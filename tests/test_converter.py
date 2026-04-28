@@ -226,32 +226,38 @@ class TestDSBConverter:
         assert len(rec) == 1
         assert abs(rec.iloc[0]["cpu_percent"] - 5.0) < 0.01
 
-    def test_net_negative_delta_forward_filled(self, converter: DSBConverter) -> None:
-        """Delta negativo su net_rx (counter reset/restart) → NaN → forward-fill."""
+    def test_net_negative_delta_forward_filled(
+        self, converter: DSBConverter
+    ) -> None:
+        """Delta negativo su net_rx (counter reset) viene azzerato a NaN
+        e poi forward-filled con il valore della window precedente.
+        """
         raw = _make_base_raw()
-        # Counter RX decresce: simula restart del container
         raw.loc[raw["window_id"] == "10_1",
                 "0_container_network_receive_bytes_total"] = _RX_W0 - 1024
 
         agg = converter._aggregate_window_metrics(raw)
         node_df = converter._compute_node_metrics(agg, "source.csv")
 
-        rec = node_df[
+        rec_w1 = node_df[
             (node_df["window_id"] == "10_1") & (node_df["node_id"] == "nginx-web-server")
         ]
-        assert len(rec) == 1
-        # Forward-fill: nessun NaN residuo (valore proveniente dalla window precedente
-        # o da backward-fill se è la prima window valida)
-        assert not pd.isna(rec.iloc[0]["net_rx_mb"])
+        assert len(rec_w1) == 1
+        val = rec_w1.iloc[0]["net_rx_mb"]
+        # Dopo forward-fill il valore deve essere non negativo.
+        # Il delta negativo viene scartato (NaN) e sostituito con il valore
+        # precedente disponibile - che in questo mock è 0.0 (prima window
+        # scartata per cpu, nessun valore precedente valido → bfill o 0).
+        assert not pd.isna(val)
+        assert val >= 0.0
 
     def test_error_rate_nominal_zero(self, converter: DSBConverter) -> None:
-        """error_rate == 0.0 nella window nominale (label_trace = 0)."""
+        """error_rate == 0.0 nella window nominale (10_0, label_trace=0)."""
         agg = converter._aggregate_window_metrics(_make_base_raw())
         edge_df = converter._compute_edge_metrics(agg, "source.csv")
 
         rec = edge_df[
-            (edge_df["window_id"] == "10_1") & (edge_df["edge_id"] == "e1")
+            (edge_df["window_id"] == "10_0") & (edge_df["edge_id"] == "e1")
         ]
-        # 10_1 ha label_trace=1 → error_rate > 0. Verifica il valore esatto.
         assert len(rec) == 1
-        assert abs(rec.iloc[0]["error_rate"] - 1.0) < 0.001
+        assert abs(rec.iloc[0]["error_rate"] - 0.0) < 0.001
