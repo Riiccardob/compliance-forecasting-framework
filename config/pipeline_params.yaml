@@ -12,8 +12,14 @@ forecasting:
   horizon_steps: 12
   baseline_model: linear_regression
   default_model: prophet
+  statistical_model: arima        # aggiungere questa riga
   deep_model: lstm
   divergence_threshold: 0.20
+  arima:                          # aggiungere questo blocco
+    max_p: 5
+    max_d: 2
+    max_q: 5
+    information_criterion: aic
   lstm:
     input_window: 24
     hidden_size: 64
@@ -21,7 +27,7 @@ forecasting:
     dropout: 0.2
     epochs: 50
     learning_rate: 0.001
-    nonlinear_metrics:             # metriche che usano LSTM invece di Prophet
+    nonlinear_metrics:
       - mem_mb
 
 causal_analysis:
