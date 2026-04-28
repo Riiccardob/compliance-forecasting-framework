@@ -1,0 +1,675 @@
+% =========================================================
+% CAPITOLO 2 — STATO DELL'ARTE
+% =========================================================
+
+\chapter{Stato dell'Arte}
+\label{chap:stato_arte}
+
+Nell'ultimo decennio, l'evoluzione delle architetture informatiche ha reso la gestione degli 
+standard qualitativi una sfida decisamente più complessa, richiedendo approcci sempre più avanzati.
+Con la diffusione dei microservizi, in particolare, garantire le proprietà non funzionali
+a runtime è diventato un problema molto più articolato rispetto a quanto avveniva con le 
+architetture monolitiche. In un ecosistema dove decine o centinaia di servizi devono collaborare 
+per elaborare una singola richiesta, la qualità finale dipende strettamente da come questi 
+componenti interagiscono e dalla fluidità del traffico. Ad oggi, le tecniche di rilevamento 
+delle anomalie sono efficaci, ma sono caratterizzate da un limite comune: operano sul 
+comportamento presente del sistema. Di conseguenza, l'intervallo temporale tra l'origine 
+dell'anomalia e la sua rilevazione permette quasi sempre solo un intervento reattivo, 
+rendendo difficile un'intervento preventivo. In questo contesto, 
+metodologie di assurance e di certificazione forniscono gli strumenti necessari per spostare il focus 
+dal semplice rilevamento ad una previsione quantificabile dei malfunzionamenti.
+
+% =========================================================
+\section{Sistemi a Microservizi}
+\label{sec:microservizi}
+% =========================================================
+
+I sistemi distribuiti moderni sono progettati sempre più frequentemente seguendo il modello
+a microservizi. Ogni microservizio incapsula un insieme ben definito di funzionalità, comunica 
+con il resto del sistema tramite scambio di messaggi e può essere aggiornato o scalato in modo del tutto 
+indipendente~\cite{dragoni2017}. Questa scelta progettuale va in contrasto con l'architettura monolitica 
+tradizionale, nella quale l'intera logica applicativa risiede in un singolo artefatto, compilato 
+e distribuito interamente su ogni istanza. La distinzione tra le due architetture non è solo 
+organizzativa; le due architetture sono infatti profondamente differenti nel modo in cui il 
+sistema consuma risorse e comunica internamente. Questa distinzione, nelle architetture a 
+microservizi, rende molto più complesso garantire e verificare le proprietà non funzionali 
+del sistema.
+
+\subsection{Struttura e Modello Comunicativo}
+\label{subsec:struttura_comunicazione}
+
+Nelle architetture monolitiche la comunicazione tra sottosistemi avviene attraverso chiamate 
+di funzione in memoria. Queste chiamate vengono gestite direttamente dall'hardware locale, 
+con latenza nell'ordine dei nanosecondi. Questo meccanismo viene completamente rielaborato 
+nel passaggio alle architetture a microservizi, spostando tutto sullo stack di rete. 
+In questo caso i servizi interagiscono via \gls{RPC} o \gls{API} RESTful, con tempi di risposta che salgono 
+a millisecondi e con maggiori rischi di errori nel passaggio tra un nodo e quello subito successivo. 
+Di conseguenza, una singola operazione dell'utente finisce per generare un intero grafo 
+di chiamate che coinvolge decine di microservizi diversi. \\
+Questa rete di relazioni è rappresentata da un \emph{service dependency graph}, nel quale i vertici 
+costituiscono le istanze dei microservizi e gli archi rappresentano le dipendenze comunicative tra di essi~\cite{qiu2020firm}. 
+Il comportamento che si manifesta a runtime su questo grafo è dinamico. Questa struttura, infatti, 
+evolve in risposta a deploy automatici, scaling orizzontale e configurazioni di routing che variano 
+al variare del carico: nuove istanze di un servizio vengono aggiunte e rimosse, i load balancer redirigono il traffico, 
+i circuit breaker aprono percorsi alternativi quando un servizio è in stato degradato. 
+Questa dinamicità, che nei microservizi si manifesta a una velocità e a una granularità 
+senza precedenti rispetto alle architetture \gls{SOA} tradizionali, costringe i sistemi di monitoraggio a 
+trattare la topologia come un'informazione strutturale viva, e non come una semplice mappa statica.
+
+La granularità fine dei microservizi, pur facilitando la manutenzione, introduce un overhead 
+di rete senza equivalenti nell'architettura monolitica; difatti, misurazioni empiriche 
+sull'applicazione Social Network di DeathStarBench~\cite{gan2019deathstar} evidenziano come la gestione delle 
+comunicazioni e l'elaborazione delle richieste di rete possano costituire il 36,3\% del tempo totale 
+di esecuzione end-to-end. E' quindi possibile affermare che la qualità del servizio end-to-end 
+non è determinata solo dalla capacità computazionale di ciascun nodo preso singolarmente; 
+bensì dipende anche in modo rilevante dalla qualità di ogni singola interazione tra 
+coppie di nodi. In questo ambito, metriche come latenza e tasso di errore sugli archi diventano 
+indicatori primari per la compliance del sistema.
+Per ottenere una visibilità strutturata sulle interazioni tra microservizi si ricorre 
+al distributed tracing. Strumenti come Jaeger\footnote{\url{https://www.jaegertracing.io/}} e Zipkin\footnote{\url{https://zipkin.io/}}, 
+ormai standard in ambito cloud-native, 
+permettono infatti di ricostruire l'intero flusso di esecuzione di una richiesta attraverso 
+un grafo di span organizzati gerarchicamente. Questi span vengono annotati con timestamp 
+di inizio e fine dell'interazione, identificatori di servizio e metadati di esito. L'integrazione di 
+questi dati con le metriche di sistema raccolte da agenti come Prometheus\footnote{\url{https://prometheus.io/}}, che campionano 
+continuamente l'utilizzo delle risorse a livello di container, permette di ottenere una 
+rappresentazione del comportamento del sistema che è contemporaneamente fine-grained a livello 
+di interazione e persistente nel tempo come serie storiche. Per unificare queste due dimensioni 
+nasce il formalismo degli \gls{ATG} adottato in questo framework, caratterizzato sia dai dati puntuali dei 
+singoli componenti sia dalla struttura temporale delle loro interazioni. In questo contesto, 
+un esempio concreto di adozione del distributed tracing è DeathStarBench~\cite{gan2019deathstar}. Quest'ultimo adotta un 
+sistema di tracciamento distribuito basato su Jaeger tramite le \gls{API} OpenTracing\footnote{\url{https://opentracing.io/} - 
+La specifica OpenTracing è stata archiviata nel 2022 e incorporata in OpenTelemetry.}, capace di tracciare 
+le richieste a granularità \gls{RPC}, associare le chiamate appartenenti alla stessa richiesta end-to-end 
+e registrare le tracce in un database centralizzato. 
+
+\subsection{Proprietà Non Funzionali nei Sistemi a Microservizi}
+\label{subsec:proprieta_nonfunzionali}
+
+Le proprietà non funzionali di maggiore rilevanza per il problema del forecasting affrontato 
+in questa tesi sono la latenza end-to-end, la disponibilità dei percorsi di servizio e il 
+throughput. Queste caratteristiche rappresentano infatti dimensioni critiche sia nella ricerca 
+accademica che nell'operatività industriale~\cite{auer2021}. Ciascuna di queste proprietà presenta 
+caratteristiche che la distinguono dalla corrispondente proprietà in architettura monolitica.
+
+La \textbf{latenza end-to-end} di una richiesta è determinata dal percorso critico, ossia
+il cammino di durata massima dalla ricezione della richiesta alla produzione della risposta.
+Nei microservizi, il percorso critico non corrisponde necessariamente al percorso più lungo
+nel service dependency graph; il percorso critico, infatti, cambia continuamente in base al
+carico istantaneo sui singoli nodi e alle fluttuazioni della rete. Una stessa richiesta può
+seguire percorsi critici differenti in momenti diversi, a seconda di quale componente stia
+subendo un rallentamento in quel preciso istante~\cite{qiu2020firm}. La latenza, di fatto,
+smette di essere un valore stabile e diventa una variabile stocastica che evolve nel tempo.
+
+Un discorso analogo vale per la \textbf{disponibilità}. Se un percorso di servizio attraversa
+$n$ microservizi in serie, la sua disponibilità complessiva è il prodotto delle disponibilità
+dei singoli componenti. Questo ha un impatto pratico enorme:
+con venti microservizi, ciascuno con una disponibilità individuale del 99,9\%, la disponibilità
+totale del percorso crolla al 98\%. Un valore del genere è spesso inaccettabile per sistemi
+critici~\cite{gan2019deathstar}. Questo fenomeno giustifica l'adozione di pattern
+architetturali di resilienza come il circuit breaker, per deviare il traffico dai nodi guasti,
+e il bulkhead, che isola i guasti impedendone la propagazione~\cite{qiu2020firm}. Questi
+meccanismi, però, modificano la topologia del sistema a runtime, rendendo ancora più complessa
+la capacità di monitorarne l'evoluzione strutturale.
+
+Infine, il \textbf{\textit{throughput}} del sistema è limitato dall'elemento che costituisce il
+``collo di bottiglia''. Il servizio con la capacità di elaborazione più bassa vincola la
+portata dell'intero percorso. La situazione si complica ulteriormente quando più flussi
+competono per la stessa risorsa, come un database condiviso. In questi casi, la contesa riduce
+il throughput disponibile per ciascun flusso in modo non lineare. Senza una modellazione
+esplicita di queste dipendenze, prevedere il throughput reale diventa estremamente difficile.
+
+\subsection{Propagazione a Cascata e Sfide per il Monitoraggio}
+\label{subsec:cascading}
+
+Uno dei fenomeni più critici nei sistemi a microservizi è la propagazione a cascata delle 
+violazioni di \gls{QoS}. Un singolo microservizio che accumula ritardi per saturazione delle risorse, 
+a causa di picchi di traffico o contesa su una risorsa condivisa, fa sì che i componenti che 
+dipendono da esso vedano un aumento della propria latenza di risposta. Quando la latenza va al 
+di sopra dei limiti di timeout configurati, i servizi chiamanti spesso tentano nuovamente l'operazione; 
+tuttavia, ciò amplifica ulteriormente il carico sul servizio già degradato, causando una reazione a 
+catena che risale le dipendenze coinvolgendo anche i servizi originariamente sani. 
+La gestione non ottimale di una singola dipendenza tra microservizi è in grado di degradare 
+la latenza di un'intera applicazione~\cite{gan2019deathstar}. In questo caso, anche dopo aver rimosso la causa del problema, 
+il sistema richiede spesso periodi prolungati per tornare a uno stato di equilibrio.
+
+Questo meccanismo di propagazione rende inadeguati i sistemi di monitoraggio attuali, che si
+limitano ad osservare componenti individuali in isolamento. Quando viene rilevata un'anomalia
+tra due servizi del service dependency graph, la causa radice può trovarsi in un nodo $w$
+topologicamente distante, oppure in un flusso applicativo del tutto separato che condivide
+con il percorso monitorato una risorsa critica, come un database o un message broker.
+Identificare l'origine di un guasto richiede quindi la capacità di ragionare sulla struttura
+complessiva del grafo e di seguire il percorso di propagazione degli effetti, superando la
+logica del semplice rilevamento di un'anomalia al tempo $t$.
+Un'ulteriore complicazione deriva dall'eterogeneità tecnologica dei microservizi. 
+Poichè ciascun servizio può essere sviluppato con linguaggi e runtime differenti, 
+ognuno di essi reagisce al carico in modo proprio, con profili di hotspot e latenza che 
+variano a seconda dell'ambiente di esecuzione~\cite{gan2019deathstar}. Tutto ciò ha una conseguenza: 
+le metriche che segnalano un problema imminente non sono universali. 
+Un indicatore fondamentale per un certo componente può risultare del tutto irrilevante per un altro. 
+Un sistema di monitoraggio efficace deve quindi incorporare questa varietà, evitando di appiattire 
+tutto su soglie di allarme generiche e uniformi. 
+
+Dal punto di vista del forecasting, la propagazione a cascata ha un'implicazione che va oltre 
+la semplice diagnosi; esiste infatti un ritardo sistematico tra l'insorgere della causa radice 
+e il momento in cui la violazione diventa visibile esternamente nelle metriche di compliance. 
+Quando un componente inizia a degenerare internamente, le metriche osservate a
+valle possono apparire normali per un tempo prolungato, nascondendo il degrado che sta
+crescendo internamente al nodo. Questa latenza è, allo stesso tempo, un ostacolo e
+un'opportunità. È un ostacolo perché rende il monitoraggio reattivo ``cieco'' alla causa in
+formazione; è però un'opportunità perché quella stessa finestra temporale, se sfruttata
+attraverso il monitoraggio delle metriche interne di nodo, rappresenta il \emph{lead time}
+necessario per un intervento preventivo.
+Tutto questo chiarisce perché, per il forecasting della non-compliance, non basti analizzare
+serie temporali isolate. È necessaria, infatti, una visione d'insieme che solo una
+rappresentazione a grafo con feature eterogenee, su nodi e archi, può offrire. Il
+Capitolo~\ref{chap:metodologia} formalizza questa necessità introducendo gli \gls{ATG} e la
+loro integrazione con la struttura semantica degli ipergrafi.
+
+% =========================================================
+\section{Assessment dei Sistemi Distribuiti}
+\label{sec:assessment}
+% =========================================================
+
+Nell'ambito dei sistemi distribuiti, il termine assessment rappresenta l'insieme delle attività 
+di osservazione e analisi del comportamento di un sistema a runtime. Lo scopo di queste attività 
+è quello di individuare eventuali anomalie e verificare la conformità del sistema stesso rispetto 
+a specifici requisiti attesi. L'assessment si articola su tre diversi livelli di astrazione crescente: 
+il monitoraggio passivo, il rilevamento delle anomalie e l'analisi delle cause radice. 
+Ciascun livello si fonda su quello precedente, aggiungendo capacità diagnostiche che i livelli 
+inferiori non sono in grado di fornire autonomamente.
+Nel corso degli anni, la letteratura in questo campo ha prodotto una vasta gamma di soluzioni, 
+raggruppabili in quattro categorie principali: metodi statistici classici, metodi basati su \gls{ML}, 
+metodi fondati su grafi e \gls{GNN}, e tecniche di root cause analysis. Una direzione più recente, 
+particolarmente rilevante per il problema del forecasting affrontato in questa tesi, 
+è quella dei grafi temporali con feature esplicite sui nodi, discussa nella sezione~\ref{subsec:atg_background}.
+
+\subsection{Monitoraggio Passivo e Osservabilità}
+\label{subsec:monitoring}
+
+Il monitoraggio passivo rappresenta la base dell'osservabilità di un sistema. 
+L'utilizzo dell'infrastruttura di telemetria permette infatti di raccogliere in modo costante 
+le metriche di sistema, come l'utilizzo della \gls{CPU} o la latenza, rendendole disponibili per le analisi successive. 
+Tale pratica è ormai standardizzata grazie a soluzioni consolidate come Prometheus per la gestione delle metriche, 
+OpenTelemetry\footnote{\url{https://opentelemetry.io/}} per l'instrumentazione unificata e Jaeger per il tracciamento delle richieste distribuite. 
+Tuttavia, questi strumenti soffrono di un problema comune: la quantità di dati generati supera 
+di gran lunga quella dei sistemi tradizionali. Un'architettura a microservizi di medie dimensioni 
+può arrivare infatti a produrre centinaia di serie temporali e milioni di span di traccia 
+per ogni ora di operatività~\cite{gan2019deathstar}. Questa quantità di dati genera un problema di selezione. 
+Non tutte le metriche sono ugualmente rilevanti per le diverse proprietà da garantire e 
+l'analisi indiscriminata di ogni serie disponibile non è computazionalmente praticabile in tempo reale.
+
+Il monitoraggio passivo non genera diagnosi in modo autonomo, ma si limita a fornire la base
+informativa per i livelli analitici superiori. Questi ultimi devono essere progettati
+specificamente per identificare i dati utili, separandoli dal rumore di fondo della telemetria.
+La scelta di quali metriche osservare, della frequenza di campionamento e del livello di
+dettaglio costituisce a tutti gli effetti un problema di progettazione che ha conseguenze
+sull'efficacia delle analisi a valle.
+
+\subsection{Rilevamento delle Anomalie}
+\label{subsec:anomaly_detection}
+
+Il rilevamento delle anomalie funge da filtro critico che trasforma la grande quantità di 
+serie temporali grezze in precisi segnali di allerta, identificando quindi i momenti in cui 
+il comportamento del sistema devia dalla normale operatività. Le tecniche disponibili spaziano 
+a partire da approcci statistici tradizionali, come z-score o CUSUM, fino a modelli di apprendimento 
+automatico in grado di processare pattern multidimensionali che 
+l'analisi univariata non sarebbe in grado di intercettare.
+
+I \textbf{metodi statistici classici} permettono di garantire un livello di interpretabilità elevato 
+e una calibrazione semplice. Fissare una soglia di allarme sulla latenza di un arco, 
+ad esempio, rappresenta il modo più semplice per mappare un vincolo contrattuale di \gls{SLA} 
+in una semplice operazione matematica di confronto. Tuttavia, questi strumenti tradizionali 
+sono caratterizzati da una forte rigidità nei confronti di fluttuazioni fisiologiche 
+del comportamento dei sistemi in analisi. Un picco di latenza durante le ore di punta potrebbe 
+essere del tutto fisiologico, mentre lo stesso valore registrato subito dopo un deploy 
+assumerebbe le sembianze di una criticità. Seppur vi siano metodi statistici più elastici ed adattivi, 
+come il CUSUM, che permettono di accumulare deviazioni dalla baseline per rilevare shift persistenti 
+anziché picchi isolati, il problema di fondo persiste. Difatti, pur essendo più elastici ed adattivi, 
+si tratta comunque di metodi univariati, incapaci quindi di tenere conto delle dipendenze 
+tra metriche di componenti distinti.
+
+Per superare i limiti dell'analisi univariata si utilizzano i \textbf{metodi basati su machine learning}. 
+Questi modelli non si limitano ad osservare le singole metriche, bensì apprendono il comportamento 
+fisiologico del sistema, sotto forma di struttura multidimensionale, a partire dai dati storici. 
+Algoritmi come l'Isolation Forest, ad esempio, sono in grado di isolare i punti anomali nello spazio delle feature, 
+procedendo attraverso partizionamenti ricorsivi. Questa logica permette di individuare combinazioni 
+di valori che presi singolarmente sembrerebbero normali, ma che nel loro insieme rivelano uno stato di allerta.
+
+Un'ulteriore evoluzione è rappresentata dai metodi basati su \textbf{\gls{GNN}}. Questi metodi estendono le capacità dei metodi 
+precedenti modellando le interazioni tra microservizi attraverso la struttura del grafo di dipendenze. 
+Operando su questa rappresentazione, è possibile rilevare anomalie che si manifestano come pattern 
+insoliti tra componenti, non solo come deviazioni di singole metriche. Valutazioni sperimentali su 
+dataset con bottleneck multipli mostrano miglioramenti dell'F1 score superiori al 40\% rispetto ad 
+approcci che non sfruttano reti neurali su grafi per modellare le interazioni strutturali tra microservizi~\cite{somashekar2024gamma}. 
+
+\textbf{GAMMA (Somashekar et al., 2024).} Il framework GAMMA affronta il rilevamento di bottleneck multipli simultanei nelle architetture 
+a microservizi, uno scenario spesso trascurato dalla letteratura precedente che tende a concentrarsi 
+sul singolo bottleneck. L'architettura sfrutta una \gls{GAT} che apprende le interazioni tra microservizi 
+a partire dalle tracce distribuite e dalle metriche di sistema, integrandola con un \emph{mixture of experts} 
+che assegna a ogni microservizio un classificatore specializzato nel riconoscimento di specifici profili di degrado. 
+L'addestramento viene eseguito in modo congiunto sui task di \emph{anomaly detection} e \emph{bottleneck localization} 
+attraverso una funzione di loss unificata. Questo approccio permette alle rappresentazioni apprese nei due 
+sotto compiti di rinforzarsi reciprocamente durante il processo. Le valutazioni condotte su DeathStarBench~\cite{gan2019deathstar} 
+evidenziano un F1 score fino a 0,92 per il rilevamento e fino a 0,89 per la localizzazione, 
+con un incremento del 46\% nelle prestazioni di localizzazione rispetto a FIRM in presenza di bottleneck multipli. 
+Il limite strutturale di GAMMA, condiviso con tutti i metodi di questa categoria, è la natura esclusivamente reattiva. 
+Il sistema opera infatti solo sul comportamento presente del sistema, tale per cui la classificazione dello 
+stato avviene al tempo $t$, senza produrre stime sull'evoluzione futura dei segnali nel tempo. Di conseguenza, 
+il \emph{lead time} per un intervento preventivo risulta nullo per costruzione.
+
+\textbf{Anomaly Detection and Diagnosis (Du et al., 2018).} L'approccio~\cite{du2018} introduce un 
+sistema di \emph{anomaly detection} per microservizi containerizzati che affronta un problema di osservabilità pratico: 
+quali metriche di sistema raccogliere a livello di container e come valutare automaticamente se il comportamento 
+è anomalo senza conoscere a priori la struttura interna dei servizi. Il sistema sfrutta agenti di 
+monitoraggio per raccogliere dati di performance, come \gls{CPU} e rete, e utilizza classificatori 
+supervisionati come Random Forest, \gls{kNN} e \gls{SVM}. Per addestrare i modelli a distinguere e classificare le anomalie, 
+il sistema si affida a dataset generati tramite fault injection controllata. 
+Nelle valutazioni sperimentali sul dataset B, Random Forest e kNN raggiungono precision e recall superiori a 0,97. 
+Sul dataset aggregato C, che combina le due sessioni sperimentali, i valori scendono a circa 0,96 per kNN e 0,93/0,91 
+per Random Forest; nella validazione per singolo servizio i risultati calano ulteriormente. 
+Il limite principale di questa metodologia risiede nella stretta dipendenza da dati etichettati prodotti artificialmente. 
+In scenari di produzione reali, caratterizzati da distribuzioni di guasto variabili o da eventi mai 
+osservati durante il training, la capacità di generalizzazione risulta sensibilmente ridotta rispetto a soluzioni 
+\textit{unsupervised} o \textit{semi-supervised}.
+
+\subsection{Analisi delle Cause Radice}
+\label{subsec:rca}
+
+L'analisi delle cause radice estende il rilevamento
+identificando non solo che un'anomalia è in corso, ma anche quale componente ne è la causa
+originaria. La distinzione è operativamente critica: un operatore che riceve l'alert ``latenza
+elevata sull'arco $e_2$'' non ha informazioni sufficienti per decidere se intervenire sul
+servizio sorgente, sul servizio destinazione o su una risorsa condivisa che entrambi contendono.
+Lo scopo della \gls{RCA} è produrre un'indicazione azionabile che consenta di dirigere
+l'intervento correttivo verso la causa vera, non verso il sintomo visibile.
+Le tecniche attuali di \gls{RCA} nei microservizi combinano l'analisi della topologia del
+grafo di dipendenze con metodi statistici di causalità, consentendo di risalire dal sintomo
+osservato alla componente responsabile. Sistemi che integrano analisi del percorso critico con
+classificatori supervisionati per la localizzazione della responsabilità \gls{SLO} dimostrano
+che è possibile identificare il microservizio responsabile di una violazione con accuracy media
+dell'ordine del 93\% su benchmark standardizzati~\cite{qiu2020firm}.
+
+Resta però un limite: anche le tecniche di \gls{RCA} più avanzate operano su ciò che è già
+accaduto. La diagnosi riguarda un'anomalia presente o recente; non permette di predire
+un'anomalia futura. In altri termini, l'output prodotto rappresenta una fotografia del guasto
+e non un forecast della sua possibile insorgenza futura.
+Un limite ulteriore, che si rivela particolarmente rilevante per il problema della tesi,
+riguarda le cause radice che si propagano tra flussi applicativi distinti. 
+Quando due percorsi certificati condividono una risorsa, come un database o un message
+broker, il degrado prodotto dal carico di un flusso può manifestarsi come violazione
+di latenza nell'altro flusso. Nessuno dei due sistemi di monitoraggio, analizzato
+individualmente, è in grado di ricostruire questa catena causale. Il sistema
+di monitoraggio del flusso osserva un incremento della latenza sul proprio percorso e
+può correttamente attribuirlo a una saturazione del database condiviso; ma per capire perché
+il database è saturo occorre correlare con le metriche del flusso appartenente a un perimetro di compliance diverso. 
+In assenza di una rappresentazione esplicita
+delle dipendenze tra proprietà certificate diverse, questa correlazione rimane implicita e la
+diagnosi si ferma al sintomo, non alla causa strutturale. Il framework proposto affronta
+questo problema non come un'estensione della \gls{RCA}, ma incorporando nella struttura del modello 
+la conoscenza topologica delle risorse condivise; cosi facendo l'interferenza diventa visibile prima ancora
+che si traduca in anomalie osservabili sui dati.
+
+\textbf{FIRM (Qiu et al., 2020).} FIRM~\cite{qiu2020firm} propone un framework di 
+localizzazione delle violazioni \gls{SLO} e mitigazione delle risorse orientato ai 
+microservizi, basato sull'integrazione di componenti complementari. 
+Il processo di localizzazione si basa sul concetto di percorso critico dinamico all'interno 
+del grafo di esecuzione di ogni richiesta. Nello specifico, un classificatore \gls{SVM} analizza le 
+metriche di variabilità del \emph{sojourn time}, ossia il tempo di permanenza della richiesta nel servizio, 
+lungo tale percorso per identificare l'istanza di microservizio responsabile del rallentamento. 
+La mitigazione utilizza un agente di \gls{DDPG}, addestrato con transfer learning tra configurazioni 
+diverse di workload, per modulare in tempo reale l'allocazione delle risorse condivise 
+sul microservizio localizzato. Su quattro benchmark di microservizi, FIRM riduce le violazioni 
+\gls{SLO} fino a 16 volte rispetto al meccanismo di autoscaling nativo di Kubernetes\footnote{\url{https://kubernetes.io/}}; 
+inoltre, localizza la causa radice della violazione con accuracy media del 93\%~\cite{qiu2020firm}. 
+Tuttavia, nel contesto di questa tesi, il limite di FIRM è duplice. Il primo riguarda 
+l'assunzione implicita di single bottleneck, tale per cui un solo microservizio è 
+responsabile della violazione in un dato istante; mentre il secondo riguarda l'assenza 
+di capacità predittive, in quanto il sistema interviene solo a violazione avvenuta o in corso.
+
+\textbf{Root Cause Discovery (NeurIPS 2022).} L'algoritmo di \emph{causal discovery}~\cite{ikram2022rcd} denominato \gls{RCD}, 
+introduce due innovazioni chiave per rendere scalabile la \gls{RCA} all'interno dei sistemi a microservizi. 
+La prima è di ordine concettuale, il guasto viene trattato infatti come un intervento sul nodo di origine 
+all'interno del grafo causale; ciò permette di distinguere tra i dati raccolti durante 
+il malfunzionamento, ossia l'\emph{interventional dataset}, e quelli relativi al normale funzionamento, 
+ossia l'\emph{observational dataset}. Il successivo confronto tra le distribuzioni dei due dataset permette 
+di ottenere informazioni utili sulla causa radice che i soli dati osservativi non potrebbero fornire. 
+La seconda innovazione riguarda l'efficienza algoritmica. Invece di mappare 
+l'intera struttura causale del sistema, \gls{RCD} esplora in modo gerarchico e localizzato solo le porzioni 
+del grafo statisticamente connesse al nodo in errore. Questo approccio riduce sensibilmente il numero 
+di test di indipendenza condizionale necessari. I test condotti su sistemi da 500 nodi mostrano tempi 
+di esecuzione estremamente ridotti: circa 22 secondi per identificare le prime cinque candidate, 
+contro gli oltre 150 minuti richiesti dall'algoritmo $\Psi$-PC~\cite{ikram2022rcd}. L'importanza di tali strumenti emerge chiaramente: 
+senza l'utilizzo di essi, l'identificazione della causa radice richiede in media 3 ore. 
+Tuttavia, \gls{RCD}, come tutti i metodi di \gls{RCA}, permette di identificare la causa di un guasto che si è già verificato, 
+ma non produce alcuna stima della probabilità o del tempo di occorrenza di guasti futuri.
+
+\subsection{Verso la Modellazione Temporale con Feature di Nodo}
+\label{subsec:atg_background}
+
+Tutte le limitazioni evidenziate finora conducono verso una chiara ed unica necessità, ossia superare 
+la logica dell'istante $t$ per la modellazione dell'evoluzione temporale a favore di un modello che integri 
+lo stato interno dei nodi con la struttura delle loro interazioni. Nonostante la ricerca sui grafi dinamici 
+affronti questa problematica, nella sua formulazione classica tende comunque a concentrare l'informazione 
+primaria sulle interazioni. In questo contesto, un grafo temporale viene tradizionalmente formalizzato come 
+una sequenza di eventi $(u, v, t)$, dove l'esistenza stessa del sistema è definita dagli scambi di messaggi 
+tra entità, e lo stato di un nodo è derivato esclusivamente dalla sua storia di interazioni. 
+Un nodo assume infatti rilevanza solo in funzione di ciò che invia o riceve sugli archi.
+Questo approccio è sufficiente per studi topologici, ma risulta limitante per il monitoraggio
+predittivo di sistemi distribuiti reali, nei quali:
+
+\begin{itemize}
+  \item i componenti possiedono uno stato interno persistente (utilizzo della \gls{CPU},
+        occupazione di memoria, saturazione del connection pool) che evolve in modo
+        indipendente dal traffico in transito;
+  \item il degrado nasce spesso prima che si manifesti sulle interazioni: un componente
+        può degradarsi internamente senza che le metriche di arco abbiano ancora superato
+        le soglie di allerta;
+  \item la violazione dei requisiti di compliance è solitamente preceduta da una deriva
+        comportamentale osservabile sullo stato dei nodi e non sugli archi.
+\end{itemize}
+
+La ricerca recente nell'ambito del graph representation learning ha introdotto grafi temporali 
+dotati di feature esplicite sui nodi~\cite{rossi2020}, estendendo così la formulazione classica. 
+Nelle \gls{TGN} viene infatti formalizzato il concetto di \textbf{Node Memory}, che permette a ogni nodo di 
+mantenere uno stato latente evolutivo. Questo stato può essere aggiornato attraverso 
+due tipologie di eventi, ossia le interazioni tra nodi sugli archi e gli eventi locali al nodo, 
+indipendenti dal traffico osservato. Gli eventi locali al nodo sono fondamentali per i sistemi distribuiti; 
+difatti, le metriche interne di un microservizio, come l'occupazione dell'heap o la saturazione delle code, 
+possono mostrare segni di deterioramento anche in assenza di chiamate di servizio attive. \\
+L'efficacia di questo approccio trova conferma in contesti analoghi, come lo studio delle reti collaborative. 
+Nei dataset di Wikipedia utilizzati per valutare modelli come JODIE o \gls{TGN}, le modifiche alle 
+pagine sono modellate come eventi temporali sugli archi, ad esempio l'interazione ``utente modifica pagina''. 
+In questo caso, gli utenti, rappresentati dai nodi, conservano uno stato latente di affidabilità 
+che può degradare nel tempo; difatti, quando un utente effettua modifiche troppo rapide o incoerenti, 
+il suo stato interno degrada verso una condizione di sospetto vandalismo prima ancora che venga 
+riscontrata una violazione esplicita delle policy. Il parallelismo con i sistemi distribuiti in questo caso è diretto. 
+Un microservizio può accumulare segnali interni di degrado, come memory leak o saturazione delle risorse, 
+indipendentemente dalle chiamate \gls{API} in corso, anticipando il momento in cui le interazioni esterne inizieranno a deteriorarsi.
+
+Un'ulteriore conferma della validità di questo approccio arriva dai sistemi di previsione del 
+traffico su reti stradali. In questi modelli, i nodi rappresentano incroci fisici caratterizzati 
+da uno stato evolutivo proprio, come la densità veicolare o la velocità media; 
+le strade rappresentano invece gli archi di collegamento. Spesso un incrocio raggiunge uno stato critico di congestione
+prima che il rallentamento si propaghi visibilmente ai tratti stradali adiacenti; il fenomeno
+nasce quindi come evento locale al nodo, non ancora osservabile sugli archi in quel preciso
+istante. Nei sistemi distribuiti si osserva un comportamento simile, ad esempio in un gateway
+che accumula una coda crescente di richieste. Questo accumulo funge da precursore per i timeout
+futuri, ma inizialmente resta un segnale di degrado confinato interamente nello stato del nodo,
+senza influenzare in modo immediato la latenza misurata sugli archi incidenti. \\
+Tali evidenze confermano che la modellazione esplicita dello stato interno dei componenti, e
+non solo delle loro interazioni, costituisce un requisito strutturale per qualsiasi forma di
+monitoraggio predittivo. La distinzione tra feature di nodo, che persistono anche in assenza
+di traffico, e feature di arco, effimere e dipendenti dal contesto comunicativo, rappresenta
+il nucleo della struttura duale adottata dal framework presentato nel Capitolo~\ref{chap:metodologia}. 
+
+% \subsection{Il Limite Fondamentale: Reattività senza Anticipo}
+% \label{subsec:lead_time_zero}
+
+% Monitoraggio, anomaly detection e \gls{RCA} condividono un limite strutturale che questa tesi
+% si propone di superare: operano esclusivamente sull'istante $t$, anziché su un orizzonte
+% temporale. Un sistema di anomaly detection si limita a segnalare che il comportamento al tempo
+% $t$ è anomalo, mentre la \gls{RCA} identifica la causa di un evento già manifesto. In questi casi, 
+% il preavviso effettivo si riduce al puro ritardo di 
+% rilevamento tra il momento di origine dell'anomalia e la sua 
+% identificazione, tipicamente dell'ordine di secondi o di pochi minuti.
+% Questo preavviso risulta spesso insufficiente per attivare strategie di mitigazione efficaci.
+% Operazioni come il provisioning di risorse aggiuntive, il reindirizzamento del traffico verso
+% repliche sane o la limitazione proattiva del carico su percorsi a rischio di congestione
+% richiedono infatti tempi di reazione superiori al margine offerto da un rilevamento puramente
+% reattivo. \\
+% FIRM riconosce esplicitamente che il forecasting delle violazioni  rimane un problema aperto, identificandolo
+% come direzione per lavori futuri~\cite{qiu2020firm}. GAMMA, pur migliorando le capacità di
+% detection e localizzazione delle cause in scenari multi-bottleneck, opera anch'esso
+% esclusivamente sul comportamento presente, senza quindi produrre stime sull'evoluzione
+% temporale del sistema~\cite{somashekar2024gamma}.\\
+% Il forecasting della non-compliance che questa tesi propone colma precisamente questo gap.
+% Invece di classificare lo stato corrente come normale o anomalo, il framework stima l'evoluzione
+% futura delle metriche di compliance, calcolando il tempo residuo prima del superamento di una
+% soglia certificata. Il \emph{lead time} generato non è quindi un semplice residuo del ritardo
+% di rilevamento, ma una stima quantitativa dell'orizzonte disponibile per l'intervento preventivo.
+
+% =========================================================
+\section{Assurance e Certificazione di Proprietà Non Funzionali}
+\label{sec:certificazione}
+% =========================================================
+
+Il termine \emph{assurance} designa l'insieme delle pratiche consolidate per dimostrare che
+un sistema si comporti correttamente rispetto a un insieme di requisiti
+non funzionali~\cite{ardagna2023manifesto}. A differenza dell'assessment, che si limita a osservare
+il comportamento del sistema a runtime per rilevarne le deviazioni, l'assurance produce
+garanzie basate su evidenze raccolte secondo un processo strutturato. Tale percorso è governato
+da standard documentati e risulta verificabile da terze parti. La certificazione rappresenta
+la forma più matura di assurance. Essa produce un artefatto formale, il certificato, che
+attesta la conformità di un sistema a una specifica proprietà non funzionale. Questo avviene
+seguendo un iter definito da una \gls{CA} e verificato da laboratori
+accreditati~\cite{anisetti2023multidim}.
+
+\subsection{Elementi del Processo di Certificazione}
+\label{subsec:processo_certificazione}
+
+Un processo di certificazione si basa su tre costrutti fondamentali~\cite{anisetti2023continuous}:
+
+\begin{itemize}
+  \item \textbf{Proprietà non funzionale}: modella il requisito da verificare, specificando 
+      il nome della proprietà, ad esempio \emph{performance}, e l'insieme degli attributi che definiscono 
+      le condizioni di soddisfacimento, come la \emph{latenza massima};
+  \item \textbf{\gls{ToC}}: rappresenta il sistema da certificare. 
+      Quest'ultimo è modellato come un insieme di componenti raggruppati secondo la propria funzionalità;
+  \item \textbf{\gls{CM}}: specifica le attività da eseguire sul \gls{ToC} per raccogliere le
+        evidenze necessarie a dimostrare che la proprietà $p$ sia effettivamente soddisfatta.
+\end{itemize}
+
+Il \gls{CM}, una volta definito dalla \gls{CA}, viene istanziato su delega da un laboratorio 
+accreditato. Quest'ultimo ha il compito di raccogliere le evidenze secondo le attività 
+specificate nel \gls{CM}. La raccolta avviene attraverso un \gls{ECM}, che si occupa di disciplinare 
+la modalità, i criteri e gli strumenti di raccolta dal \gls{ToC}. Il processo è
+illustrato nella Figura~\ref{fig:certificate}.\\
+Non appena il volume di evidenze raccolto risulta sufficiente per i criteri del CM, la CA rilascia un certificato C. 
+Tale documento include il modello di certificazione adottato, le evidenze raccolte e garantisce la catena 
+di fiducia attraverso una firma digitale. La validità del certificato rilasciato dipende dalla correttezza 
+di tre assunzioni~\cite{anisetti2023continuous}: il \gls{CM} deve essere prodotto da una \gls{CA} fidata, 
+il \gls{CM} deve rappresentare fedelmente il \gls{ToC} e la proprietà certificata ed infine le evidenze raccolte devono essere sufficienti 
+a dimostrare la proprietà. Il certificato rimane valido finché queste tre condizioni continuano ad essere soddisfatte.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width = 0.60\textwidth, height=0.45\textheight, trim={0 10mm 0 0}, clip]{images/certificate}
+	\caption[Modello di certificazione]{Modello di certificazione~\cite{anisetti2023continuous}}
+	\label{fig:certificate}
+\end{figure}
+\begin{figure}[H]
+	\centering
+	\includegraphics[width = 0.8\textwidth, height=0.35\textheight,trim={0 0 0 0}, clip]{images/certificate_usage}
+	\caption[Utilizzo della certificazione]{Utilizzo della certificazione~\cite{anisetti2023multidim}}
+	\label{fig:certificate_usage}
+\end{figure}
+
+Schemi di questo tipo trovano applicazione consolidata nella verifica di proprietà di
+confidenzialità, integrità e disponibilità in ambienti cloud, oltre che per la selezione di
+servizi basata su \gls{SLA}~\cite{anisetti2023multidim}. La Figura~\ref{fig:certificate_usage} 
+illustra come, nel contesto dei sistemi distribuiti moderni, le certificazioni vengano utilizzate. 
+Il Service Provider implementa il servizio, la CA esegue il Certification Model contro di esso, 
+e il certificato risultante viene depositato in un repository condiviso. L'End User 
+consulta questo repository per selezionare il servizio più idoneo ai propri requisiti, 
+sfruttando le proprietà certificate come criteri di confronto oggettivi. Questo modello funziona 
+però a condizione che il sistema certificato rimanga sostanzialmente stabile nel tempo, un'assunzione 
+che i sistemi a microservizi mettono in crisi.
+
+\subsection{Limiti degli Schemi Tradizionali nei Sistemi Distribuiti Dinamici}
+\label{subsec:limiti_tradizionali}
+
+Gli schemi di certificazione tradizionali si basano su assunzioni che i sistemi distribuiti 
+moderni violano sistematicamente. La più critica è la staticità del \gls{ToC}, tale per cui il \gls{CM} 
+descrive il sistema nella configurazione osservata al momento della certificazione, assumendo 
+che tale configurazione persista nel tempo~\cite{ardagna2023manifesto}. Nelle architetture a microservizi questa 
+assunzione non regge; difatti, fenomeni come deploy automatici, scaling orizzontale, 
+failover e riconfigurazioni orchestrate, modificano costantemente l'insieme dei componenti attivi, 
+la loro topologia di comunicazione e le prestazioni complessive. Un certificato rilasciato per 
+una specifica configurazione architetturale non è quindi automaticamente valido per la 
+configurazione successiva, anche quando le proprietà funzionali del sistema rimangono invariate. 
+
+La seconda limitazione riguarda il meccanismo di innesco della ricertificazione. Gli schemi
+attuali reagiscono principalmente a modifiche del codice sorgente o a scadenze temporali
+predefinite, ignorando le variazioni comportamentali del sistema non relative a modifiche
+strutturali esplicite~\cite{anisetti2023continuous}. Un sistema che subisce un degrado graduale
+delle proprie performance, causato ad esempio dalla saturazione progressiva delle risorse,
+dall'accumulo di stato interno anomalo o da derive lente nei pattern di traffico, non attiva
+alcuna procedura di ricertificazione negli schemi tradizionali, poiché il codice rimane
+invariato e il certificato non è ancora formalmente scaduto. Il risultato è una finestra di
+invalidità silenziosa del certificato durante la quale il documento continua ad attestare la
+conformità di un sistema che, nella pratica, non soddisfa più le proprietà per cui è stato
+certificato.
+
+Una terza limitazione è l'approccio alla selezione delle evidenze. Gli schemi tradizionali 
+tendono infatti a focalizzare la valutazione esclusivamente su artefatti software, 
+come il codice eseguibile e le configurazioni statiche. Così facendo, vengono spesso trascurati 
+elementi che incidono in modo rilevante sulla qualità delle proprietà certificate; 
+ad esempio, il processo di sviluppo adottato o le procedure di verifica applicate. 
+Il risultato è la produzione di certificati che riflettono solo una parte dell'informazione 
+necessaria a supportare decisioni accurate sulla compliance di un sistema distribuito~\cite{anisetti2023multidim}.
+
+\subsection{Certificazione Continua e Multidimensionale}
+\label{subsec:cert_avanzata}
+
+La ricerca ha risposto ai limiti dei modelli tradizionali attraverso due direzioni complementari
+che ampliano sia la dinamica temporale del processo certificativo sia l'ampiezza delle
+dimensioni considerate nella valutazione.
+
+La \textbf{certificazione continua} estende il processo di certificazione in un ciclo
+\textbf{\gls{MAPE}} che monitora continuamente il comportamento del sistema comparandolo con
+il modello di comportamento normale incluso nel certificato corrente. In questo schema, il
+certificato $C_t$ al tempo $t$ integra esplicitamente un \emph{system model} $B$, ovvero un
+modello adattivo del comportamento normale del sistema, costruito tramite tecniche formali, 
+come Petri net o Abstract State Machine, oppure tecniche di machine learning applicate ai dati osservabili, a
+seconda del contesto applicativo, oltre a un riferimento al certificato precedente
+$C_{t-1}$~\cite{anisetti2023continuous}. In questo contesto, la ricertificazione è innescata
+non da eventi discreti predefiniti, ma dalla rilevazione di una variazione comportamentale
+misurata come scostamento tra il comportamento osservato e il modello $B$. Tale meccanismo
+permette di ridurre i falsi positivi tipici dei trigger basati su semplici modifiche del codice
+e consente di intercettare derive comportamentali che gli schemi convenzionali non riuscirebbero
+a individuare.
+
+La \textbf{certificazione multidimensionale}, invece, non si limita a valutare i soli artefatti software, 
+bensì considera anche dimensioni aggiuntive, che influenzano la qualità delle proprietà certificate~\cite{anisetti2023multidim}. 
+Una dimensione $D$ raggruppa attributi la cui inclusione nella valutazione, oltre agli attributi 
+degli artefatti eseguibili, migliora l'accuratezza complessiva della valutazione di conformità. La certificazione, 
+in questo caso, si basa sulla composizione dei risultati ottenuti nelle singole dimensioni. 
+Così facendo è possibile ottenere un quadro più accurato della conformità attesa. 
+L'approccio supporta inoltre la selezione dei servizi sulla base di più criteri di certificazione, 
+rendendo così le decisioni più solide in contesti operativi reali.
+
+% =========================================================
+\section{Scenario di Riferimento: Sistema di Telemedicina Critica}
+\label{sec:scenario_riferimento}
+% =========================================================
+
+Il formalismo introdotto nel Capitolo~\ref{chap:metodologia} richiede un sistema applicativo concreto su cui
+esemplificare i costrutti del framework. La scelta è caduta su un sistema di telemedicina critica 
+in quanto combina due caratteristiche necessarie a questa funzione: requisiti di compliance con vincoli 
+quantitativi assoluti, e una topologia in cui due flussi applicativi con livelli di criticità diversi 
+condividono risorse di backend. Questa seconda caratteristica è ciò che rende lo scenario importante 
+per la dimostrazione del layer semantico; difatti, in un sistema del genere, un problema nel flusso meno 
+critico può minacciare le garanzie del flusso più critico attraverso una risorsa condivisa.
+
+\subsection{Architettura del Sistema e Flussi di Elaborazione}
+\label{subsec:architettura_telemedicina}
+
+L'architettura è costituita da cinque microservizi con funzionalità distinte:
+
+\begin{itemize}
+  \item \textbf{API Gateway (SGW)}: funge da punto di ingresso per le richieste esterne; 
+      gestisce autenticazione, autorizzazione e instradamento verso i sottosistemi;
+  \item \textbf{Data Ingestion Service (SIN)}: riceve i flussi di dati biomedici dai 
+      dispositivi di monitoraggio remoto, li normalizza nel formato interno e li indirizza verso la persistenza; 
+  \item \textbf{Database Service (SDB)}: rappresenta una risorsa di persistenza condivisa, 
+      implementata con un pool di connessioni gestito dalla \gls{JVM};
+  \item \textbf{Alert Service (SAL)}: recupera i dati da SDB, applica regole cliniche 
+      predefinite e genera notifiche verso il personale sanitario;
+  \item \textbf{Billing Service (SBL)}: gestisce fatturazione, archiviazione documentale 
+      e procedure amministrative.
+\end{itemize}
+
+I cinque microservizi sono connessi da due flussi con criticità distinte. 
+Il \textbf{flusso clinico} attraversa in sequenza i servizi SGW, SIN, SDB e SAL: 
+ogni dato biomedico ricevuto dal gateway percorre l'intera catena fino alla 
+generazione della notifica clinica. Il \textbf{flusso amministrativo} collega 
+invece SGW al servizio di fatturazione SBL, che a sua volta accede a SDB per 
+le operazioni di scrittura. La condivisione di SDB tra i due flussi costituisce 
+il punto di interferenza strutturale del sistema, analizzato nella 
+Sezione~\ref{subsec:compliance_sets}. La topologia complessiva è illustrata 
+nella Figura~\ref{fig:telemedicina_grafo}.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width = 1.0\textwidth, trim={0 0 0 15mm}, clip]{images/telemedicina_grafo}
+	\caption[Architettura del sistema di telemedicina]{Architettura del sistema di telemedicina}
+	\label{fig:telemedicina_grafo}
+\end{figure}
+
+\subsection{Metriche di Osservazione del Sistema}
+\label{subsec:metriche_osservazione}
+
+Il sistema è implementato su runtime Java con framework Spring Boot, scelta che determina la
+disponibilità di metriche di stato interno specifiche della \gls{JVM}. Le metriche di nodo
+$\mathbf{x}_v(t) = [\text{cpu}_v(t),\, \text{mem}_v(t),\, \text{pool}_v(t),\, \text{gc}_v(t)]$
+permettono di monitorare quattro dimensioni fondamentali di ciascun microservizio: utilizzo
+della \gls{CPU}, occupazione dell'heap \gls{JVM}, saturazione del connection pool 
+verso il database (\texttt{pool\_percent}), e la durata delle pause del garbage collector (\texttt{gc\_pause\_ms}).\\
+Mentre l'utilizzo di \gls{CPU} e memoria rappresentano uno standard in qualsiasi sistema di
+monitoraggio moderno, le restanti due metriche sono strettamente legate al runtime Java e
+rivelano condizioni di degrado latente. Ad esempio, un nodo
+può avere il connection pool saturo all'85\% senza che la latenza degli archi incidenti abbia
+ancora violato le proprie soglie; in questo caso, le richieste vengono ancora servite, ma con tempi
+di attesa crescenti nelle code di connessione. Queste metriche interne consentono di anticipare
+la violazione rispetto al momento in cui essa diventa visibile sugli archi. \\
+Le metriche di arco $\mathbf{x}_e(t) = [L_e(t),\, \varepsilon_e(t),\, \theta_e(t)]$
+descrivono invece la qualità di ogni singola interazione attraverso la latenza media delle chiamate $L_e$, 
+il tasso di errore $\varepsilon_e$ inteso come frazione di richieste fallite, e il throughput $\theta_e$ 
+misurato in richieste al secondo. La Tabella~\ref{tab:metriche_telemedicina} riassume la classificazione completa.
+
+\begin{table}[htbp]
+\centering
+\caption{Metriche del sistema di telemedicina.}
+\label{tab:metriche_telemedicina}
+\begin{tabular}{llll}
+\toprule
+\textbf{Simbolo} & \textbf{Descrizione} & \textbf{Unità} & \textbf{Natura} \\
+\midrule
+$\text{cpu}_v(t)$  & Utilizzo \gls{CPU}           & \%    & Stato (nodo) \\
+$\text{mem}_v(t)$  & Heap \gls{JVM} occupato       & MB    & Stato (nodo) \\
+$\text{pool}_v(t)$ & Saturazione connection pool   & \%    & Stato (nodo) \\
+$\text{gc}_v(t)$   & Pause garbage collector       & ms    & Stato (nodo) \\
+$L_e(t)$           & Latenza media arco            & ms    & Interazione (arco) \\
+$\varepsilon_e(t)$ & Tasso di errore               & ratio & Interazione (arco) \\
+$\theta_e(t)$      & Throughput                    & req/s & Interazione (arco) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Proprietà Certificate e Nodi Condivisi}
+\label{subsec:compliance_sets}
+
+Il sistema deve garantire il rispetto di due proprietà non funzionali certificate,
+caratterizzate da requisiti distinti. La prima proprietà, denominata \textbf{Real-time
+Dependability}, impone che la latenza end-to-end del flusso clinico non superi i 500\,ms e
+che la disponibilità del percorso superi il 99,99\% su base mensile. Il soddisfacimento di
+tale proprietà dipende dalla conformità congiunta dei servizi SGW, SIN, SDB e SAL; difatti, 
+un malfunzionamento di uno qualunque di essi violerebbe la proprietà sull'intero percorso.
+La seconda proprietà, denominata \textbf{Billing Compliance}, richiede
+la corretta esecuzione di ogni operazione di fatturazione e la coerenza della base documentale.
+I componenti coinvolti sono SGW, SBL e SDB.
+
+Il confronto tra i due insiemi rivela immediatamente che SGW e SDB appartengono a entrambe le proprietà. 
+In particolare, SDB rappresenta il nodo di interferenza strutturale critico tra i due flussi. 
+Un incremento sostenuto del carico amministrativo sul flusso di fatturazione può infatti saturare 
+il \emph{connection pool} del database, rallentando l'accesso di SIN alla persistenza. 
+Si genera così una minaccia per la proprietà \textbf{Real-time Dependability} attraverso una catena 
+causale che ha origine interamente al di fuori del percorso clinico. 
+Questa interferenza non è identificabile analizzando i flussi in isolamento; essa emerge invece come 
+informazione topologica dal confronto tra i due insiemi di componenti.
+Il valore architetturale del layer semantico risiede proprio nella capacità di rendere
+esplicita, già in fase di progettazione, un'interferenza che i sistemi di assessment
+tradizionali potrebbero rilevare solo empiricamente. In certi contesti, un rilevamento tardivo
+renderebbe inutile qualsiasi tentativo di intervento. Questo scenario verrà utilizzato come esempio illustrativo nel Capitolo~\ref{chap:metodologia} per mostrare
+come la pipeline predittiva operi in presenza di un'interferenza cross-property.

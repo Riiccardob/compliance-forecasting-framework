@@ -1,0 +1,1716 @@
+% =========================================================
+% CAPITOLO 3 — METODOLOGIA
+% =========================================================
+
+\chapter{Metodologia}
+\label{chap:metodologia}
+
+La struttura del \textit{framework} metodologico per il \textit{forecasting} predittivo della
+\textit{non-compliance} in sistemi distribuiti a microservizi è ibrida; combina infatti due
+formalismi distinti, con ruoli complementari e non intercambiabili. I Grafi Temporali
+Attribuiti (\gls{ATG}) modellano l'evoluzione dinamica delle metriche osservabili a
+\textit{runtime} e forniscono la struttura dati ideale per l'applicazione dei modelli di
+previsione quantitativa sulle serie temporali. Tuttavia, essi non permettono di esprimere
+nativamente i vincoli logici che legano molteplici componenti a una specifica proprietà
+certificata. Gli ipergrafi, invece, codificano tali vincoli logici con assoluta precisione
+strutturale, ma sono per natura privi di capacità predittive. A questi due formalismi si
+aggiunge un terzo elemento, la funzione di \textit{mapping} semantico, che funge da ponte
+traducendo le previsioni quantitative locali in valutazioni globali di conformità sulle
+proprietà certificate. 
+L'architettura ibrida nasce dalla necessità di superare i limiti che un approccio standard
+incontrerebbe nel modellare sistemi complessi caratterizzati da proprietà certificate multiple e
+componenti condivisi tra percorsi distinti. Come illustrato nella Figura~\ref{fig:framework_overview},
+il modello si articola su due dimensioni.
+
+La prima dimensione riguarda la \textbf{rappresentazione del sistema}, organizzata su tre
+\textit{layer} concettuali:
+
+\begin{itemize}
+  \item \textbf{Layer 1 (Ipergrafo di certificazione):} è una struttura statica che viene
+        definita a \textit{design-time} e che permette di codificare ogni proprietà certificata
+        in un iperarco con semantica AND atomica. Attraverso la funzione \textit{Shared} permette
+        di identificare topologicamente i punti di interferenza tra proprietà distinte, senza
+        necessità di elaborare dati storici;
+  \item \textbf{Layer 2 (\textit{Attributed Temporal Graph}):} è una struttura dinamica che
+        descrive l'evoluzione del sistema a \textit{runtime}, attraverso serie temporali di
+        metriche osservabili. Queste serie di metriche costituiscono lo stato interno dei nodi
+        e la qualità delle interazioni sugli archi. La struttura costituisce il substrato
+        computazionale su cui operano tutti i modelli di previsione;
+  \item \textbf{Layer 3 (\textit{Mapping} semantico):} funge da collegamento bidirezionale tra
+        i due livelli precedenti. Traduce ogni \textit{compliance set} nell'insieme degli archi
+        rilevanti per quella proprietà e associa le previsioni locali alla corretta funzione di
+        aggregazione.
+\end{itemize}
+
+La seconda dimensione riguarda la \textbf{\textit{pipeline} di \textit{forecasting}},
+articolata in quattro fasi operative atte a trasformare i dati di telemetria grezza in giudizi
+di conformità.
+
+\begin{itemize}
+  \item \textbf{Fase I (Previsione locale):} la configurazione topologica dell'ipergrafo orienta
+        in modo deterministico la selezione delle metriche rilevanti, mentre i modelli predittivi
+        generano le traiettorie di previsione sull'orizzonte temporale configurato, elaborando le 
+        serie storiche delle metriche selezionate per identificarne trend, stagionalità e dinamiche evolutive;
+  \item \textbf{Fase II (Analisi causale):} una sequenza di test statistici applicati sulle coppie
+        di metriche semanticamente rilevanti definisce il grafo causale, includendo le dipendenze
+        \textit{cross-property} tra \textit{compliance sets} distinti;
+  \item \textbf{Fase III (Monitoraggio strutturale):} due linee di analisi parallele si occupano
+        rispettivamente del monitoraggio metrico aggregato, tramite \textit{threshold}, z-score e
+        Isolation Forest, e del monitoraggio comportamentale sul \textit{Path Adherence Score}
+        tramite \gls{CUSUM}. Entrambe convergono in un validatore strutturale finale;
+  \item \textbf{Fase IV (Sintesi e \textit{Alert}):} l'aggregazione dei risultati produce un
+        \textit{alert} strutturato che indica proprietà a rischio, \textit{lead time} stimato, la
+        causa radice e il \textit{compliance set} impattato.
+\end{itemize}
+
+Attraverso l'adozione di questo approccio stratificato, l'output finale del \textit{framework}
+rappresenta a tutti gli effetti un giudizio di \textit{compliance} predittivo completo e non un
+semplice segnale di anomalia statistica. Nelle sezioni seguenti vengono formalizzate le strutture
+di rappresentazione (Sezione~\ref{sec:rappresentazione_sistema}) e i meccanismi algoritmici della
+\textit{pipeline} (Sezione~\ref{sec:pipeline_forecasting}).
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width = 0.9\textwidth, height=0.45\textheight,trim={0 0 0 0}, clip]{images/framework_overview}
+	\caption[Struttura del framework]{Struttura del framework}
+	\label{fig:framework_overview}
+\end{figure}
+
+% =========================================================
+\section{Rappresentazione del Sistema}
+\label{sec:rappresentazione_sistema}
+% =========================================================
+
+I Grafi Temporali Attribuiti (\gls{ATG}) permettono di descrivere con precisione il comportamento
+di un sistema distribuito a \textit{runtime}. Essi catturano infatti sia le metriche interne dei
+microservizi sui nodi, sia le metriche relative alle interazioni sugli archi, consentendo di
+costruire modelli di \textit{forecasting} su ciascuna di queste serie temporali. Nonostante ciò,
+nel momento in cui il sistema è soggetto a molteplici proprietà certificate, l'utilizzo esclusivo
+di un grafo temporale attribuito presenta un limite strutturale significativo; il grafo non permette
+infatti di esprimere nativamente la semantica logica che lega un insieme di componenti a una
+specifica proprietà certificata.
+Questa criticità si accentua ulteriormente in presenza di componenti condivisi tra più percorsi
+certificati. Si consideri, ad esempio, una generica risorsa condivisa tra un flusso critico ad alta
+priorità e un flusso secondario. Un modello basato esclusivamente su \gls{ATG} può rilevare un
+aumento della latenza lungo il flusso critico e correlarlo alla saturazione della risorsa, ma non
+dispone dell'informazione semantica per dedurre che il carico del flusso secondario costituisce la
+reale causa originaria. In uno scenario di questo genere, l'identificazione della causa radice
+richiede un'analisi empirica sui dati storici. Tuttavia, tale approccio presenta due limiti
+significativi. Da un lato può infatti introdurre costi computazionali elevati, fino a quadratici in
+approcci basati su correlazione a coppie su tutte le metriche disponibili, dall'altro comporta il
+rischio che eventuali interferenze tra diverse proprietà rimangano invisibili, finché non si
+manifestano esplicitamente nei dati. Per superare questi limiti, viene adottato l'approccio ibrido
+a tre \textit{layer} introdotto ad inizio capitolo. I tre \textit{layer} operano su scale temporali
+differenti e svolgono funzioni complementari ma non sovrapponibili. L'ipergrafo di certificazione è
+definito a \textit{design-time}; viene infatti determinato in fase di configurazione del sistema e
+subisce modifiche solo in caso di cambiamenti architetturali o variazioni nelle proprietà
+certificate. Al contrario, l'\gls{ATG} è una struttura a \textit{runtime} che evolve costantemente
+in base al ritmo della telemetria. Infine, la funzione di \textit{mapping} rappresenta il ponte tra
+i primi due livelli e consente al sistema di tradurre le previsioni metriche in valutazioni di
+\textit{compliance}, mantenendo intatto il valore semantico della certificazione durante tutto il
+ciclo di vita.
+
+% ---------------------------------------------------------
+\subsection{Ipergrafo di Certificazione e Compliance Sets}
+\label{sec:ipergrafo_certificazione}
+% ---------------------------------------------------------
+
+Sulla base dei limiti analizzati, emerge la necessità di definire un formalismo che sia in grado di
+rappresentare in maniera esplicita i vincoli di conformità tra molteplici componenti. Viene quindi
+introdotta la nozione di \textit{compliance set} intesa come l'insieme minimale di componenti la cui
+conformità contemporanea configura una condizione necessaria affinché una proprietà certificata sia
+soddisfatta; quindi, un \textit{compliance set} non rappresenta un semplice percorso nel grafo,
+bensì costituisce un vincolo logico di tipo AND tra tutti i componenti in esso contenuti. La
+violazione dello \gls{SLA} da parte di un solo elemento fa sì che l'intera proprietà venga violata.
+Questa semantica non emerge dalla struttura arco-nodo di un grafo tradizionale, in quanto
+quest'ultimo modella solo le relazioni binarie tra coppie di nodi. Un \textit{compliance set}
+invece può coinvolgere un numero arbitrario di elementi in una singola relazione atomica. \\
+Il formalismo degli ipergrafi permette, attraverso una struttura matematica appropriata, di
+rappresentare questa semantica. Un ipergrafo rappresenta infatti una generalizzazione del grafo
+standard in cui un iperarco può connettere un insieme arbitrario di nodi; un iperarco non è quindi
+vincolato ad avere esattamente due estremi, bensì può contenere un qualsiasi numero finito di nodi.
+Formalmente, un ipergrafo è una coppia $H = (V, E_H)$\footnote{La notazione
+originale di Berge adotta $X$ come simbolo per l'insieme dei vertici, definendo l'ipergrafo come
+la coppia $H = (X, E)$. L'adattazione a $V$, utilizzata in questo lavoro, è coerente con la
+notazione standard dei grafi adottata nel resto del \textit{framework} e non altera la definizione
+sostanziale.} ~\cite{berge1989}, dove:
+
+\begin{itemize}
+  \item $V$ è l'insieme dei nodi rappresentanti i microservizi;
+  \item $E_H$ è la famiglia degli iperarchi, dove ogni iperarco $h \in E_H$ è un sottoinsieme non
+        vuoto di $V$.
+\end{itemize}
+
+Nel contesto del \textit{framework}, ogni proprietà certificata viene quindi mappata su un
+iperarco dell'ipergrafo di certificazione. L'utilizzo degli ipergrafi, inoltre, permette di
+visualizzare immediatamente le interferenze strutturali; i nodi condivisi tra più iperarchi 
+indicano infatti componenti critici in cui un singolo degrado prestazionale può innescare violazioni a cascata su diverse certificazioni.
+
+\subsubsection{Definizione Formale}
+\label{sec:def_formale_ipergrafo}
+
+A ogni proprietà $\Phi_i$ che il sistema distribuito deve garantire, viene associato un iperarco
+$H_{\Phi_i} \subseteq V$ che costituisce il \textit{compliance set} della proprietà. La
+semantica dell'iperarco risponde a una logica AND atomica: la proprietà $\Phi_i$ è considerata
+verificata se, e solo se, ogni singolo componente appartenente all'insieme rispetta il proprio
+\gls{SLA} individuale. Formalmente, tale relazione è espressa come:
+\begin{equation}
+\label{eq:compliance_condition}
+\Phi_i \text{ verificata} \iff \forall\, v \in H_{\Phi_i} : \text{SLA}_v \text{ rispettato}
+\end{equation}
+In questa espressione, $\text{SLA}_v$ rappresenta la specifica degli \gls{SLA} del componente $v$.
+La violazione dell'equazione~\eqref{eq:compliance_condition} per almeno un nodo appartenente a $H_{\Phi_i}$ 
+implica la violazione di $\Phi_i$ sull'intero \textit{compliance set}. Questa asimmetria tra la rigidità 
+del requisito di conformità universale e la facilità di violazione rende l'intero vincolo 
+vulnerabile al degrado di una singola parte. L'ipergrafo di certificazione del sistema è la struttura 
+che aggrega tutti i \textit{compliance sets} delle proprietà monitorate:
+\begin{equation}
+\label{eq:h_cert}
+H_{\text{cert}} = \bigl(V,\; \{H_{\Phi_1}, H_{\Phi_2}, \ldots, H_{\Phi_m}\}\bigr)
+\end{equation}
+$H_{\text{cert}}$ rappresenta una struttura statica che descrive le dipendenze logiche definite in
+fase di progettazione architetturale e viene aggiornata solo quando cambiano le proprietà
+certificate o l'architettura del sistema. $V$ rappresenta l'insieme dei microservizi.
+
+\subsubsection{Istanziazione sul Sistema di Telemedicina}
+\label{sec:istanziazione_telemedicina}
+
+Nel sistema di telemedicina critica introdotto nel Capitolo~\ref{chap:stato_arte}, l'insieme dei
+microservizi è:
+\begin{equation}
+\label{eq:V_telemed}
+V = \{\text{SGW},\, \text{SIN},\, \text{SDB},\, \text{SAL},\, \text{SBL}\}
+\end{equation}
+dove le sigle identificano rispettivamente l'\textit{API Gateway} (SGW), il \textit{Data Ingestion
+Service} (SIN), il \textit{Database Service} (SDB), l'\textit{Alert Service} (SAL) e il
+\textit{Billing Service} (SBL). Il sistema è soggetto a due proprietà certificate con requisiti
+distinti.
+La proprietà $\Phi_{\text{crit}}$ (\textit{Real-time Dependability}) impone che la latenza
+end-to-end del flusso clinico rimanga inferiore a 500\,ms e che la disponibilità del percorso
+superi il 99,99\% su base mensile. Il \textit{compliance set} associato a questa proprietà include
+tutti i servizi che costituiscono il flusso clinico:
+\begin{equation}
+\label{eq:h_crit}
+H_{\text{crit}} = \{\text{SGW},\, \text{SIN},\, \text{SDB},\, \text{SAL}\}
+\end{equation}
+La proprietà $\Phi_{\text{adm}}$ (\textit{Billing Compliance}) richiede la corretta esecuzione di
+ogni operazione di fatturazione e la coerenza della base documentale. Il relativo
+\textit{compliance set} include i servizi coinvolti nel flusso amministrativo:
+\begin{equation}
+\label{eq:h_adm}
+H_{\text{adm}} = \{\text{SGW},\, \text{SBL},\, \text{SDB}\}
+\end{equation}
+\subsubsection{Funzione Shared e Identificazione delle Interferenze}
+\label{sec:funzione_shared}
+
+Il valore architetturale dell'ipergrafo di certificazione emerge con particolare chiarezza quando
+si analizza la relazione tra \textit{compliance sets} distinti. Per ogni coppia di proprietà
+$(\Phi_i, \Phi_j)$ con $i \neq j$, si definisce la funzione \textit{Shared} che identifica i
+componenti condivisi tra i rispettivi \textit{compliance sets}:
+\begin{equation}
+\label{eq:shared}
+\text{Shared}(H_{\Phi_i}, H_{\Phi_j}) = H_{\Phi_i} \cap H_{\Phi_j}
+\end{equation}
+Ogni componente $v \in \text{Shared}(H_{\Phi_i}, H_{\Phi_j})$ rappresenta un \textbf{punto di
+interferenza strutturale}. In tali nodi, il degrado prestazionale può propagarsi simultaneamente
+verso entrambe le proprietà; allo stesso modo, il carico generato dalle attività afferenti a una
+proprietà può deteriorare la qualità del servizio dell'altra.
+Applicando la funzione al caso di studio della telemedicina, si ottiene:
+\begin{equation}
+\label{eq:shared_telemed}
+\text{Shared}(H_{\text{crit}}, H_{\text{adm}}) = H_{\text{crit}} \cap H_{\text{adm}}
+= \{\text{SGW},\, \text{SDB}\}
+\end{equation}
+Il \textit{gateway} SGW e il \textit{database} SDB sono elementi condivisi tra le due proprietà.
+In particolare, il servizio SDB emerge come il nodo di interferenza critico. Un incremento
+sostenuto del traffico legato al flusso amministrativo può infatti saturare il \textit{connection
+pool} di SDB, degradando la latenza con cui SIN accede alla persistenza. In questo modo, la
+proprietà $\Phi_{\text{crit}}$ viene minacciata attraverso una catena causale che si origina
+interamente al di fuori del \textit{compliance set} del flusso clinico. SGW, pur appartenendo a
+$\text{Shared}(H_{\text{crit}}, H_{\text{adm}})$, non genera un componente di interferenza
+esplicito in $M^{\text{interf}}$: essendo il \textit{gateway} d'ingresso del sistema, non riceve
+archi interni da altri nodi di $V$ che convoglino traffico quantificabile verso di esso.
+L'interferenza su SGW, se presente, si manifesterebbe come saturazione di $\text{cpu}_{\text{SGW}}$
+o $\text{mem}_{\text{SGW}}$, già incluse in $M^{\text{direct}}$
+(Sezione~\ref{sec:feature_selection}).
+È fondamentale sottolineare che tale informazione possiede natura topologica e non statistica; essa
+emerge infatti dall'intersezione di due insiemi definiti a livello logico e non richiede
+l'elaborazione di serie storiche o correlazioni tra metriche di percorsi differenti. Mentre un
+sistema di monitoraggio basato esclusivamente su \gls{ATG} rileverebbe tale interferenza solo a
+seguito di una manifestazione empirica nei dati, l'ipergrafo la rende esplicitamente rappresentabile
+già in fase di progettazione.
+
+\subsubsection{Proprietà Strutturali}
+\label{sec:proprieta_strutturali}
+
+L'ipergrafo $H_{\text{cert}}$~\eqref{eq:h_cert} soddisfa alcune proprietà strutturali determinanti per la
+correttezza e l'efficienza computazionale del \textit{framework}. La \textit{completezza} richiede
+che ogni componente $v \in V$ che partecipa attivamente al sistema appartenga ad almeno un
+iperarco; difatti, qualora un nodo non fosse incluso in alcun \textit{compliance set}, il suo
+monitoraggio non troverebbe giustificazione all'interno del \textit{framework} in quanto il suo
+stato non concorrerebbe al soddisfacimento di alcuna proprietà. La \textit{relazione di dominanza
+tra proprietà}, invece, analizza le relazioni di inclusione tra gli iperarchi. Se
+$H_{\Phi_i} \subseteq H_{\Phi_j}$, allora la proprietà $\Phi_j$ risulta logicamente più
+restrittiva, in quanto coinvolge un numero maggiore di componenti il cui \gls{SLA} deve essere
+simultaneamente soddisfatto. Ogni violazione di $\Phi_i$ implica matematicamente anche la
+violazione di $\Phi_j$, poiché il componente guasto appartenente a $H_{\Phi_i}$ appartiene per
+definizione anche all'insieme dominante $H_{\Phi_j}$. Questo ordine parziale può essere utilizzato 
+per ottimizzare la sequenza di valutazione. Verificare  prima i \textit{compliance sets} più restrittivi 
+consente, qualora risultino conformi, di inferire automaticamente la conformità dei set meno restrittivi 
+contenuti in essi. In questo modo si riduce il numero di controlli necessari nei cicli operativi in cui il sistema è sano.
+È necessario osservare che la proprietà di completezza è definita rispetto a $V$, garantendo che
+ogni componente monitorato contribuisca ad almeno una proprietà certificata, senza però vincolare
+la composizione di $V$ stessa. Di conseguenza, il perimetro del \textit{framework} coincide
+esattamente con i componenti inclusi esplicitamente in $V$. Componenti infrastrutturali trasversali,
+come \textit{load balancer} o \textit{DNS resolver}, il cui fallimento può compromettere più
+proprietà simultaneamente, devono essere inclusi esplicitamente in $V$ e nei rispettivi iperarchi
+affinché il loro impatto venga modellato correttamente. Al contrario, componenti esclusi da $V$
+costituiscono invece un \textit{blind spot} del \textit{framework} e il loro effetto sulla
+\textit{compliance} non è rappresentato dal modello. Questa criticità va quindi considerata come
+una limitazione della fase di modellazione, piuttosto che un limite intrinseco del sistema reale.
+
+Un vantaggio dell'ipergrafo risiede nella sua \emph{modularità} rispetto all'evoluzione del
+sistema. Difatti, quando viene introdotta una nuova proprietà certificata $\Phi_{m+1}$ è
+sufficiente aggiungere il relativo iperarco $H_{\Phi_{m+1}}$ senza la necessità di dover
+modificare i \textit{compliance sets} esistenti. Analogamente, quando un componente viene aggiunto
+all'architettura esso viene inserito nell'iperarco corrispondente, operazione svolta in fase di
+aggiornamento del modello di certificazione, mantenendo inalterata la struttura degli altri.
+Questa flessibilità è fondamentale in sistemi caratterizzati da architetture in evoluzione continua;
+difatti, l'aggiunta di una nuova proprietà non necessita di ridefinire tutte le strutture di
+monitoraggio esistenti.
+
+% ---------------------------------------------------------
+\subsection{Grafo Temporale Attribuito e Metriche Osservabili}
+\label{sec:atg_metriche}
+% ---------------------------------------------------------
+
+Il Layer~2 dell'architettura ibrida è rappresentato dall'\gls{ATG}; quest'ultimo modella
+l'evoluzione dinamica del sistema distribuito attraverso serie temporali di metriche osservabili.
+A differenza del Layer~1, il quale definisce le proprietà certificate, il Layer~2 descrive il
+comportamento del sistema a \textit{runtime}, attraverso le misurazioni raccolte dall'infrastruttura
+di telemetria.
+
+\subsubsection{Definizione Formale}
+\label{sec:def_formale_atg}
+Un Grafo Temporale Attribuito al tempo $t$ è definito dalla quadrupla:
+\begin{equation}
+\label{eq:atg_def}
+G_t = (V,\; E_t,\; \mathbf{X}_{V,t},\; \mathbf{X}_{E,t})
+\end{equation}
+I quattro elementi della definizione hanno ruoli distinti e complementari.
+
+\begin{itemize}
+  \item $\mathbf{V}$: rappresenta l'insieme dei nodi, ossia i microservizi o componenti
+        strutturali che costituiscono il sistema distribuito. $V$ è condiviso tra Layer~1 e
+        Layer~2; difatti, gli stessi componenti che compaiono nei \textit{compliance sets}
+        dell'ipergrafo compaiono anche come nodi nell'\gls{ATG}. Questa condivisione costituisce
+        il presupposto necessario per la funzione di \textit{mapping} descritta nella
+        Sezione~\ref{sec:funzione_mapping};
+  \item $\mathbf{E_t \subseteq V \times V}$: indica l'insieme degli archi attivi al tempo $t$.
+        Un arco $(u,v) \in E_t$ rappresenta una chiamata di servizio tra il componente $u$ e il
+        componente $v$ nell'intervallo temporale corrispondente a $t$. A differenza dei nodi,
+        l'insieme degli archi è variabile nel tempo. Nuovi archi compaiono infatti quando vengono
+        attivate nuove dipendenze comunicative, mentre archi esistenti scompaiono quando i
+        \textit{circuit breaker} interrompono percorsi degradati o quando il sistema viene
+        riconfigurato;
+  \item $\mathbf{X_{V,t} \in \mathbb{R}^{|V| \times d_V}}$: costituisce la matrice delle
+        \textit{feature} di nodo al tempo $t$. Ogni riga $i$ contiene il vettore relativo allo
+        stato interno del componente $v_i$. Queste \textit{feature} sono persistenti, ovvero
+        assumono valori definiti anche in assenza di traffico in transito sul nodo. Un
+        microservizio in stato di \textit{idle}, ad esempio, ha un utilizzo della \gls{CPU}
+        prossimo allo zero e una dimensione stabile dell'\textit{heap} di memoria. Questi dati
+        sono osservabili e informativi anche senza che il nodo stia elaborando richieste. La
+        struttura duale del grafo è compatibile con i principali approcci di \textit{representation
+        learning} su grafi dinamici, tra cui i \gls{TGN}~\cite{rossi2020}, che adottano
+        un'architettura analoga, distinguendo tra uno stato persistente per nodo
+        (\textit{memory module}) e \textit{feature} effimere associate agli eventi di interazione;
+  \item $\mathbf{X_{E,t} \in \mathbb{R}^{|E_t| \times d_E}}$: rappresenta la matrice delle
+        \textit{feature} di arco al tempo $t$. Ogni riga $j$ contiene il vettore associato
+        all'interazione $e_j \in E_t$. A differenza delle \textit{feature} di nodo, le
+        \textit{feature} di arco sono effimere: esse esistono solo in presenza di traffico
+        sull'arco. Parametri come la latenza di una chiamata, il tasso di errore e il
+        \textit{throughput} sono proprietà che nascono e finiscono con l'interazione, e quindi
+        legate alla durata dell'interazione stessa.
+\end{itemize}
+
+\subsubsection{Ruolo Diagnostico delle Feature}
+\label{sec:ruolo_diagnostico}
+
+Le \textbf{\textit{feature} di nodo} rappresentano la sorgente primaria per l'individuazione dei
+segnali di degrado lento, definiti come \textit{compliance drift}. Un \textit{memory leak}, ad
+esempio, si manifesta attraverso una crescita graduale di $\text{mem}_v(t)$ nell'arco di ore o
+giorni, molto prima che la latenza degli archi incidenti superi le soglie di allarme. Analogamente,
+la saturazione progressiva del \textit{connection pool} di un \textit{database} è visibile su
+$\text{pool}_v(t)$ minuti prima che le richieste inizino a mettersi in coda e la latenza esploda.
+In questi scenari, il mancato monitoraggio delle \textit{feature} di nodo fa sì che vengano
+prodotti \textit{alert} con un \textit{lead time} insufficiente per un intervento preventivo
+efficace. Le \textbf{\textit{feature} di arco}, al contrario, rappresentano la superficie
+osservabile delle interazioni e costituiscono la metrica di \textit{compliance} più diretta per
+requisiti di latenza o disponibilità. La violazione di uno \gls{SLA} di latenza si manifesta
+direttamente come $L_e(t) > L_{\max}$ su un arco del percorso certificato. Il \textit{forecasting}
+delle \textit{feature} di arco permette di stimare la latenza futura che viene poi aggregata per
+ottenere la previsione della proprietà \textit{end-to-end}.
+
+Nel sistema di telemedicina, le \textit{feature} di nodo associate a ciascun microservizio
+$v \in V$ sono raggruppate nel vettore:
+\begin{equation}
+\label{eq:node_features}
+\mathbf{x}_v(t) = \bigl[\text{cpu}_v(t),\; \text{mem}_v(t),\; \text{pool}_v(t),\; \text{gc}_v(t)\bigr]
+\end{equation}
+Il vettore è definito in modo uniforme su tutti i componenti del sistema, rappresentando lo spazio
+delle \textit{feature} disponibili nel Layer~2. La selezione operativa delle metriche rilevanti per
+il \textit{forecasting}, che può escludere alcune dimensioni del vettore per specifici nodi, è
+demandata alla \textit{feature selection} della Fase~I (Sezione~\ref{sec:feature_selection}). \\
+In questa definizione, $\text{cpu}_v(t)$ indica l'utilizzo della \gls{CPU} in percentuale. 
+Il parametro $\text{mem}_v(t)$ denota invece l'occupazione della memoria principale del processo in MB che, 
+nel sistema di riferimento basato su \gls{JVM}, corrisponde all'occupazione dell'\textit{heap}; 
+$\text{gc}_v(t)$ esprime la durata delle pause di gestione della memoria in millisecondi e, 
+nel sistema di riferimento, corrisponde alle pause del \textit{garbage collector} \gls{JVM}.
+La metrica $\text{pool}_v(t)$ rappresenta invece il tasso di saturazione delle connessioni. 
+Il suo significato specifico dipende dal ruolo del nodo: per i microservizi applicativi come 
+SIN misura il \textit{connection pool outbound} verso il \textit{database}, 
+mentre per il database SDB indica il \textit{pool incoming} delle connessioni dai \textit{client}. 
+Per SIN, il \textit{pool} in uscita verso SDB non viene incluso direttamente in $M^{\text{direct}}$ 
+(Sezione~\ref{sec:feature_selection}) poiché, nella configurazione del sistema di riferimento, 
+la sua saturazione costituisce tipicamente una conseguenza diretta della saturazione del \textit{pool incoming} 
+di SDB lato \textit{server}, il quale rappresenta il vero segnale \textit{root-cause}. 
+La rilevanza di queste metriche varia a
+seconda del componente. Per SGW e SAL, che non gestiscono \textit{pool} di connessioni, il
+contributo più significativo proviene da \gls{CPU} e memoria, mentre $\text{pool}_v(t)$ è la
+metrica determinante per il \textit{database} SDB; infine $\text{gc}_v(t)$ segnala il degrado
+nelle fasi di allocazione per SIN, che esegue normalizzazione dati su \gls{JVM}. 
+Per quanto riguarda le interazioni $e = (u,v) \in E_t$, le \textit{feature} di arco sono definite dal vettore:
+\begin{equation}
+\label{eq:edge_features}
+\mathbf{x}_e(t) = \bigl[L_e(t),\; \varepsilon_e(t),\; \theta_e(t)\bigr]
+\end{equation}
+dove $L_e(t)$ indica la latenza media delle chiamate sull'arco $e$ in ms, $\varepsilon_e(t)$ è il
+tasso di errore come frazione delle richieste fallite, e $\theta_e(t)$ è il \textit{throughput} in
+richieste al secondo.
+Questa modellazione duale consente al \textit{framework} di intercettare il degrado interno prima
+che questo si propaghi all'esterno, trasformando segnali deboli a livello di nodo in previsioni
+azionabili sulla \textit{compliance} globale.
+
+I due scenari seguenti illustrano concretamente la complementarità tra \textit{feature} di nodo e
+\textit{feature} di arco. Per semplicità illustrativa, si assume che il \textit{budget} totale di
+500\,ms imposto dalla proprietà \emph{Real-time Dependability} venga ripartito allocando soglie
+locali indicative di 250\,ms per i singoli archi critici. Entrambe le tabelle riportano valori a
+titolo puramente illustrativo.
+
+\begin{table}[htbp]
+\centering
+\caption{Scenario \textit{memory leak} in SIN: le metriche di nodo segnalano il degrado con
+largo anticipo rispetto alla metrica di arco (valori illustrativi).}
+\label{tab:scenario_memory_leak}
+\begin{tabular}{ccccc}
+\toprule
+\textbf{Giorno} & $\boldsymbol{L_{e_1}}$\textbf{(ms)} & $\boldsymbol{L_{e_2}}$\textbf{(ms)} & \textbf{mem\_SIN (MB)} & \textbf{cpu\_SIN (\%)} \\
+\midrule
+0  & 45 & 80  & 512  & 28 \\
+5  & 45 & 158 & 972  & 44 \\
+10 & 46 & 268 & 1507 & 63 \\
+\midrule
+\multicolumn{5}{c}{\footnotesize\textbf{Soglia \gls{SLA}:} $L_{e_1} \leq 250\;\text{ms}$, $L_{e_2} \leq 250\;\text{ms}$ (\textit{budget} ripartito)} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+La Tabella~\ref{tab:scenario_memory_leak} mostra come la memoria del servizio SIN subisca un
+incremento del 194\% in dieci giorni, mentre la latenza dell'arco $e_2$ supera la soglia definita
+dallo \gls{SLA} solo al decimo giorno. Un sistema che monitora esclusivamente le \textit{feature}
+di arco genererebbe l'alert al decimo giorno senza alcun preavviso utile. Al contrario, un sistema
+che monitora anche le \textit{feature} di nodo può prevedere la violazione già al quinto giorno,
+quando $\text{mem}_{\text{SIN}}$ supera i 900\,MB con un \textit{trend} di crescita con tasso
+accelerato. In questo scenario, il coefficiente di correlazione tra $\text{mem\_SIN}$ e $L_{e_2}$
+è prossimo a 0,99, risultato empiricamente coerente con una relazione causale, la cui direzione
+viene verificata nella Fase~II tramite il test di Granger.
+
+\begin{table}[htbp]
+\centering
+\caption{Scenario interferenza su SDB: la saturazione del \textit{connection pool} precede la
+violazione di latenza sul percorso critico (valori illustrativi).}
+\label{tab:scenario_interferenza}
+\begin{tabular}{ccccc}
+\toprule
+\textbf{Tempo} & $\boldsymbol{L_{e_2}}$\textbf{(ms)} & $\boldsymbol{\theta_{e_5}}$\textbf{(req/s)} & \textbf{pool\_SDB (\%)} & \textbf{Stato} \\
+\midrule
+08:00 & 82  & 5  & 38 & Normale \\
+08:30 & 127 & 25 & 81 & In degrado \\
+09:00 & 450 & 29 & 98 & \textit{Failure} \\
+\midrule
+\multicolumn{5}{c}{\footnotesize\textbf{Soglia \gls{SLA}:} $L_{e_2} \leq 250\;\text{ms}$;\; soglia \textit{pool}: 90\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+La Tabella~\ref{tab:scenario_interferenza} illustra un caso di interferenza \textit{cross-property}.
+Il \textit{throughput} del flusso amministrativo $\theta_{e_5}$ aumenta da 5 a 29\,req/s in
+un'ora, saturando progressivamente il \textit{connection pool} del \textit{database} SDB. Alle
+08:30 la saturazione del \textit{pool} raggiunge l'81\%, avvicinandosi pericolosamente alla soglia
+critica del 90\%, mentre la latenza $L_{e_2}$ rimane conforme. Un sistema di monitoraggio basato
+solo su \textit{feature} di arco, senza quindi accesso alla \textit{feature} di nodo
+$\text{pool}_{\text{SDB}}$, non disporrebbe dei dati necessari per generare un preavviso utile in
+questo momento. La \textit{feature} di nodo, in questo caso, rende visibile il degrado circa trenta
+minuti prima della violazione esplicita. Questo anticipo costituisce il \textit{lead time}
+disponibile per l'attuazione di un intervento preventivo.
+
+\paragraph{Selezione delle Metriche}
+\label{sec:selezione_metriche}
+
+Il formalismo dell'\gls{ATG} non impone un \textit{set} predefinito di metriche. La distinzione
+tra \textbf{\textit{feature} di nodo} e \textbf{\textit{feature} di arco} ha una valenza
+concettuale e non prescrittiva. Di conseguenza, in un'applicazione reale, le annotazioni del grafo
+temporale dipendono dal dominio specifico e dallo \textit{stack} tecnologico in uso. Per quanto
+riguarda l'analisi dello stato dei nodi, possono essere utilizzate metriche relative a: la
+saturazione delle risorse, come \gls{CPU} e memoria, contatori applicativi, come numero di
+richieste in coda e \textit{cache hit rate} oppure eventi di gestione runtime, come pause del
+\textit{garbage collector} e saturazione dei \textit{thread pool}. Per quanto riguarda gli archi,
+invece, tipicamente vengono utilizzati indicatori di qualità delle interazioni; tra questi si hanno
+la latenza \textit{end-to-end}, il \textit{throughput}, il tasso di errore.
+La scelta delle metriche da utilizzare dipende strettamente dalle proprietà che devono essere
+monitorate. Nel caso di proprietà come la \textit{Real-time Dependability} vengono utilizzate
+metriche relative ai parametri temporali, come ad esempio latenza e \textit{jitter}. Diversamente,
+per proprietà come la \textit{Billing Compliance}, si utilizzano invece metriche transazionali;
+tra queste figurano il \textit{throughput} per quantificare i volumi di fatturazione ($\theta_e$)
+e il tasso di errore ($\varepsilon_e$) per intercettare transazioni fallite o scartate. Questa
+flessibilità fa sì che il \textit{framework} proposto sia applicabile a qualsiasi sistema
+distribuito, purché questo sia dotato di telemetria strutturata secondo la distinzione tra stato
+dei nodi e qualità delle interazioni indipendentemente dalle tecnologie utilizzate.
+
+\paragraph{Integrazione con l'Infrastruttura di Osservabilità}
+\label{sec:integrazione_infrastruttura}
+
+Il \textit{framework} è progettato per integrarsi con le \textit{pipeline} di osservabilità
+standard dell'ecosistema \textit{cloud-native}. Per l'instrumentazione, strumenti come
+OpenTelemetry\footnote{\url{https://opentelemetry.io/}} o le librerie \textit{client} di
+Prometheus\footnote{\url{https://prometheus.io/}} permettono di produrre nativamente le serie
+temporali che alimentano il Layer~2.
+Per quanto riguarda la persistenza delle serie temporali, essa può essere affidata a soluzioni
+come Prometheus TSDB o TimescaleDB\footnote{\url{https://www.timescale.com/}}; queste soluzioni
+permettono di garantire la capacità di gestione di dati ad alta frequenza, necessaria per le
+finestre di analisi del \textit{framework}. Per la ricostruzione automatica della topologia $E_t$,
+invece, strumenti di \textit{distributed tracing} come Jaeger\footnote{\url{https://www.jaegertracing.io/}}
+e Zipkin\footnote{\url{https://zipkin.io/}} permettono di ricostruire le dipendenze comunicative
+attive a partire dagli \textit{span} delle richieste.\\
+L'architettura si mantiene quindi agnostica rispetto allo \textit{stack} tecnologico specifico;
+l'unico requisito è costituito dalla capacità di esportare le serie temporali in un formato
+strutturato, come CSV o Parquet, per l'ingestione nella \textit{pipeline} di \textit{forecasting}.
+
+\subsubsection{Il Probabilistic Behavioral Overlay}
+\label{sec:pbo}
+
+Al fine di quantificare con precisione fenomeni quali latenza o saturazione delle risorse vengono
+utilizzate le metriche associate ai nodi e agli archi dell'\gls{ATG}; tuttavia, questi dati non
+sono sufficienti per stabilire se il sistema sia conforme al comportamento atteso oppure se stia
+progressivamente deviando verso traiettorie impreviste. Per superare questo limite, il
+\textit{framework} sfrutta un livello di astrazione superiore, denominato \textbf{\gls{PBO}}.
+Questo livello permette al \textit{framework} stesso di interpretare le osservazioni quantitative
+sotto forma di comportamento globale del sistema. È importante però distinguere \gls{ATG} e
+\gls{PBO}, in quanto offrono due viste complementari ma distinte del sistema.
+
+L'\gls{ATG} cattura una rappresentazione \emph{fine-grained}; difatti, per ogni istante temporale,
+vengono registrati i valori puntuali delle metriche su nodi e archi attivi. Questa granularità
+risulta fondamentale sia per la costruzione di modelli di previsione accurati sulle singole serie
+temporali, sia per l'identificazione delle cause radice di eventuali anomalie a livello di singolo
+componente. Il \gls{PBO} fornisce invece una rappresentazione \textit{coarse-grained} del
+comportamento; difatti, anziché descrivere i valori esatti delle metriche, permette di catturare
+la frequenza con cui le richieste seguono ciascun percorso disponibile. Tramite il suo utilizzo,
+anche in assenza di anomalie nelle metriche, è possibile identificare una deviazione
+comportamentale. Ad esempio, una diminuzione progressiva del traffico sul percorso clinico non
+necessariamente produce variazioni immediate nelle metriche puntuali degli archi del percorso
+primario; tuttavia, questa deviazione può essere identificata attraverso il \gls{PBO}. Da un punto
+di vista formale, la costruzione del \gls{PBO} trae ispirazione concettuale dai principi del
+\textit{Process Mining} e, in particolare, dalla struttura dati dei \textit{Directly-Follows
+Graphs}~\cite{vanderaalst2016}. Tuttavia, mentre nel \textit{process mining}
+tradizionale tali strumenti vengono impiegati prevalentemente per l'analisi a posteriori e la
+\textit{conformance checking} dei processi, nel presente \textit{framework}
+la struttura probabilistica viene riadattata e applicata dinamicamente al monitoraggio continuo e
+al \textit{forecasting} delle interazioni nei sistemi a microservizi. Formalmente, il \gls{PBO}
+è definito come il grafo:
+\begin{equation}
+\label{eq:pbo_def}
+G_{\text{Behavior}}(t) = (V,\; E_{\text{all}},\; W_t)
+\end{equation}
+dove:
+
+\begin{itemize}
+  \item $\mathbf{V}$: rappresenta il medesimo insieme di nodi dell'\gls{ATG}.
+  \item $\mathbf{E_{\text{all}}}$: rappresenta l'insieme di tutti gli archi osservati nel sistema
+        sull'intera finestra storica di addestramento. Questo insieme include sia gli archi attivi
+        al tempo $t$, sia i percorsi di \textit{fallback} che non risultano necessariamente attivi
+        in ogni istante;
+  \item $\mathbf{W_t}$: è la matrice dei pesi di transizione stocastici. Il peso di ogni arco
+        $(u,v)$ indica la quantità di traffico totale in uscita dal nodo $u$ che sceglie quel
+        percorso specifico in un dato intervallo di tempo. La matrice $W_t$ è, per costruzione,
+        stocastica per righe limitatamente ai nodi con archi uscenti attivi: la somma dei pesi
+        uscenti da ogni nodo non terminale è pari a 1, mentre la riga corrispondente a un nodo
+        terminale risulta nulla, in quanto tale nodo non instrada traffico verso altri componenti.
+\end{itemize}
+
+\paragraph{Il \textit{Path Adherence Score}}
+\label{sec:path_adherence_score}
+
+Il \gls{PBO} permette di definire una metrica che misura quanto il sistema stia effettivamente
+seguendo il percorso comportamentale certificato per una data proprietà. In particolare, dato il
+percorso certificato $P_{\text{cert}} = (v_1, v_2, \ldots, v_n)$ associato alla proprietà $\Phi_i$,
+il \textit{Path Adherence Score} al tempo $t$ è definito come il prodotto dei pesi stocastici lungo
+il percorso:
+\begin{equation}
+\label{eq:pa_score}
+PA(P_{\text{cert}},\; t) = \prod_{k=1}^{n-1} w_{v_k, v_{k+1}}(t)
+\end{equation}
+Il valore di $PA(P_{\text{cert}}, t)$ è compreso tra 0 e 1 e si interpreta, sotto ipotesi di
+indipendenza delle transizioni (proprietà di Markov), come la probabilità empirica che una
+richiesta attraversi l'intero percorso certificato $P_{\text{cert}}$ nella finestra temporale
+corrente. Un valore $PA \approx 1$ rappresenta una piena conformità comportamentale;
+significa infatti che il traffico segue quasi esclusivamente il percorso certificato. Invece,
+$PA \to 0$ significa che una porzione crescente del traffico sta deviando su
+percorsi alternativi; ciò segnala un allontanamento strutturale dal comportamento atteso. Questa
+formulazione è rigorosamente valida per percorsi lineari ordinati, ed è il caso del sistema di
+telemedicina analizzato, dove il flusso clinico segue la sequenza univoca
+SGW$\to$SIN$\to$SDB$\to$SAL. Qualora il \textit{compliance set} $H_{\Phi_i}$ presenti invece una
+topologia con rami paralleli o bilanciamento di carico, il \gls{PAS} non è applicabile in questa
+forma. In tali contesti, infatti, l'aderenza strutturale viene quantificata globalmente attraverso
+la distanza tra le matrici di transizione.
+
+Il \textit{Path Adherence Score} costituisce una serie temporale direttamente utilizzabile per il
+\textit{forecasting}. Applicando un modello di previsione a $PA(t)$ è infatti possibile stimare
+quanto tempo residuo il sistema abbia prima di abbandonare il percorso certificato, anche in
+assenza di violazioni metriche puntuali già manifeste.
+Per il sistema di telemedicina analizzato, il percorso certificato del flusso clinico corrisponde
+alla sequenza $P_{\text{crit}} = (\text{SGW}, \text{SIN}, \text{SDB}, \text{SAL})$, che attraversa
+i tre archi della catena clinica in ordine. Il \textit{Path Adherence Score} si ottiene applicando
+la formula~\eqref{eq:pa_score} ai pesi degli archi di questo percorso nel \gls{PBO}. Un valore
+prossimo a 1 indica che la quasi totalità del traffico clinico scorre lungo il percorso atteso.
+Al contrario, una diminuzione del valore segnala un allontanamento strutturale che solitamente
+indica e precede l'attivazione di meccanismi di \textit{failover} o la comparsa di errori visibili
+sulle metriche di arco.
+
+\paragraph{Calibrazione del Gold Standard e Graph Edit Distance}
+\label{sec:gold_standard_ged}
+
+Il \gls{PBO} osservato $G_{\text{Behavior}}(t)$ è confrontato con un \gls{PBO} di riferimento
+denominato \textit{PBO gold standard}:
+\begin{equation}
+\label{eq:pbo_gold}
+G_{\text{Behavior}}^{\text{gold}} = (V,\; E_{\text{all}},\; W^{\text{gold}})
+\end{equation}
+In questa definizione, $E_{\text{all}}$ rappresenta l'insieme completo degli archi osservati nella
+finestra storica di addestramento. $W^{\text{gold}}$ identifica invece la matrice dei pesi di
+transizione osservata durante un periodo di normale operatività su tutti gli archi di $E_{\text{all}}$.
+In questa matrice, i pesi degli archi certificati $E_{\text{cert}}$ risulteranno tipicamente
+elevati, mentre quelli dei percorsi di \textit{fallback} saranno inferiori ma non necessariamente
+nulli, riflettendo quindi il traffico residuo osservato durante la calibrazione. Il sottoinsieme
+$E_{\text{cert}}$ degli archi certificati rimane rilevante per il calcolo del \textit{Path
+Adherence Score}, ma non rappresenta l'insieme di archi del \textit{gold standard}. La definizione
+del \textit{gold standard} richiede una fase iniziale di calibrazione, durante la quale il sistema
+deve operare in condizioni di normale operatività e le distribuzioni del traffico devono
+corrispondere fedelmente ai modelli attesi. La conformità di queste condizioni viene verificata
+tramite un'analisi retrospettiva sulle metriche di arco e di nodo: le finestre temporali in cui
+emergono anomalie nei dati storici vengono escluse dal calcolo di $W^{\text{gold}}$, e il periodo
+di osservazione viene esteso fino a ottenere un campione pulito di dimensione sufficiente. La
+qualità di questa fase è fondamentale. Un \textit{dataset} di calibrazione contenente anomalie
+produrrebbe un \textit{gold standard} inquinato e ciò porterebbe il sistema a generare falsi
+negativi durante la fase operativa, andando a vanificare l'intera architettura di rilevamento.
+Per questa ragione, il \textit{gold standard} deve essere aggiornato ogni qualvolta il sistema
+subisca modifiche strutturali: migrazioni infrastrutturali, variazioni significative nelle
+dinamiche di traffico, o qualsiasi altro cambiamento che alteri le distribuzioni attese. Nelle fasi
+di transizione architetturale si crea un lasso temporale intermedio in cui il vecchio
+\textit{gold standard} è invalidato ma il nuovo non è ancora calibrato. In questo caso, il sistema
+gestisce questa finestra di vulnerabilità adottando soglie di tolleranza più ampie sulla distanza
+strutturale, contenendo così la generazione di \textit{alert} impropri fino al completamento della
+ricalibratura.
+
+In scenari dove l'insieme dei nodi $V$ e degli archi $E_{\text{all}}$ è fisso, la topologia del
+grafo non varia nel tempo. In questi casi, lo scostamento strutturale tra il \gls{PBO} osservato e
+il \textit{gold standard} si riduce interamente alla variazione dei pesi e può essere quantificato
+attraverso la norma di Frobenius $\|W(t) - W^{\text{gold}}\|_F$, senza necessità di ricorrere agli
+algoritmi \gls{GED}; difatti, ciò che cambia a ogni istante $t$ sono esclusivamente i pesi $W_t$.
+La distanza strutturale viene calcolata attraverso la norma di
+Frobenius\footnote{La norma di Frobenius estende la norma euclidea allo spazio 
+delle matrici, aggregando in un unico scalare la magnitudo di tutte le 
+variazioni elemento per elemento.} tra le matrici dei pesi, la quale
+misura la deviazione complessiva come radice della somma dei quadrati degli scarti su tutti gli
+archi:
+\begin{equation}
+\label{eq:frobenius}
+\|W(t) - W^{\text{gold}}\|_F = \sqrt{\sum_{u,v} \bigl(w_{uv}(t) - w^{\text{gold}}_{uv}\bigr)^2}
+\end{equation}
+Il ricorso ad algoritmi di \textit{Graph Edit Distance} (\gls{GED}), definita come il numero
+minimo ponderato di operazioni elementari, quali inserimento o cancellazione di nodi e archi e modifica dei
+pesi, per trasformare $G_{\text{Behavior}}(t)$ nel \textit{gold standard}, è giustificato nei
+contesti in cui la topologia $E_t$ sia effettivamente variabile a \textit{runtime}; ad esempio,
+in sistemi con \textit{scaling} dinamico che introduce nuovi archi non presenti nella finestra
+storica. Tuttavia, il calcolo esatto della \gls{GED} ha complessità esponenziale nel numero di
+nodi dei grafi coinvolti; per questo motivo il \textit{framework} ricorre ad approssimazioni
+efficienti basate su metodi derivati dall'algoritmo Ungherese~\cite{riesen2009}, che garantiscono
+soluzioni di buona qualità in tempo polinomiale. In scenari dove la topologia è variabile ma il
+percorso certificato rimane attivo come sottoinsieme del grafo, un valore elevato di \gls{GED}
+combinato con una diminuzione del \textit{Path Adherence Score} costituisce un segnale di allerta
+strutturale fondamentale per la classificazione dell'\textit{alert} nella Fase~IV. Questa
+combinazione indica che il sistema non solo si sta allontanando dal percorso certificato, ma lo
+sta facendo in modo tale da richiedere un numero significativo di trasformazioni per tornare al
+comportamento di riferimento. Ciò segnala un potenziale degrado profondo della conformità.
+
+% ---------------------------------------------------------
+\subsection{Funzione di Mapping}
+\label{sec:funzione_mapping}
+% ---------------------------------------------------------
+
+Il \textit{Layer}~3 dell'architettura ibrida è costituito dalla funzione di \textit{mapping}
+$\mathcal{M}$, che collega le strutture statiche del \textit{Layer}~1 alle strutture dinamiche
+del \textit{Layer}~2. Senza di essa, i due livelli opererebbero in modo indipendente e il
+\textit{framework} non potrebbe tradurre le previsioni metriche in giudizi di conformità sulle
+proprietà certificate. A partire dalla specifica di ciascun \textit{compliance set}, $\mathcal{M}$
+determina in modo deterministico quali metriche del grafo temporale risultino rilevanti per una
+data proprietà e quali previsioni locali debbano essere aggregate per ottenere una previsione
+globale di \textit{compliance}.
+
+\subsubsection{Definizione Formale}
+\label{sec:def_formale_mapping}
+
+La funzione di \textit{mapping} è una relazione bidirezionale tra iperarchi del \textit{Layer}~1
+e i sottoinsiemi di archi del \textit{Layer}~2. Nella direzione Layer~1 $\to$ Layer~2, la funzione
+associa ogni \textit{compliance set} all'insieme degli archi del grafo temporale il cui degrado
+impatta direttamente la proprietà:
+\begin{equation}
+\label{eq:mapping_def}
+\mathcal{M}(H_{\Phi_i}) = A(H_{\Phi_i}) = \{e = (u,v) \in E_t \mid u \in H_{\Phi_i} \wedge v \in H_{\Phi_i}\}
+\end{equation}
+Nella direzione inversa Layer~2 $\to$ Layer~1, i metadati dell'annotazione semantica permettono di
+risalire dalla degradazione di uno specifico arco $e$ all'insieme di proprietà impattate. In
+particolare, si ha che: per ogni $H_{\Phi_i}$ tale che $e \in A(H_{\Phi_i})$, la violazione
+dell'arco contribuisce alla valutazione di conformità di $\Phi_i$. Questo meccanismo inverso viene
+utilizzato nella Fase~IV, dove la funzione di aggregazione traduce le previsioni locali in giudizi
+globali di \textit{compliance}. Inoltre, per gli archi esterni identificati come potenziali vettori
+di interferenza $M^{\text{interf}}$, il meccanismo inverso sfrutta la funzione \textit{Shared} per
+mappare l'anomalia dell'arco di interferenza direttamente alle proprietà che dipendono dal nodo
+condiviso saturato. La definizione comprende gli archi interni al \textit{compliance set}, ossia le comunicazioni
+dirette tra i componenti del \textit{set}. Invece, gli archi provenienti da nodi esterni, che
+convogliano traffico verso componenti condivisi, non rientrano in $A(H_{\Phi_i})$ ma vengono
+inclusi nel componente $M^{\text{interf}}$ della \textit{feature selection}
+(Sezione~\ref{sec:feature_selection}), ossia il meccanismo dedicato alla gestione delle interferenze
+\textit{cross-property}. \\
+Nel sistema di telemedicina, la topologia del \textbf{flusso clinico} è definita dalla sequenza
+$\text{SGW} \to \text{SIN} \to \text{SDB} \to \text{SAL}$, con gli archi $e_1$, $e_2$ ed $e_3$.
+Il \textit{mapping} per la proprietà $\Phi_{\text{crit}}$ risulta quindi:
+\begin{equation}
+\label{eq:mapping_crit}
+A(H_{\text{crit}}) = \{e_1\!:\text{SGW}\!\to\!\text{SIN},\; e_2\!:\text{SIN}\!\to\!\text{SDB},\; e_3\!:\text{SDB}\!\to\!\text{SAL}\}
+\end{equation}
+Per la proprietà $\Phi_{\text{adm}}$, la topologia del \textbf{flusso amministrativo} segue il
+percorso $\text{SGW} \to \text{SBL} \to \text{SDB}$, con gli archi $e_4$ ed $e_5$:
+\begin{equation}
+\label{eq:mapping_adm}
+A(H_{\text{adm}}) = \{e_4\!:\text{SGW}\!\to\!\text{SBL},\; e_5\!:\text{SBL}\!\to\!\text{SDB}\}
+\end{equation}
+\subsubsection{Strategie di Implementazione del Mapping}
+\label{sec:strategie_mapping}
+
+L'adozione di librerie di \textit{machine learning} e algoritmi di analisi su grafi impone un
+vincolo di compatibilità: la maggior parte degli strumenti disponibili opera nativamente su grafi
+con \textit{feature} sugli archi, non su strutture ipergrafiche. Il Layer~3 deve quindi tradurre
+la struttura dell'ipergrafo in una rappresentazione compatibile con il Layer~2, preservando la
+semantica dei \textit{compliance sets}. Sono state analizzate due strategie principali.
+
+\textbf{Annotazione Semantica}: mantiene invariata la topologia originale del grafo temporale,
+arricchendo ogni arco con metadati che ne dichiarano l'appartenenza agli iperarchi corrispondenti.
+Per ogni arco $e = (u,v)$, viene mantenuto l'insieme degli iperarchi a cui appartiene (tutti gli
+$H_{\Phi_i}$ tali che $u \in H_{\Phi_i}$ \textbf{e} $v \in H_{\Phi_i}$). Quando il Layer~3
+analizza una previsione su un arco $e$, consulta queste annotazioni statiche per determinare quali
+proprietà vengono impattate. Questa soluzione non introduce \textit{overhead} a \textit{runtime},
+poiché i metadati vengono calcolati una sola volta in fase di definizione del sistema. Questo
+meccanismo di annotazione copre gli archi interni ai \textit{compliance sets}. Gli archi che
+costituiscono $M^{\text{interf}}$, ossia archi con un solo estremo in $H_{\Phi_i}$, non vengono
+annotati con gli iperarchi di cui non sono interni: la loro rilevanza viene determinata
+separatamente attraverso la funzione \textit{Shared} durante la \textit{feature selection} della
+Fase~I (Sezione~\ref{sec:feature_selection}).
+
+\textbf{Espansione Topologica}: introduce nodi virtuali di sincronizzazione. Per ogni
+\textit{compliance set} $H_{\Phi_i}$, si aggiunge al grafo temporale un nodo sintetico $v_{H_i}$
+a cui vengono connessi tutti i nodi del \textit{set} tramite archi fittizi. Questa strategia rende
+la logica AND esplicita nella topologia, poiché la sua attivazione richiede che tutti i nodi del
+\textit{set} siano attivi e conformi. Tuttavia, ciò introduce un \textit{overhead} computazionale
+crescente con il numero di proprietà da monitorare; il grafo deve essere infatti arricchito di $m$
+nodi, uno per proprietà, le cui \textit{feature} devono essere ricalcolate a ogni passo temporale.
+
+La Tabella~\ref{tab:mapping_strategies} sintetizza i vantaggi e gli svantaggi delle due
+metodologie di implementazione.
+
+\begin{table}[htbp]
+\centering
+\caption{Confronto tra le strategie di implementazione del \textit{mapping}.}
+\label{tab:mapping_strategies}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Proprietà} & \textbf{Annotazione Semantica} & \textbf{Espansione Topologica} \\
+\midrule
+\textbf{Semantica}                   & Implicita (metadati) & AND Esplicita (topologica) \\
+\textbf{Topologia invariata}         & Sì                   & No \\
+\textbf{\textit{Overhead} spaziale}  & Nullo                & $m$ nodi aggiuntivi \\
+\textbf{\textit{Overhead runtime}}   & Nullo                & Ricalcolo \textit{feature} nodi \\
+\textbf{Compatibilità algoritmi}     & Tramite \textit{query} su metadati & Nativa \\
+\textbf{Identificazione interferenze}& \textit{Query} diretta & Difficile \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Scelta dell'Annotazione Semantica}
+\label{sec:scelta_annotazione}
+
+Per l'implementazione del \textit{framework} proposto in questo lavoro, viene adottata la
+strategia dell'\textbf{Annotazione Semantica} per tre ragioni convergenti. La prima è data
+dall'\textit{efficienza computazionale}. In sistemi che monitorano un numero elevato di proprietà,
+l'espansione topologica moltiplicherebbe il numero di nodi e renderebbe il grafo più oneroso da
+elaborare ad ogni passo temporale; ciò non porterebbe vantaggi al \textit{forecasting} che non
+siano ottenibili attraverso le annotazioni. La seconda è la \textit{compatibilità con la telemetria
+standard}. Le \textit{pipeline} di osservabilità industriali producono infatti metriche e tracce
+associate ad archi e nodi del \textit{service dependency graph} reale, non a nodi virtuali.
+L'annotazione semantica consente quindi di arricchire direttamente queste strutture senza richiedere
+l'inserimento di nodi virtuali. La terza ragione è la \textit{scalabilità rispetto all'evoluzione
+del sistema}. L'aggiunta di una nuova proprietà certificata, attraverso l'utilizzo dell'annotazione
+semantica, richiede solo di aggiornare le annotazioni degli archi già preesistenti. Al contrario,
+l'espansione topologica richiederebbe di modificare la topologia del grafo e ricalcolare le
+\textit{feature} di tutti i nodi di sincronizzazione interessati.
+
+\subsubsection{Operatività con Telemetria Parziale}
+\label{sec:operativita_parziale}
+
+Il \textit{framework} proposto non necessita di copertura totale dello spazio metrico teoricamente
+possibile. Qualora alcune metriche non fossero disponibili, ad esempio per impossibilità di
+instrumentare un \textit{database legacy} o dell'assenza di \textit{distributed tracing} su
+componenti \textit{third-party}, il sistema è in grado di adattare il perimetro di analisi
+attraverso la \textit{feature selection} guidata dall'ipergrafo. La Fase~I della
+\textit{pipeline} seleziona automaticamente il sottoinsieme di metriche effettivamente osservabili
+e rilevanti per la proprietà monitorata. In assenza di una metrica ideale, il \textit{forecasting}
+opera su \textit{indicatori proxy}; ad esempio, se la saturazione del \textit{connection pool} non
+è tracciabile in modo diretto, la latenza delle \textit{query} può essere utilizzata come
+indicatore indiretto della contesa sulla risorsa. Nonostante la granularità e la completezza della
+telemetria siano importanti, in quanto influenzano la profondità dell'analisi, esse non invalidano
+l'architettura complessiva. In scenari con telemetria ridotta, infatti, l'approccio ibrido
+continua a funzionare attraverso l'\textit{identificazione topologica delle interferenze}
+(Layer~1) e il \textit{monitoraggio della Path Adherence} (Fase~III). Questi meccanismi consentono
+infatti di mantenere una visibilità strutturale sul sistema anche in assenza di un'analisi causale
+completa.
+
+% =========================================================
+\section{Pipeline di Forecasting della Non-Compliance}
+\label{sec:pipeline_forecasting}
+% =========================================================
+
+La \textit{pipeline} di \textit{forecasting} della \textit{non-compliance} costituisce il motore
+del \textit{framework} e si occupa di trasformare il flusso continuo di dati di telemetria in
+stime quantitative relative al tempo residuo prima di una violazione di \textit{compliance}
+all'interno del sistema in analisi. La \textit{pipeline} è costituita da quattro fasi sequenziali.
+Le prime tre fasi si occupano di generare segnali informativi parziali, mentre l'ultima si occupa
+di produrre un \textit{alert} semanticamente completo. Questo \textit{output} finale non si limita
+ad avvisare della violazione prevista, bensì identifica e descrive anche la causa originaria della
+violazione e il \textit{compliance set} interessato. L'efficacia della \textit{pipeline} risiede
+principalmente nel modo in cui i tre \textit{layer} del \textit{framework} interagiscono in ogni
+fase della \textit{pipeline} stessa.
+
+\begin{itemize}
+  \item \textbf{Layer~1 (Ipergrafo):} interviene nella Fase~I guidando in modo deterministico la
+        \textit{feature selection} attraverso l'identificazione delle metriche rilevanti per ogni
+        proprietà. Nella Fase~II, invece, orienta lo \textit{screening} causale verso le coppie
+        di metriche semanticamente significative; infine, interviene nella Fase~IV dove la logica
+        di aggregazione è determinata direttamente dalla semantica delle proprietà, la quale è
+        codificata nell'ipergrafo;
+  \item \textbf{Layer~2 (\gls{ATG}):} rappresenta il substrato computazionale di tutte e quattro
+        le fasi. Ogni previsione, test causale o rilevamento di anomalia viene infatti eseguito
+        sulle serie temporali contenute nel grafo temporale;
+  \item \textbf{Layer~3 (\textit{Mapping}):} è operativo nelle Fasi~I e~II, dove la funzione
+        $\mathcal{M}$ seleziona le metriche e le coppie da analizzare. Opera inoltre nella
+        Fase~IV, dove la stessa funzione determina quali previsioni locali contribuiscono alla
+        previsione globale della proprietà. Nella Fase~III, il Layer~3 non interviene direttamente;
+        le analisi operano infatti sull'insieme $M_{\Phi_i}$ già costruito in Fase~I e sul \gls{PBO}
+        definito nella Sezione~\ref{sec:pbo}.
+\end{itemize}
+
+Le fondamenta delle prime tre fasi sono costituite da tecniche di analisi consolidate nel campo dei
+grafi e delle serie temporali. In questo caso, la differenza metodologica sostanziale rispetto a un
+approccio tradizionale, non guidato semanticamente, risiede nel ruolo dell'ipergrafo. Quest'ultimo
+orienta in modo deterministico la selezione delle metriche, lo \textit{screening} causale e
+l'aggregazione dei segnali di anomalia. Questo approccio permette al \textit{framework} di
+ottimizzare in modo significativo lo spazio di ricerca rispetto a un approccio puramente
+statistico; così facendo, infatti, il \textit{framework} evita l'esplorazione completa delle
+coppie di metriche, concentrando l'analisi sulle metriche topologicamente rilevanti per ciascuna
+proprietà.
+
+% ---------------------------------------------------------
+\subsection{Fase~I: Previsione Locale delle Metriche}
+\label{sec:fase_1}
+% ---------------------------------------------------------
+
+La prima fase della \textit{pipeline} ha il compito di trasformare le serie temporali di telemetria
+grezza in previsioni quantitative riguardanti l'evoluzione delle metriche su un orizzonte temporale
+$\tau$. L'output di questo stadio è rappresentato dall'insieme delle previsioni:
+\begin{equation}
+\label{eq:fase1_output}
+\bigl\{\hat{X}^m(t+\tau') : m \in M_{\Phi_i},\; \tau' \in \{1,\ldots,\tau\}\bigr\}
+\end{equation}
+calcolate per ogni proprietà $\Phi_i$ e per ogni metrica appartenente al \textit{set} di
+\textit{feature} selezionate.
+Il parametro $\tau$ è pensato per essere configurabile in base alle necessità operative del sistema.
+Attraverso un orizzonte temporale ridotto, ad esempio nell'ordine delle ore, è possibile garantire
+una precisione superiore; tuttavia ciò risulta meno efficace per la pianificazione di interventi
+preventivi complessi. Al contrario, orizzonti più estesi, nell'ordine di giorni o settimane,
+producono preavvisi operativamente significativi ma con incertezza maggiore. Difatti, l'accuratezza
+dei modelli di \textit{forecasting} degrada sistematicamente all'aumentare di $\tau$. Tuttavia, il
+\textit{framework} è in grado di determinare automaticamente il \textit{lead time} $\tau^*$
+individuando l'orizzonte minimo in cui la traiettoria prevista interseca la soglia certificata.
+Questo meccanismo consente all'operatore di ricevere il preavviso massimo disponibile con una
+determinata soglia di affidabilità della previsione.
+
+\subsubsection{Feature Selection Topologica}
+\label{sec:feature_selection}
+
+In un sistema basato esclusivamente su \gls{ATG}, privo quindi del \textit{layer} semantico, la
+\textit{feature selection} verrebbe trattata come un problema puramente statistico. Il numero di
+coppie di metriche da analizzare crescerebbe in modo quadratico rispetto al numero totale di
+metriche del sistema, raggiungendo per sistemi di medie dimensioni l'ordine di milioni di coppie.
+Questo calcolo non solo richiederebbe \textit{dataset} storici estremamente ricchi, ma sarebbe
+caratterizzato dall'incapacità intrinseca di rilevare interferenze \textit{cross-property} non
+ancora manifestatesi nei dati.
+Nell'approccio ibrido presentato, invece, la \textit{feature selection} è deterministica e guidata
+dalla topologia del Layer~1. L'insieme $M_{\Phi_i}$ viene costruito integrando tre componenti
+distinti.
+
+\begin{itemize}
+  \item \textbf{Componente Diretto ($M^{\text{direct}}$)}: include tutte le metriche di nodo e di
+        arco associate ai componenti del \textit{compliance set} $H_{\Phi_i}$ e alle loro
+        interazioni identificate dalla funzione di \textit{mapping}. Queste metriche sono
+        considerate rilevanti per definizione;
+  \item \textbf{Componente di Interferenza ($M^{\text{interf}}$)}: estende l'insieme del primo
+        componente con le metriche di \textit{throughput} degli archi che convogliano traffico
+        verso i nodi condivisi da altri \textit{compliance sets}. Tale traffico può infatti
+        saturare le risorse condivise e impattare la proprietà $\Phi_i$, pur provenendo da un
+        flusso non certificato per quest'ultima;
+  \item \textbf{Componente Causale ($M^{\text{causal}}$)}: aggiunge, attraverso un'analisi causale
+        preliminare \textit{offline}, le metriche di nodi esterni a $H_{\Phi_i}$ che mostrano
+        dipendenze causali storicamente verificate con metriche interne al \textit{compliance set}.
+        Affinché tali metriche possano essere scoperte e incluse nell'analisi, è requisito necessario
+        che i nodi esterni siano instrumentati e appartengano all'infrastruttura di osservabilità
+        globale del sistema, ossia l'insieme $V$ dell'\gls{ATG}. L'analisi non estende
+        automaticamente il perimetro di strumentazione; difatti, se un nodo non è instrumentato,
+        la sua dipendenza causale rimane un \textit{blind spot} noto del \textit{framework}.
+\end{itemize}
+
+L'insieme complessivo delle metriche da sottoporre a previsione è espresso formalmente come:
+\begin{equation}
+\label{eq:m_total}
+M_{\Phi_i} = M_{\Phi_i}^{\text{direct}} \cup M_{\Phi_i}^{\text{interf}} \cup M_{\Phi_i}^{\text{causal}}
+\end{equation}
+Considerando la proprietà $\Phi_{\text{crit}}$, associata al percorso clinico
+SGW$\to$SIN$\to$SDB$\to$SAL e agli archi $e_1$, $e_2$, $e_3$, le prime due componenti della
+\textit{feature selection} vengono identificate dalla topologia. L'ipergrafo consente infatti di
+aggirare lo \textit{screening} statistico, estraendo a priori le metriche rilevanti. Il componente
+diretto include il vettore completo delle metriche per i tre archi del percorso e le metriche di
+stato interno di tutti i quattro componenti appartenenti a $H_{\text{crit}}$. La selezione delle
+metriche di nodo rispecchia le caratteristiche architetturali di ciascun servizio: per SGW e SAL,
+che non gestiscono \textit{pool} di connessioni, le grandezze più informative sono l'utilizzo della
+\gls{CPU} e l'occupazione della memoria; per SIN, che esegue operazioni di normalizzazione dei dati
+biomedici su \gls{JVM}, si aggiungono le pause del \textit{garbage collector} come indicatore di
+pressione sull'\textit{heap}; per SDB, che costituisce la risorsa condivisa critica, oltre al
+consumo di \gls{CPU} e memoria viene monitorato il tasso di saturazione del \textit{connection
+pool}. Complessivamente l'insieme risulta:
+\begin{equation}
+\label{eq:m_direct_crit}
+M^{\text{direct}}(H_{\text{crit}}) =
+  \bigcup_{e \in A(H_{\text{crit}})} \{L_e,\, \varepsilon_e,\, \theta_e\}
+  \cup \bigcup_{v \in H_{\text{crit}}} \{\text{cpu}_v,\, \text{mem}_v\}
+  \cup \{\text{gc}_{\text{SIN}},\, \text{pool}_{\text{SDB}}\}
+\end{equation}
+Il componente di interferenza include invece il \textit{throughput} dell'arco $e_5$
+(SBL$\to$SDB), appartenente al flusso amministrativo: $M^{\text{interf}}(H_{\text{crit}}) =
+\{\theta_{e_5}\}$.
+L'arco $e_5$ viene incluso in quanto SDB è un nodo condiviso: il traffico proveniente da
+$\Phi_{\text{adm}}$ può saturare il suo \textit{connection pool}, degradando il servizio verso SIN.
+Senza il contributo semantico dell'ipergrafo, l'inclusione di questo arco richiederebbe la verifica
+statistica della correlazione tra $e_5$ e le metriche di $H_{\text{crit}}$ sui dati storici. Se
+tale interferenza non si fosse ancora verificata, un sistema \gls{ATG} puro ignorerebbe questo
+parametro, lasciando il sistema cieco di fronte a una saturazione del \textit{connection pool}
+causata da un improvviso picco di traffico nel flusso di fatturazione.
+
+Il componente causale $M_{H_{\text{crit}}}^{\text{causal}}$, infine, emerge dall'analisi di Granger
+eseguita sui dati storici per catturare dipendenze non esplicitate dalla topologia. Un esempio
+significativo è il servizio SBL: pur non appartenendo al flusso clinico ($H_{\Phi_{\text{crit}}}$),
+la sua attività di fatturazione può innescare contesa sulle risorse di I/O del disco condiviso con
+SDB. Il test di Granger, applicato alle serie storiche di $\text{cpu}_{\text{SBL}}$ e di $L_{e_2}$,
+potrebbe rilevare una dipendenza causale: periodi di elevata attività di SBL precedono
+sistematicamente picchi di latenza sul flusso clinico. Questa dipendenza emerge dall'analisi
+statistica e non dalla topologia dell'ipergrafo, giustificando la sua inclusione in
+$M^{\text{causal}}$ anziché in $M^{\text{interf}}$. 
+Questa dipendenza causale \emph{tra} $\text{cpu}_{\text{SBL}}$ e le metriche
+del flusso clinico è distinta da quella già catturata topologicamente in
+$M^{\text{interf}}$ tramite $\theta_{e_5}$: il Layer~1 intercetta
+l'interferenza di carico sul \textit{connection pool}; il test di Granger
+intercetta la contesa sulle risorse di I/O del disco, non direttamente
+visibile nella topologia.
+
+L'analisi che produce $M^{\text{causal}}$ è un'operazione eseguita in fase di \textit{setup} del
+\textit{framework} sui dati storici disponibili e aggiornata periodicamente in seguito a modifiche
+architetturali significative o in seguito alla rilevazione di derive comportamentali persistenti non
+spiegabili dalle catene causali note. È concettualmente distinta dall'analisi causale della
+Fase~II; difatti, la Fase~II opera a \textit{runtime} sull'insieme completo $M_{\Phi_i}$ che
+include sia le metriche già note da $M^{\text{causal}}$ sia quelle identificate topologicamente;
+in questo modo è quindi in grado di scoprire nuove relazioni causali emergenti dal comportamento
+corrente del sistema, non solo validare quelle pre-identificate \textit{offline}.
+
+\subsubsection{Modelli Predittivi Adottati}
+\label{sec:modelli_predittivi}
+
+Per ogni metrica $m \in M_{\Phi_i}$, il sistema applica un modello predittivo scelto in base alle
+caratteristiche dinamiche della relativa serie temporale. Il \textit{framework} adotta una strategia
+di \textit{forecasting} articolata su quattro livelli di complessità crescente, bilanciando
+accuratezza e interpretabilità.
+
+\paragraph{Regressione lineare come baseline}
+
+Questo rappresenta l'approccio più semplice ed assume che la metrica segua un \textit{trend}
+lineare nel tempo. La previsione consiste nella proiezione della retta di regressione, stimata
+sulla finestra storica, sull'orizzonte $\tau$. La regressione lineare, basata sul metodo dei 
+Minimi Quadrati Ordinari (OLS), rappresenta un riferimento eccellente in termini di interpretabilità 
+e velocità; fornisce infatti una previsione che si possa facilmente verificare a livello visivo sul grafico 
+della metrica. La rigidità è però il suo limite principale: non è in grado
+di modellare la stagionalità, gestire i \textit{changepoint}\footnote{Nell'analisi delle serie temporali, 
+un \textit{changepoint} indica una variazione improvvisa e discontinua del regime statistico dei dati, 
+come un salto netto della latenza media a seguito di un deploy architetturale. 
+Si distingue dalle dinamiche non lineari, che rappresentano invece evoluzioni continue ma irregolari, 
+come la crescita esponenziale tipica di un \textit{memory leak}.} o catturare dinamiche non lineari.
+Per questa ragione non viene adottata come modello principale, bensì come \textit{baseline} di
+validazione. Qualora la divergenza tra la previsione del modello principale e quella della
+\textit{baseline} superi una soglia configurabile, il sistema segnala un'incertezza elevata e
+riduce la classificazione di criticità dell'eventuale \textit{alert} generato.
+
+\paragraph{ARIMA per serie con memoria stocastica}
+
+Il modello \gls{ARIMA}(p,d,q)~\cite{box2016} 
+rappresenta un'evoluzione significativa rispetto alla regressione lineare. Difatti, mentre la
+regressione assume che il futuro dipenda esclusivamente dal tempo, il modello ARIMA assume che il
+valore futuro dipenda dalla storia recente della metrica stessa; questo avviene catturando la
+memoria stocastica della serie. Il modello ARIMA è composto da tre diverse componenti. La
+\textbf{componente autoregressiva (AR)} di ordine $p$ esprime il valore corrente come combinazione
+lineare dei $p$ valori precedenti; la \textbf{componente di integrazione (I)} di ordine $d$ applica
+$d$ differenziazioni successive per rendere stazionaria una serie che presenta un \textit{trend};
+infine, la \textbf{componente a media mobile (MA)} di ordine $q$ incorpora gli errori di previsione
+dei $q$ passi temporali precedenti. L'applicazione del modello segue quattro passi fondamentali.
+Inizialmente avviene la verifica della stazionarietà attraverso il test di \gls{ADF} 
+\footnote{Il test di Augmented Dickey-Fuller è un test statistico
+standard utilizzato nell'analisi delle serie storiche per verificare l'ipotesi nulla di presenza
+di una radice unitaria nel campione. Il superamento del test (con $p$-value tipicamente $< 0.05$)
+permette di rigettare l'ipotesi nulla, confermando la stazionarietà della serie.}, con una soglia
+$p$-value tipicamente pari a $0{,}05$. A questa prima fase segue una fase di differenziazione della
+serie, se necessario, con ordine $d = 1$ o $d = 2$. Dopodichè avviene l'identificazione degli
+ordini $p$ e $q$ attraverso i grafici di autocorrelazione (\gls{ACF}) e autocorrelazione parziale
+(\gls{PACF}); infine, avviene la stima dei parametri per \gls{MLE}\footnote{La stima di \gls{MLE} è un metodo statistico classico utilizzato 
+per inferire i parametri di un modello. Nel contesto del \textit{framework}, i \textit{solver} matematici 
+sottostanti ai modelli predittivi (come ARIMA) impiegano la \gls{MLE} per calcolare i coefficienti ottimali, 
+ovvero quelli che massimizzano la probabilità congiunta di osservare l'esatta sequenza dei dati storici di addestramento.}
+e la validazione dei residui con il test di
+Ljung-Box\footnote{Il test di Ljung-Box verifica l'assenza di autocorrelazione 
+seriale nei residui: un risultato non significativo ($p > 0.05$) indica 
+che i residui si comportano come rumore bianco, validando la bontà 
+dell'adattamento del modello.}.
+
+Il modello ARIMA è preferibile rispetto alla regressione per metriche che mostrano \textit{trend}
+ben definiti e una componente stocastica significativa, soprattutto in presenza di serie temporali
+sufficientemente lunghe, assenza di stagionalità complessa e necessità di intervalli di confidenza
+solidi dal punto di vista statistico. Il limite principale risiede nella linearità; ARIMA non
+cattura infatti dipendenze non lineari tra valori passati e futuri e gestisce in maniera poco
+efficace \textit{changepoint} causati da eventi o anomalie di sistema.
+
+\paragraph{Prophet per serie con stagionalità}
+
+Molte metriche architetturali presentano \textit{pattern} fortemente ciclici legati ai ritmi di
+utilizzo del sistema, come l'aumento del traffico durante le ore diurne. Per modellare queste serie
+temporali caratterizzate da stagionalità multiple, il \textit{framework} utilizza l'algoritmo
+Prophet~\cite{taylor2018forecasting}. A differenza dei classici modelli autoregressivi, Prophet
+scompone il segnale secondo un approccio additivo basato su tre componenti principali. La prima
+componente è rappresentata da un \textbf{\textit{trend} a lungo termine}, ed è in grado di
+adattarsi ai cambiamenti strutturali del carico rilevando in modo del tutto autonomo i
+\textit{changepoint}. Questa è modellata attraverso una funzione lineare o logistica, a seconda delle
+caratteristiche della serie. La seconda è la \textbf{componente stagionale}, con periodicità
+configurabile, la quale modella le fluttuazioni periodiche attraverso l'utilizzo di serie di Fourier.
+La terza componente permette, infine, di integrare la conoscenza di eventi noti come
+\textit{backup} notturni o rilasci di sistema, che altrimenti potrebbero inquinare temporaneamente
+il comportamento della metrica.
+La capacità di identificare autonomamente i \textit{changepoint} nel \textit{trend} fa sì che
+Prophet risulti molto più robusto di ARIMA in scenari operativi dove il sistema può subire
+interventi manuali. È inoltre in grado di gestire autonomamente i dati mancanti senza richiedere
+interpolazione preventiva, poiché l'approccio di \textit{curve-fitting} non impone osservazioni su
+una griglia temporale regolare. Per questi motivi, rappresenta la scelta più adatta per metriche
+con una forte componente stagionale o influenzate da routine amministrative ricorrenti.
+
+\paragraph{LSTM per dinamiche non lineari}
+
+Per le metriche caratterizzate da dinamiche non lineari, come l'occupazione progressiva
+dell'\textit{heap} \gls{JVM} in presenza di un \textit{memory leak} o la saturazione esponenziale
+del \textit{connection pool}, il sistema ricorre a una rete \textbf{LSTM (\textit{Long
+Short-Term Memory})}~\cite{hochreiter1997} addestrata sui dati storici della metrica in analisi.
+Queste reti superano i limiti delle reti neurali ricorrenti tradizionali grazie a un meccanismo di
+memoria selettiva, detto \textit{gate mechanism}, che determina in modo adattivo quali informazioni
+della sequenza di \textit{input} debbano essere mantenute nello stato interno e quali possano
+essere scartate in quanto irrilevanti per la previsione futura.
+L'architettura prevede una struttura \textit{encoder-decoder}~\cite{sutskever2014}, dove l'\textit{encoder}
+si occupa di comprimere la sequenza storica in uno stato interno vettoriale, mentre il
+\textit{decoder} utilizza quello stato per generare le previsioni future sull'orizzonte temporale
+$\tau$. La rete viene addestrata minimizzando una funzione di \textit{loss} appropriata al
+\textit{task} di regressione; nel contesto del \textit{forecasting} di metriche continue, la
+scelta tipica è l'Errore Quadratico Medio (\gls{MSE}), che penalizza in modo quadratico le
+deviazioni sull'intero orizzonte predittivo.
+Il \textit{framework} riserva la rete LSTM alle metriche con comportamenti fortemente non lineari o
+dipendenze a lungo termine. L'elevato costo computazionale e la minore interpretabilità, comune ai
+modelli di \textit{deep learning} rispetto alle controparti statistiche, la rendono infatti poco
+adatta a un impiego generalizzato. Il significativo miglioramento in termini di accuratezza
+predittiva, tuttavia, giustifica il suo utilizzo in presenza di dinamiche complesse o non lineari.
+L'incertezza della previsione LSTM viene stimata tramite la tecnica \textit{Monte Carlo
+Dropout}~\cite{gal2016}: durante l'\textit{inference}, il \textit{dropout} rimane attivo e la rete
+viene eseguita $N$ volte sulla stessa sequenza di \textit{input}, producendo una distribuzione di
+previsioni da cui si estraggono media e deviazione standard come stima dell'intervallo di
+confidenza.
+
+\begin{table}[htbp]
+\centering
+\caption{Confronto tra i modelli predittivi adottati nel framework.}
+\label{tab:modelli_predittivi}
+\small
+\setlength{\tabcolsep}{4pt}
+\makebox[\textwidth][c]{%
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Modello} & \textbf{Accuratezza} & \textbf{Interpretabilità} & \textbf{Costo comp.} & \textbf{Caso d'uso principale} \\
+\midrule
+Regressione lineare & Bassa     & Alta  & Trascurabile & \textit{Baseline}, validazione \\
+ARIMA               & Media     & Media & Basso        & \textit{Trend} con memoria stocastica \\
+Prophet             & Media-Alta & Media & Medio        & Stagionalità, dati irregolari \\
+LSTM                & Alta       & Bassa & Alto         & Dinamiche non lineari \\
+\bottomrule
+% \multicolumn{5}{p{0.92\textwidth}}{\footnotesize\textit{Le valutazioni di accuratezza sono riferite al contesto applicativo del \textit{framework}, ossia serie temporali di metriche di sistemi distribuiti caratterizzate da componenti stagionali, \textit{trend} potenzialmente non lineari e dinamiche di saturazione. In contesti diversi, la gerarchia relativa tra modelli può variare.}} \\
+\end{tabular}%
+}
+\end{table}
+
+\subsubsection{Output della Fase~I}
+\label{sec:output_fase1}
+
+L'output della Fase~I consiste, per ogni proprietà $\Phi_i$ monitorata, nell'insieme delle
+previsioni delle metriche appartenenti a $M_{\Phi_i}$ sull'orizzonte $\tau$. Per ogni serie
+temporale selezionata, il sistema produce una traiettoria di previsioni sull'intero orizzonte da 1
+a $\tau$, ciascuna accompagnata da un intervallo di confidenza che riflette l'incertezza del
+modello. Ad esempio, in uno scenario in cui il flusso amministrativo eserciti una pressione
+crescente sul \textit{database} SDB, l'output relativo alla proprietà $\Phi_{\text{crit}}$, su un
+orizzonte ipotetico di 12 giorni, potrebbe produrre una previsione di latenza per l'arco critico
+$e_2$ (SIN$\to$SDB) significativamente superiore alla soglia locale di 250\,ms adottata nelle
+Tabelle~\ref{tab:scenario_memory_leak} e~\ref{tab:scenario_interferenza} per i singoli archi
+critici. Le latenze degli altri archi del percorso, invece, risulterebbero ancora entro i limiti.
+
+% ---------------------------------------------------------
+\subsection{Fase~II: Identificazione delle Relazioni Causali}
+\label{sec:fase_2}
+% ---------------------------------------------------------
+
+La seconda fase della \textit{pipeline} ha il compito di identificare le dipendenze causali tra le
+metriche dell'insieme $M_{\Phi_i}$, distinguendo le correlazioni spurie dai rapporti di causa-effetto
+verificati statisticamente. L'output di questo stadio è il \textbf{grafo causale}, ossia una
+struttura orientata i cui nodi rappresentano le metriche analizzate, sia di nodo che di arco, i cui
+archi rappresentano le dipendenze causali verificate. Ogni arco è etichettato con la tipologia di
+dipendenza, lineare o non lineare, e l'intensità della relazione misurata. Per le relazioni lineari,
+l'intensità è quantificata dall'incremento del coefficiente di determinazione $R^2$, del test di
+Granger, tra il modello ristretto e il modello completo; per quelle non lineari, dal valore
+\textit{TE} normalizzato. La distinzione tra correlazione e causalità è operativamente critica.
+Due metriche possono essere fortemente correlate per diverse ragioni: la prima causa la seconda, la
+seconda causa la prima, o perché entrambe sono l'effetto di una terza variabile nascosta. Un
+operatore che riceve un \textit{alert} contenente una causa radice errata rischia di intervenire
+sul componente sbagliato, finendo per consumare risorse senza risolvere il problema e lasciando
+intatta la causa reale fino alla violazione effettiva dello \gls{SLA}.
+
+\subsubsection{Screening Guidato dalla Topologia}
+\label{sec:screening_topologia}
+
+Analogamente a quanto avviene nella Fase~I, la struttura dell'ipergrafo permette di ridurre
+drasticamente lo spazio di ricerca dell'analisi causale. Difatti, invece di calcolare le
+correlazioni su tutte le coppie possibili di metriche presenti nel sistema, l'analisi si concentra
+su tre categorie di coppie semanticamente rilevanti:
+
+\begin{itemize}
+  \item \textbf{Coppie intra-hyperedge}: riguardano le metriche su nodi e archi appartenenti allo
+        stesso \textit{compliance set} $H_{\Phi_i}$. Queste metriche rappresentano le candidate
+        naturali per l'identificazione di relazioni causali dirette tra lo stato interno di un nodo
+        e la degradazione degli archi che esso serve;
+  \item \textbf{Coppie inter-hyperedge}: coinvolgono metriche su nodi condivisi tra diversi \textit{compliance sets}
+        $v \in \text{Shared}(H_{\Phi_i}, H_{\Phi_j})$ e metriche di archi appartenenti ad
+        $A(H_{\Phi_j})$. Questa categoria è fondamentale per l'identificazione delle relazioni
+        causali \textit{cross-property}, ossia come il carico di una proprietà possa influenzare
+        le prestazioni di un'altra;
+  \item \textbf{Coppie nodo-arco}: ossia le coppie dove il nodo $v$ appartiene a $H_{\Phi_i}$ e
+        l'arco $e$ appartiene ad $A(H_{\Phi_i})$. Le coppie nodo-arco costituiscono il
+        sottoinsieme più rilevante delle coppie intra-hyperedge ai fini della \textit{root cause
+        analysis}, in quanto collegano direttamente lo stato interno di un componente alla qualità
+        dell'interazione che esso serve.
+\end{itemize}
+
+Le tre categorie non sono mutualmente esclusive per costruzione; la distinzione serve a identificare
+le priorità dell'analisi.
+
+\subsubsection{Procedura di Analisi Causale in Tre Stadi}
+\label{sec:analisi_causale}
+
+Per ogni coppia di metriche appartenente alle categorie descritte, l'analisi causale si articola in
+tre fasi sequenziali di complessità crescente, bilanciando rigore statistico ed efficienza
+computazionale.
+
+\paragraph{Screening preliminare (Correlazione di Pearson)}
+
+Il primo stadio consiste in un filtraggio basato sul coefficiente di correlazione lineare di
+Pearson $r \in [-1, 1]$. Invece di eseguire immediatamente test causali complessi, il \textit{framework}
+promuove al test di Granger della fase successiva solo le coppie che mostrano un legame
+relazionale forte, applicando una soglia operativa\footnote{La soglia operativa $|r| > 0.7$ 
+funge da euristica per il pre-filtraggio: permette di scartare relazioni deboli o dominate dal 
+rumore prima di impegnare risorse computazionali nei più costosi test di causalità temporale.}, 
+ad esempio $|r| > 0{,}7$. Questa scelta
+introduce un \textit{trade-off} tra efficienza computazionale e rischio di falsi negativi. Il
+filtraggio permette infatti di ridurre drasticamente il numero di test successivi, aumentando di
+conseguenza l'efficienza computazionale. D'altra parte, dipendenze non lineari come gli effetti
+soglia, tipici dei sistemi distribuiti, possono non manifestarsi attraverso una correlazione lineare
+significativa: tali relazioni presentano spesso valori di correlazione lineare di Pearson bassi
+prima della soglia e crescono rapidamente solo dopo il superamento di essa, risultando quindi non
+idonee a passare allo stadio successivo. Per mitigare questo rischio, il sistema introduce un
+meccanismo di \textit{bypass} guidato dalla topologia. Le coppie di metriche identificate dal
+Layer~1 come \textit{inter-hyperedge}, ovvero associate a nodi condivisi tra diversi \textit{compliance
+sets}, vengono sottoposte direttamente al test di Granger \textit{bypassando} il filtro di Pearson.
+Questa scelta è motivata dal fatto che, per un insieme di coppie già ridotto per costruzione, il
+filtro di Pearson non produce un risparmio computazionale significativo, mentre introduce il rischio
+concreto di scartare relazioni causali non lineari prima che possano essere valutate dagli stadi
+successivi.
+
+\paragraph{Test di causalità di Granger}
+
+Le coppie che superano il primo filtro vengono successivamente sottoposte all'analisi di causalità
+di Granger~\cite{granger1969}. Questo approccio formalizza un principio predittivo: se una metrica
+$m_1$ causa effettivamente una metrica $m_2$, allora la conoscenza della storia passata di $m_1$
+deve migliorare la precisione nel prevedere il futuro di $m_2$ rispetto all'uso della sola storia
+di $m_2$. A livello operativo, il sistema confronta un modello ``ristretto'' con un modello
+``completo''. Il modello ristretto si basa esclusivamente sui valori passati della metrica in analisi
+mentre, il modello completo, integra i valori passati della potenziale causa. Se il miglioramento
+apportato dal modello completo rispetto a quello ristretto risulta statisticamente significativo,
+attraverso un test $F$ sulla riduzione della somma dei quadrati dei residui tra il modello completo
+e quello ristretto con $p$-value $< 0{,}05$, è possibile concludere che $m_1$ \textbf{causa-Granger}
+$m_2$, ovvero che la sua storia passata ha valore predittivo su $m_2$.
+Il test richiede che le serie temporali analizzate siano stazionarie. Per le metriche per cui
+l'analisi in Fase~I ha determinato un ordine di differenziazione $d > 0$ tramite il test \gls{ADF},
+la medesima trasformazione viene applicata alla serie storica prima del test di Granger. Per le
+metriche trattate con modelli diversi da ARIMA, il test \gls{ADF} viene eseguito preventivamente
+con la stessa procedura descritta in Fase~I.
+
+\paragraph{Transfer Entropy Non-lineare}
+
+Il terzo stadio funge da meccanismo di \textit{fallback} per quelle coppie che, pur avendo
+superato lo \textit{screening} iniziale di Pearson o essendone state esentate, come le coppie
+\textit{inter-hyperedge}, non superano il test di Granger, tale per cui la loro dipendenza causale
+potrebbe non essere lineare. In questi casi, il \textit{framework} applica la \textit{Transfer
+Entropy} ($\text{TE}_{m_1 \to m_2}$)~\cite{schreiber2000}, ossia una metrica basata sulla teoria
+dell'informazione che quantifica quanto la conoscenza di $m_1$ riduca l'incertezza su $m_2$. A
+differenza del test di Granger, strettamente legato a modelli lineari, la \textit{Transfer Entropy}
+estende l'analisi alle relazioni non lineari. Tale caratteristica è fondamentale, oltre che per
+intercettare relazioni non lineari, per individuare i tipici ``effetti soglia'' dei microservizi,
+ossia situazioni in cui le prestazioni crollano improvvisamente una volta raggiunta una certa
+saturazione. La messa in atto di questa terza fase è selettiva; ciò è dovuto all'elevato costo
+computazionale e alla necessità di discretizzare le serie temporali nell'implementazione basata
+sullo stimatore classico.
+
+\subsubsection{Identificazione della Causalità Cross-Property}
+\label{sec:causalita_cross_property}
+
+Nel caso di nodi condivisi tra diversi \textit{compliance sets}, il sistema verifica l'esistenza di
+una catena causale \textit{cross-property} capace di collegare il carico di una proprietà alla
+degradazione di un'altra. La forma di questa catena è specifica: un arco appartenente al
+\textit{compliance set} di $\Phi_j$ causa la saturazione del nodo condiviso $v$, che a sua volta
+causa la degradazione di un arco del \textit{compliance set} di $\Phi_i$. La verifica avviene
+applicando test di Granger in sequenza lungo le due direzioni della catena; qualora entrambi
+restituiscano esito positivo, l'interferenza \textit{cross-property} viene confermata statistica\-mente
+e integrata nel grafo causale e nell'\textit{alert} della Fase~IV. \\
+Questa procedura costituisce una verifica sequenziale della catena causale, non una Granger
+causality condizionale in senso formale. Non esclude la presenza di variabili confondenti o percorsi
+diretti alternativi. Viene adottata come compromesso tra rigore statistico e praticabilità
+computazionale in contesti operativi, e costituisce evidenza consistente di dipendenza causale, non
+una prova formale di causalità strutturale.
+
+Nello scenario di interferenza del sistema di telemedicina, i test potrebbero rivelare una forte
+correlazione tra il \textit{throughput} del flusso amministrativo e la latenza del flusso clinico.
+In particolare, si potrebbe osservare una causalità di Granger dal \textit{throughput} su $e_5$
+verso la saturazione del \textit{pool} di SDB, e una seconda causalità di Granger dalla saturazione
+del \textit{pool} di SDB verso la latenza su $e_2$. La catena causale risultante,
+$\theta_{e_5} \to \text{pool}_{\text{SDB}} \to L_{e_2}$, attraverserebbe due \textit{compliance
+sets} distinti. Un sistema di monitoraggio tradizionale, operando su ciascuna proprietà in
+isolamento, rimarrebbe cieco di fronte a questa connessione. Sarebbe in grado di identificare il
+sintomo, ossia l'aumento della latenza clinica, ma non saprebbe risalire alla causa radice in
+quanto quest'ultima risiede al di fuori del perimetro clinico monitorato.
+
+% ---------------------------------------------------------
+\subsection{Fase~III: Monitoraggio dell'Aderenza Strutturale}
+\label{sec:fase_3}
+% ---------------------------------------------------------
+
+La terza fase della \textit{pipeline} rileva anomalie nello stato aggregato del \textit{compliance
+set} e deviazioni strutturali del comportamento del sistema rispetto al percorso certificato.
+L'analisi si articola su due tracce parallele che convergono in un validatore finale. La prima
+traccia comprende il monitoraggio metrico puntuale ed è articolata su due livelli:
+il livello base, composto da \textit{threshold} statico e z-score sempre attivi, e l'Isolation Forest che viene
+attivato solo in presenza di almeno uno di questi segnali di base. La seconda traccia monitora costantemente la deviazione
+comportamentale tramite \gls{CUSUM} sul \textit{Path Adherence Score}, in parallelo e in modo
+indipendente dalla prima. Il livello di validazione strutturale finale viene attivato solo quando
+entrambe le tracce segnalano un'anomalia. Il carico computazionale viene così ottimizzato senza
+compromettere la sensibilità del sistema.
+
+\subsubsection{Livello Base: Threshold Statico e Z-Score}
+\label{sec:threshold_zscore}
+
+Il primo livello di analisi, costantemente attivo, funge da ``sentinella'' attraverso l'applicazione
+di un filtro deterministico sulle metriche contenute in $M_{\Phi_i}$. Questa fase combina la
+rigidità necessaria dei vincoli contrattuali con la flessibilità della statistica di base.
+
+\paragraph{Threshold statico: il vincolo contrattuale}
+
+Per ogni metrica $m$ e ogni soglia $T_m$ definita nel modello di certificazione, viene
+generato un \textit{alert} immediato al verificarsi di specifiche condizioni. Nel dettaglio, 
+l'allarme scatta quando $m(t) > T_m$ per le metriche con limite superiore, come latenza o
+\textit{error rate}, oppure quando $m(t) < T_m$ per metriche con limite inferiore, come affidabilità
+e \textit{throughput}. Questo metodo traduce i requisiti di \textit{compliance} in un semplice 
+confronto aritmetico, non richiede alcun addestramento ed è efficace nel rilevare violazioni nette. 
+Tuttavia, il suo limite è dato dalla rigidità: non è in grado di distinguere tra un carico 
+fisiologico previsto, come un picco durante le ore di punta, e un'anomalia strutturale che prelude a un guasto.
+
+\paragraph{Z-score adattivo: il contesto statistico}
+
+Per superare la rigidità del \textit{threshold} statico, il \textit{framework} adotta uno
+\textbf{z-score adattivo}. Una metrica $m$ al tempo $t$ è segnalata come anomala se il suo valore
+si discosta dalla propria \emph{media mobile storica} $\mu_m$, calcolata su una finestra
+configurabile di osservazioni recenti, per un valore maggiore di un parametro configurabile di
+deviazioni standard $\sigma_m$.
+% \footnote{Lo z-score quantifica la distanza di una singola
+% osservazione dalla propria media mobile storica in termini di deviazioni standard ($\sigma$). Sotto
+% l'assunzione di una distribuzione normale, l'utilizzo di una soglia $|z| > 3$ garantisce un'elevata
+% sensibilità, poiché isola unicamente i valori che ricadono in quel $0{,}3\%$ di casistiche estreme
+% rispetto al comportamento nominale.}. 
+Tipicamente, il sistema adotta una soglia $|z| > 3$ che, in
+una distribuzione gaussiana, corrisponde ai valori che hanno una probabilità inferiore allo
+$0{,}3\%$ di verificarsi in condizioni normali. Il vantaggio dello z-score è dato dalla
+maggior sensibilità ai contesti operativi rispetto al \textit{threshold} statico; difatti, la soglia
+dello z-score si calibra automaticamente sui dati storici, imparando di conseguenza il
+comportamento ritenuto ``normale'' del sistema. Il suo limite risiede nell'assunzione implicita di
+stazionarietà della distribuzione, che può non valere per metriche con \textit{trend} progressivi;
+in questi casi, lo z-score fatica a distinguere tra anomalie reali e variazioni strutturali del
+sistema. Per questa ragione viene utilizzato come segnale di primo livello per attivare le analisi
+successive, non come strumento di diagnosi finale.
+
+\subsubsection{Rilevamento di Anomalie Aggregate: Isolation Forest}
+\label{sec:isolation_forest}
+
+Il secondo livello applica l'Isolation Forest sullo stato aggregato del \textit{compliance set}
+$H_{\Phi_i}$. Mentre i filtri del primo livello operano in modo isolato, l'\textbf{Isolation
+Forest}~\cite{liu2008} analizza le correlazioni implicite tra i componenti del \textit{set} per
+identificare anomalie multivariate.
+
+\paragraph{Il vettore di stato aggregato}
+
+Per ogni \textit{compliance set}, il sistema costruisce un vettore di stato aggregato concatenando
+le \textit{feature} di nodo di tutti i componenti del \textit{set}:
+\begin{equation}
+\label{eq:aggregate_state}
+\mathbf{X}_{H_{\Phi_i}}(t) = \bigl[\mathbf{x}_{v_1}(t),\; \mathbf{x}_{v_2}(t),\; \ldots,\; \mathbf{x}_{v_k}(t)\bigr]
+\end{equation}
+dove $k = |H_{\Phi_i}|$ rappresenta la cardinalità del \textit{set}. Su questo vettore aggregato
+viene successivamente applicato un modello Isolation Forest, addestrato sui dati storici di periodi
+di normale operatività. Le dimensioni del vettore corrispondenti a metriche strutturalmente non
+rilevanti per un dato nodo, come $\text{pool}_v$ per SGW e SAL o $\text{gc}_v$ per SDB, assumono
+valori costanti o prossimi allo zero; il modello Isolation Forest apprende questa distribuzione
+durante la calibrazione sul \textit{gold standard}, incorporandola come parte del profilo di
+normalità. Le \textit{feature} di arco vengono escluse dal vettore aggregato in quanto effimere:
+in finestre temporali con traffico ridotto o assente, i loro valori sarebbero strutturalmente nulli
+indipendentemente dallo stato di salute del sistema, rendendo instabili sia l'addestramento che
+l'\textit{inference} del modello. L'Isolation Forest opera quindi esclusivamente sulle
+\textit{feature} di nodo, che per costruzione assumono valori informativi anche in assenza di
+traffico.
+
+\paragraph{Principio di funzionamento: l'isolamento della rarità}
+
+A differenza dei metodi tradizionali che cercano di definire cosa sia ``normale'', l'Isolation
+Forest si concentra sull'identificazione diretta delle anomalie basandosi sulla \emph{rarità} e
+sulla presenza di valori \emph{distanti} dalla distribuzione centrale. Il processo segue una
+logica basata su alberi decisionali. Le \textit{osservazioni anomale}, essendo statisticamente rare,
+si trovano in regioni dello spazio delle \textit{feature} poco popolate; ciò fa sì che possano
+essere isolate in pochissimi passi. Le \textit{osservazioni normali}, invece, essendo dense e vicine
+tra loro, richiedono numerose partizioni ricorsive prima di essere separate dalle altre. Una
+\emph{profondità di isolamento bassa}, ossia un punto che si separa rapidamente dal resto della
+foresta, è un segnale di atipicità e quindi di anomalia. Il sistema adotta una soglia di anomalia
+$s > 0{,}5$, calibrabile tramite il parametro di \textit{contamination} disponibile nelle librerie
+standard come scikit-learn\footnote{\url{https://scikit-learn.org}}, che definisce la frazione
+attesa di anomalie nel \textit{set} di addestramento. Il vantaggio di applicare l'Isolation Forest
+allo stato aggregato, anziché alle singole metriche, è che il modello è in grado di rilevare
+combinazioni di valori che presi singolarmente apparirebbero conformi. Nell'ambito dello scenario
+di riferimento, un \textit{database} SDB con \gls{CPU} al 15\% e \textit{pool} al 75\% potrebbe
+apparire nei limiti qualora le due metriche venissero analizzate separatamente. Tuttavia, la loro
+combinazione risulta fortemente anomala rispetto ai \textit{pattern} storici che, solitamente,
+mostrano o uno stato normale avente entrambe le percentuali basse, o uno stato di picco con
+entrambe le metriche elevate. Una combinazione di questo tipo segnala un'anomalia strutturale
+profonda, come un \textit{connection leak} o un blocco I/O, che i filtri univariati ignorerebbero.
+
+\subsubsection{Monitoraggio della Deriva Strutturale con EWMA e \gls{CUSUM}}
+\label{sec:ewma_cusum}
+
+Il terzo livello monitora la deviazione progressiva del comportamento del sistema rispetto al
+percorso certificato, attraverso due strumenti complementari: \gls{EWMA} e \gls{CUSUM}.
+L'obiettivo dell'analisi è raggiungere la capacità, da parte del \textit{framework}, di distinguere
+gli scostamenti momentanei dei dati da un vero e proprio degrado strutturale.
+
+\paragraph{Pulizia del segnale: il filtro \gls{EWMA}}
+
+Prima di applicare il \gls{CUSUM}, il \textit{Path Adherence Score} viene sottoposto a un processo
+di livellamento tramite il filtro \gls{EWMA}\footnote{\gls{EWMA} è un filtro statistico di tipo 
+\gls{IIR} che applica un peso esponenzialmente decrescente alle osservazioni storiche, conferendo 
+ai dati recenti maggiore rilevanza rispetto a quelli passati.} al fine di ridurre il rumore di fondo. Il segnale grezzo, infatti,
+può oscillare significativamente tra finestre temporali consecutive, anche in assenza di anomalie
+gravi in corso. \gls{EWMA} si basa su un fattore di smorzamento, con valore compreso tra 0 e 1,
+che regola il peso attribuito ai dati passati permettendo di bilanciare tra reattività e stabilità
+del segnale. In questo contesto, la reattività indica la capacità del sistema di segnalare
+immediatamente un cambiamento; mentre la stabilità rappresenta la capacità di assorbire piccole
+fluttuazioni casuali tra i dati, evitando di lanciare allarmi in maniera impropria.
+Sostanzialmente, questo fattore determina la velocità con cui i dati più vecchi perdono importanza
+rispetto a quelli nuovi: valori più alti fanno sì che i dati passati perdano importanza rapidamente,
+rendendo il filtro più reattivo alle variazioni recenti; valori più bassi, invece, preservano la
+memoria storica più a lungo, producendo una stima più stabile ma meno sensibile ai cambiamenti.
+Calibrando correttamente il filtro è possibile ottenere una serie temporale omogenea e quindi adatta
+a un monitoraggio continuo. Lo stesso trattamento di livellamento viene applicato alla serie
+temporale della norma di Frobenius nei casi in cui il \gls{PAS} non risulti applicabile, garantendo
+la medesima stabilità del segnale indipendentemente dalla metrica di aderenza utilizzata.
+
+\paragraph{Rilevazione della deriva persistente: il metodo \gls{CUSUM}}
+
+Sulla serie temporale filtrata attraverso \gls{EWMA} viene poi applicato l'algoritmo
+\gls{CUSUM}~\cite{montgomery2009}, ossia uno strumento progettato per evidenziare derive strutturali
+persistenti, distinguendole da fluttuazioni isolate. A differenza dei meccanismi di soglia
+tradizionali, il \gls{CUSUM} non reagisce a singoli eventi anomali; bensì accumula progressivamente
+le deviazioni negative del \textit{Path Adherence Score} rispetto al valore di riferimento
+calcolato sul \textit{gold standard} $W^{\text{gold}}$. Al fine di ridurre il rischio di falsi
+positivi, garantendo quindi solidità operativa, il meccanismo di accumulo si basa su un margine di
+tolleranza configurabile. Questo parametro permette al sistema di assorbire le micro oscillazioni
+fisiologiche del traffico, impedendo che variazioni irrilevanti alimentino il contatore
+dell'anomalia. Il sistema genera un \textit{alert} di deviazione comportamentale non appena il
+degrado accumulato supera una soglia predefinita, segnalando quindi un allontanamento significativo
+e persistente dal percorso certificato.
+
+L'impostazione del \gls{CUSUM} all'interno del \textit{framework} è volutamente unidirezionale,
+ovvero orientata alla sola direzione di degrado della metrica su cui opera: per il \textit{Path
+Adherence Score}, ciò significa accumulare i decrementi rispetto al valore di riferimento; per la
+norma di Frobenius, significa accumulare gli incrementi rispetto al valore di riferimento calcolato
+sul \textit{gold standard}. In entrambi i casi, il sistema si concentra esclusivamente
+sull'allontanamento dal comportamento certificato; scostamenti nella direzione opposta, come un
+picco di traffico che scorre correttamente lungo gli archi certificati, non costituiscono una
+violazione della \textit{compliance} strutturale nel contesto qui definito.
+
+\subsubsection{Verifica della Conformità Strutturale}
+\label{sec:conformita_strutturale}
+
+Il quarto livello, essendo il più oneroso dal punto di vista computazionale, viene attivato
+esclusivamente come validatore finale. Il suo compito è confrontare il \gls{PBO} osservato con il
+\textit{gold standard} attraverso una procedura articolata in tre fasi.
+
+\begin{enumerate}
+  \item \textbf{Analisi del \textit{trend}}: viene calcolata la derivata temporale della serie
+        livellata tramite \gls{EWMA}, al fine di identificare la direzione del degrado. Per il
+        \textit{Path Adherence Score}, il degrado si manifesta come decremento persistente, ossia
+        come derivata negativa, mentre per le metriche di distanza strutturale, quali norma di
+        Frobenius o \gls{GED}, il degrado si manifesta come incremento persistente, ossia derivata
+        positiva.
+  \item \textbf{Misurazione della distanza}: nel caso in cui la topologia sia fissa, ossia $V$ e
+        $E_{\text{all}}$ invariati, come nello scenario di riferimento, la distanza strutturale
+        viene elaborata attraverso la norma di Frobenius $\|W(t) - W^{\text{gold}}\|_F$, calcolata
+        sull'intera matrice dei pesi. In contesti di topologia variabile a \textit{runtime},
+        invece, la distanza viene calcolata attraverso la \textbf{\textit{Graph Edit Distance}
+        (\gls{GED})} tra il \gls{PBO} corrente e il \textit{gold standard} per quantificare la
+        deformazione del grafo.
+  \item \textbf{Validazione dell'\textit{alert}}: qualora la derivata confermi per almeno tre
+        intervalli consecutivi la direzione del degrado, derivata negativa per il \textit{Path
+        Adherence Score} e positiva per la norma di Frobenius o \gls{GED}, e il valore della
+        distanza strutturale superi una soglia configurabile, viene generato un segnale di
+        deviazione strutturale confermata.
+\end{enumerate}
+
+La combinazione delle due condizioni che stanno alla base della terza fase, ossia la validazione
+dell'\textit{alert}, è fondamentale per filtrare i falsi positivi causati da fluttuazioni temporanee
+della metrica di aderenza comportamentale che non corrispondono a deformazioni strutturali effettive
+del grafo comportamentale.
+
+\subsubsection{Procedura di Rilevamento Combinata}
+\label{sec:rilevamento_combinato}
+
+I quattro livelli della Fase~III vengono combinati secondo un protocollo di attivazione gerarchico.
+Il \textit{threshold} statico e lo z-score sono sempre in funzione e costituiscono il primo filtro
+di selezione. L'Isolation Forest viene interrogato solo quando uno dei due segnali di base è attivo,
+in modo tale da verificare se lo stato aggregato del \textit{compliance set} sia coerente con il
+profilo storico. Parallelamente, il \gls{CUSUM} monitora costantemente la serie livellata tramite \gls{EWMA}: 
+il \textit{Path Adherence Score} nei casi di percorso lineare ordinato, oppure la norma di Frobenius 
+$\|W(t) - W^{\text{gold}}\|_F$ come segnale di deviazione scalare qualora il \gls{PAS} non risulti applicabile.
+Un'allerta di \textit{drift} viene generata quando l'accumulo statistico di tali scostamenti supera 
+la soglia critica. Infine, qualora sia il \gls{CUSUM} sia l'Isolation Forest segnalino anomalie, 
+interviene il \textbf{validatore strutturale}. Quest'ultimo calcola puntualmente la distanza strutturale 
+definitiva, tramite norma di Frobenius per topologie fisse o \gls{GED} per topologie variabili, 
+per confermare formalmente la deviazione prima dell'emissione dell'alert.
+
+
+La diagnosi finale dipende dalla combinazione dei segnali attivi. Se tutti e quattro gli indicatori sono
+attivi simultaneamente, il sistema classifica lo stato come criticamente anomalo sia a livello
+metrico che comportamentale; in questo caso la criticità dell'\textit{alert} in uscita dalla
+Fase~IV viene elevata al livello massimo. Qualora solo il \gls{CUSUM} sia attivo, il sistema
+segnala una deviazione comportamentale in corso che non ha ancora generato anomalie metriche
+evidenti. Si tratta tipicamente di interferenze \textit{cross-property} nelle fasi iniziali.
+Qualora invece il segnale di base sia attivo e il \gls{CUSUM} segnali una deviazione comportamentale, 
+ma l'Isolation Forest non confermi l'anomalia multivariata, il sistema rileva la coesistenza di un'anomalia 
+metrica puntuale e di una deriva comportamentale strutturale non caratterizzata da pattern aggregati anomali. 
+In questo caso il Validatore non viene attivato; in assenza di incertezza modellistica elevata, 
+la classificazione in Fase~IV sarà almeno Arancione per l'attività del \gls{CUSUM}, indipendentemente dal \textit{lead time}.
+Altrimenti, qualora il \gls{CUSUM} e l'Isolation Forest segnalino entrambi un'anomalia, viene attivato
+il validatore strutturale. Se quest'ultimo non conferma la deviazione, ad esempio in quanto la
+distanza strutturale è ancora sotto soglia o la derivata non sia persistente, il sistema produce 
+un segnale di preallerta dovuto al fatto che sono presenti anomalie sia metriche
+che comportamentali, ma la deformazione strutturale del grafo non è ancora statisticamente confermata. 
+La classificazione finale dell'\textit{alert} dipenderà poi dal \textit{lead time} 
+stimato nella Fase~IV, che determinerà il livello Arancione o Rosso secondo le soglie definite nella 
+Sezione~\ref{sec:classificazione_criticita}, in attesa della conferma strutturale 
+del Validatore. 
+% Altrimenti, qualora solo l'Isolation Forest sia attivo, il sistema segnala uno stato metrico anomalo
+% che non ha ancora causato una deviazione di percorso. Qualora il segnale di base, \textit{threshold}
+% o z-score, sia attivo ma l'Isolation Forest non confermi l'anomalia multivariata, il sistema
+% registra un evento di attenzione a bassa priorità senza elevarlo ad \textit{alert} strutturale.
+% Si tratta tipicamente di una fluttuazione di carico fisiologica, coerente con i \textit{pattern}
+% storici: un picco locale di risorse che il sistema sta ancora gestendo attraverso il percorso
+% certificato. Questa stratificazione consente di distinguere tra semplici fluttuazioni di carico e
+% derive strutturali profonde, rendendo gli interventi più mirati e tempestivi.
+Altrimenti, qualora l'Isolation Forest confermi l'anomalia multivariata e il segnale di base, 
+\textit{threshold} o z-score, sia attivo, ma il \gls{CUSUM} non segnali deviazioni comportamentali, 
+il sistema segnala uno stato metrico anomalo che non ha ancora causato una deviazione di percorso. 
+Si tratta tipicamente di un picco di carico interno al \textit{compliance set} che non ha ancora 
+alterato la distribuzione del traffico sul percorso certificato.
+Infine, qualora il segnale di base sia attivo ma l'Isolation Forest non confermi l'anomalia multivariata, 
+il sistema registra un evento di attenzione a bassa priorità senza elevarlo ad \textit{alert} strutturale.
+Si tratta tipicamente di una fluttuazione di carico fisiologica, coerente con i \textit{pattern} storici.
+Questa stratificazione consente di distinguere tra semplici fluttuazioni di carico e derive strutturali 
+profonde, rendendo gli interventi più mirati e tempestivi.
+
+
+% ---------------------------------------------------------
+\subsection{Fase~IV: Generazione degli Alert e Stima del Lead Time}
+\label{sec:fase_4}
+% ---------------------------------------------------------
+
+La quarta fase della \textit{pipeline} rappresenta il cuore del \textit{framework} proposto. Essa
+è fondamentale in quanto aggrega i risultati delle tre fasi precedenti al fine di produrre
+\textit{alert} relativi alla proprietà certificata. La differenza rispetto a un sistema di
+\textit{anomaly detection} tradizionale è inizialmente quantitativa, in quanto permette di ottenere
+un \textit{lead time} più ampio; tuttavia, il vantaggio principale è qualitativo: l'\textit{alert}
+generato, infatti, rappresenta un vero e proprio giudizio di \textit{compliance} predittivo su una
+specifica proprietà. Il \textit{framework}, attraverso la fusione delle previsioni locali (Fase~I),
+delle catene causali (Fase~II) e delle deviazioni strutturali (Fase~III), permette infatti di
+fornire un verdetto che include l'indicazione esplicita della causa strutturale e dei componenti
+impattati.
+
+\subsubsection{Aggregazione Predittiva per Proprietà}
+\label{sec:aggregazione_predittiva}
+
+Per ogni proprietà $\Phi_i$, la previsione globale viene calcolata applicando una funzione di
+aggregazione semantica alle traiettorie predittive locali ottenute nella Fase~I:
+\begin{equation}
+\label{eq:global_forecast}
+\hat{\Phi}_i(t+\tau') = f_{\text{agg}}^{\Phi_i}\!\bigl(\{\hat{X}^m(t+\tau') : m \in M_{\Phi_i}\}\bigr)
+\end{equation}
+La scelta della funzione $f_{\text{agg}}^{\Phi_i}$ dipende strettamente dalla natura della
+proprietà monitorata. Il \textit{framework} copre le tre casistiche più comuni. Queste funzioni sono
+definite per catene seriali, che costituiscono il caso architetturale del sistema di telemedicina
+analizzato. In presenza di topologie con rami paralleli, la funzione di aggregazione
+per la latenza diventerebbe ad esempio il massimo tra i percorsi paralleli anziché la somma.
+
+Per semplificare la notazione nelle formule successive, si definisce $A_i = A(H_{\Phi_i})$ come 
+l'insieme degli archi appartenenti al \textit{compliance set} della la proprietà $\Phi_i$, 
+ovvero gli archi del grafo temporale i cui estremi appartengono entrambi a $H_{\Phi_i}$.
+In questo formalismo, $t$ rappresenta l'istante temporale corrente; 
+mentre $\tau$ indica l'orizzonte temporale massimo di previsione, ad esempio un intervallo di 12 giorni. 
+La variabile $\tau' \in \{1, \ldots, \tau\}$ funge da indice per i singoli passi previsionali futuri. 
+Tutte le quantità si intendono dunque valutate al tempo futuro $t+\tau'$; l'utilizzo di tale variabile 
+è necessario per monitorare l'evoluzione dell'intera traiettoria predittiva e identificare con 
+precisione l'istante in cui si prevede possa verificarsi una violazione, anziché limitare 
+l'analisi al solo stato finale del sistema all'orizzonte $\tau$.
+
+Per proprietà di latenza \textit{end-to-end}, la latenza totale è calcolata come la somma delle
+latenze previste sui singoli archi del percorso certificato:
+\begin{equation}
+\label{eq:agg_latency}
+\hat{L}_{\Phi_i}(t+\tau') = \sum_{e \in A_i} \hat{L}_e(t+\tau')
+\end{equation}
+
+Per proprietà di affidabilità, una richiesta \textit{end-to-end} ha successo solo se tutte le
+interazioni della catena certificata non producono errori; questo riflette direttamente la semantica
+AND del \textit{compliance set}. L'affidabilità globale prevista è il prodotto delle probabilità di
+successo dei singoli archi:
+\begin{equation}
+\label{eq:agg_reliability}
+\hat{R}_{\Phi_i}(t+\tau') = \prod_{e \in A_i} (1 - \hat{\varepsilon}_e(t+\tau'))
+\end{equation}
+dove $\hat{\varepsilon}_e(t+\tau')$ è il tasso di errore previsto sull'arco $e$, direttamente
+forecastabile dalla componente $\varepsilon_e$ del vettore $\mathbf{x}_e(t)$ definito nella
+Sezione~\ref{sec:def_formale_atg}.
+
+Per proprietà di capacità, il limite della catena è determinato dal suo collo
+di bottiglia, ossia dall'arco con \textit{throughput} minimo. La capacità globale prevista è:
+\begin{equation}
+\label{eq:agg_capacity}
+\hat{C}_{\Phi_i}(t+\tau') = \min_{e \in A_i} \hat{\theta}_e(t+\tau')
+\end{equation}
+dove $\hat{\theta}_e(t+\tau')$ è il \textit{throughput} previsto sull'arco $e$, forecastabile
+direttamente dalla componente $\theta_e$ del vettore $\mathbf{x}_e(t)$.
+
+Nello scenario di riferimento, tra il flusso clinico e quello amministrativo, l'aggregazione
+additiva della latenza su un orizzonte temporale di $\tau = 12$ giorni potrebbe indicare un valore
+totale $\hat{L}_{\text{crit}}$ superiore alla soglia di sicurezza di 500\,ms. In questo
+caso, il sistema procederebbe a segnalare preventivamente una violazione prevista, permettendo di
+intervenire prima che il degrado diventi effettivo.
+
+\subsubsection{Stima del Lead Time}
+\label{sec:stima_lead_time}
+
+Il \textit{lead time} $\tau^*$ associato a ciascun \textit{alert} indica il minimo
+orizzonte temporale entro il quale la proprietà $\Phi_i$ monitorata violerà le condizioni di conformità.
+Essendo che la violazione può corrispondere sia al superamento di un limite superiore, ad esempio la
+latenza elevata, sia al cedimento al di sotto di un limite inferiore, come il calo dell'affidabilità
+o del \textit{throughput}, la definizione di \textit{lead time} viene generalizzata attraverso una
+funzione logica:
+\begin{equation}
+\label{eq:lead_time}
+\tau^* = \min\bigl\{\tau' \in \{1, \ldots, \tau\} : 
+  \mathrm{is\_violated}\bigl(\hat{\Phi}_i(t+\tau'),\; \Phi_i^{\text{SLA}}\bigr)\bigr\}
+\end{equation}
+In questa formula, $\Phi_i^{\text{SLA}}$ rappresenta la soglia stabilita nel modello di
+certificazione. A livello operativo, un ipotetico \textit{lead time} di 12 giorni indica che si
+dispone di dodici giorni per intervenire sul sistema prima che avvenga la violazione.
+Qualora l'insieme risulti vuoto, ovvero nessun passo $\tau'$ nell'orizzonte 
+produca una violazione prevista, la Fase~IV non genera alcun \textit{alert} 
+per la proprietà $\Phi_i$ nel ciclo corrente.
+
+\subsubsection{Classificazione della Criticità dell'Alert}
+\label{sec:classificazione_criticita}
+
+In seguito all'identificazione di una violazione, è necessario determinare la criticità
+dell'\textit{alert}. Quest'ultima viene determinata sulla base della combinazione di quattro fattori
+distinti: il \textit{lead time} stimato, lo \textit{score} di anomalia prodotto dall'Isolation
+Forest nella Fase~III, il segnale di deviazione comportamentale prodotto dal \gls{CUSUM} e il
+segnale di deviazione strutturale confermata prodotto dal Validatore strutturale.
+
+\begin{itemize}
+  \item \textbf{Livello Giallo (Attenzione):} si attiva quando il \textit{lead time} stimato
+        supera i 7 giorni e non si rilevano segnali strutturali attivi da parte del \gls{CUSUM}
+        o dell'Isolation Forest. La previsione è coerente con la \textit{baseline} e non vengono
+        rilevate anomalie strutturali: la tendenza al degrado richiede monitoraggio, non un
+        intervento immediato;
+  \item \textbf{Livello Arancione (Prevenzione):} scatta quando il \textit{lead time} è compreso
+        tra 2 e 7 giorni, oppure nel caso in cui il \gls{CUSUM} rilevi un \textit{drift}
+        strutturale attivo o l'Isolation Forest segnali uno stato aggregato anomalo. In questo
+        caso, la tendenza è considerabile come preoccupante e il sistema richiede un intervento
+        preventivo;
+  \item \textbf{Livello Rosso (Emergenza):} viene generato sempre quando il \textit{lead time}
+        stimato è inferiore a 2 giorni. La presenza simultanea della conferma causale di Granger
+        sulla catena identificata e del \textit{Path Adherence Score} in rapido declino eleva la
+        certezza diagnostica del giudizio. Analogamente, l'attivazione di segnali quali anomalia
+        Isolation Forest attiva e il segnale di deviazione strutturale confermata dal Validatore
+        strutturale nella Fase~III costituisce un'ulteriore conferma della gravità sistemica, pur
+        non essendone condizione necessaria. Tuttavia, in assenza di tali riscontri causali e
+        topologici, il livello Rosso scatta ugualmente a protezione del sistema, includendo
+        nell'\textit{alert} un indicatore di affidabilità ridotta per segnalare che la violazione
+        prevista non è ancora aggravata da derive strutturali manifeste. Questo scenario indica una
+        violazione imminente della \textit{compliance}, richiedendo un intervento tecnico immediato.
+\end{itemize}
+
+I livelli vengono valutati in ordine decrescente di gravità: il Rosso ha precedenza sull'Arancione,
+che a sua volta ha la precedenza sul Giallo. In aggiunta ai criteri sopra descritti, qualora la divergenza tra la
+previsione del modello principale e quella della \textit{baseline} lineare superi la soglia configurabile 
+definita nella Fase~I, la classificazione dell'\textit{alert} viene ridotta di un livello, da Rosso ad Arancione
+oppure da Arancione a Giallo. In tal caso, l'\textit{alert} include anche un indicatore esplicito di affidabilità ridotta, 
+segnalando che la stima è soggetta a incertezza modellistica elevata. Il livello Giallo non viene ulteriormente
+declassato: la tendenza al degrado richiede comunque monitoraggio indipendentemente dall'incertezza previsionale.
+
+\subsubsection{Struttura dell'Alert Semanticamente Arricchito}
+\label{sec:struttura_alert}
+
+L'output finale della Fase~IV, per ogni proprietà a rischio, è un \textit{alert} strutturato che
+include una serie di campi semantici, ciascuno derivante dalle analisi compiute nelle fasi
+precedenti. I campi che compongono l'\textit{alert} includono: la \textit{proprietà a rischio}, che
+identifica la proprietà certificata sotto minaccia; il \textit{compliance set impattato}, che elenca
+l'insieme di componenti la cui conformità congiunta è minacciata; il \textit{lead time stimato}
+$\tau^*$, che indica il tempo residuo prima che si verifichi la violazione effettiva e la
+\textit{metrica critica}, che riporta il valore previsto e la soglia certificata della metrica che
+sta guidando la violazione. L'\textit{arco critico principale}, invece, identifica l'arco del grafo
+temporale che contribuisce maggiormente alla violazione aggregata della proprietà monitorata. 
+La \textit{causa radice} indica il componente o la catena causale identificata dalla Fase~II come origine 
+del degrado, mentre l'\textit{interferenza cross-property} nomina la proprietà $\Phi_j$ la cui attività 
+contribuisce al degrado di $\Phi_i$, qualora la causa radice coinvolga un nodo condiviso. Infine, 
+viene indicato il livello di criticità.
+
+\begin{table}[htbp]
+\centering
+\caption{Esempio di \textit{alert} strutturato per lo scenario di interferenza \textit{cross-property}
+(valori esemplificativi).}
+\label{tab:alert_telemed}
+\begin{tabular}{ll}
+\toprule
+\textbf{Campo} & \textbf{Valore (esemplificativo)} \\
+\midrule
+Proprietà a rischio       & \textit{Real-time Dependability} $\Phi_{\text{crit}}$ \\
+\textit{Compliance Set}   & $H_{\text{crit}} = \{\text{SGW, SIN, SDB, SAL}\}$ \\
+\textit{Lead time} stimato & $\tau^* = 12$ giorni \\
+Metrica critica           & $\hat{L}_{\text{crit}} > 500\;\text{ms}$ (soglia certificata) \\
+Arco critico principale   & $e_2 : \text{SIN} \to \text{SDB}$ (contributo prevalente) \\
+Causa radice              & Saturazione \textit{connection pool} SDB \\
+Interferenza              & $\Phi_{\text{adm}}$: \textit{throughput} $\theta_{e_5}$ in crescita \\
+Nodo condiviso            & $\text{SDB} \in \text{Shared}(H_{\text{crit}}, H_{\text{adm}})$ \\
+Criticità                 & Arancione (\gls{CUSUM} attivo, \textit{lead time} 12 giorni) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Contributo Distintivo Rispetto agli Approcci Tradizionali}
+\label{sec:contributo_distintivo}
+
+Il confronto tra l'\textit{alert} generato dall'approccio ibrido proposto e quello che produrrebbe
+un sistema di monitoraggio tradizionale illustra concretamente il valore aggiunto del Layer~1 e
+della Fase~IV. Privo di contesto semantico, un sistema puramente statistico si limiterebbe a
+segnalare, nello scenario di riferimento, che è previsto un aumento entro un determinato orizzonte
+temporale della latenza sull'arco $e_2\!:\!\text{SIN}\!\to\!\text{SDB}$, evidenziando al contempo
+un'alta correlazione con la saturazione del \textit{connection pool} di SDB. Seppur tecnicamente
+corretto, questo \textit{alert} risulta incompleto sotto tre aspetti cruciali.
+
+Il primo aspetto riguarda la \textit{proprietà certificata}; il sistema non è infatti in grado di
+nominare $\Phi_{\text{crit}}$ in quanto non possiede un'associazione esplicita tra l'arco $e_2$ e
+la proprietà che esso serve. Sistemi come FIRM~\cite{qiu2020firm}, pur raggiungendo un'accuracy
+media del 93\% nella localizzazione della violazione, producono diagnosi che non specificano quale
+proprietà certificata sia effettivamente minacciata. Il secondo aspetto riguarda
+l'\textit{interferenza cross-property}. Un sistema tradizionale non includerebbe il
+\textit{throughput} $\theta_{e_5}$ nella propria analisi perché tale arco appartiene a un flusso
+amministrativo distinto, separato a livello logico da quello clinico. Questa limitazione strutturale
+viene riscontrata anche in sistemi come GAMMA~\cite{somashekar2024gamma}, progettati per la suite
+DeathStarBench~\cite{gan2019deathstar}. In questi casi, il rilevamento di \textit{bottleneck}
+multipli avviene a livello di singola richiesta, senza una mappa esplicita delle risorse condivise
+tra flussi concorrenti. Il terzo aspetto riguarda la \textit{semantica dell'aggregazione}. Un
+sistema tradizionale non calcolerebbe la latenza \textit{end-to-end} prevista in quanto non conosce
+la topologia dell'intero percorso e la relativa funzione di aggregazione. Di conseguenza,
+l'eventuale superamento della soglia di 500\,ms risulterebbe evidente solo nel momento in cui
+l'operatore aggregasse manualmente le latenze dei tre archi del percorso clinico.
+
+L'approccio ibrido proposto risolve queste tre limitazioni. Il \textit{mapping} semantico
+(Layer~3) fornisce il contesto associando $e_2$ a $H_{\text{crit}}$, la funzione logica
+dell'ipergrafo intercetta le cause esterne, includendo così $\theta_{e_5}$ nell'analisi
+dell'interferenza, e la Fase~IV applica proattivamente la funzione di aggregazione additiva. Il
+valore aggiunto non è solo operativo ma anche computazionale; la selezione topologica delle metriche
+in Fase~I e lo \textit{screening} topologico delle coppie in Fase~II riducono lo spazio di analisi
+da quadratico nel numero totale di metriche del sistema a lineare nel prodotto tra il numero di
+proprietà monitorate e la dimensione media dei \textit{compliance sets}. Entrambe le riduzioni sono
+conseguenze dirette dell'adozione dell'ipergrafo, per questo motivo sono garantite
+indipendentemente dalla qualità e dalla quantità dei dati storici a disposizione.
