@@ -6,6 +6,7 @@ metadata:
   flow: "read-home-timeline"
   graph_id: "graph_2"
   dataset: "GAMMA"
+  window_duration_seconds: 30
 
 nodes:
   - id: nginx-web-server        # index 0 - entry point HTTP

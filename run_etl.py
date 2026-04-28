@@ -4,11 +4,18 @@ from pathlib import Path
 from src.utils.config_loader import ConfigLoader
 from src.ingestion.converter import DSBConverter
 
-ROOT = Path(__file__).parent
-TOPOLOGY_PATH = ROOT / "config" / "topology.yaml"
-PIPELINE_PATH = ROOT / "config" / "pipeline_params.yaml"
-RAW_DIR = ROOT / "DATASET"
 
-config = ConfigLoader(TOPOLOGY_PATH, PIPELINE_PATH)
-converter = DSBConverter(config)
-converter.convert_all(RAW_DIR)
+def main() -> None:
+    root = Path(__file__).parent
+    config = ConfigLoader(
+        root / "config" / "topology.yaml",
+        root / "config" / "pipeline_params.yaml",
+    )
+    topology = config.load_topology()
+    raw_dir = root / topology["data_paths"]["raw_dir"]
+    converter = DSBConverter(config)
+    converter.convert_all(raw_dir)
+
+
+if __name__ == "__main__":
+    main()
