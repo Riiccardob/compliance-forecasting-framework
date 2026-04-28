@@ -12,10 +12,10 @@ forecasting:
   horizon_steps: 12
   baseline_model: linear_regression
   default_model: prophet
-  statistical_model: arima        # aggiungere questa riga
+  statistical_model: arima        
   deep_model: lstm
   divergence_threshold: 0.20
-  arima:                          # aggiungere questo blocco
+  arima:                          
     max_p: 5
     max_d: 2
     max_q: 5
