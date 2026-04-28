@@ -54,6 +54,7 @@ class DSBConverter:
         self._logger = LoggingSetup.configure(__name__, "INFO")
 
         topology = config.load_topology()
+        self._topology: dict = topology
 
         # Mappatura indice → nome servizio (ordine lista topology.yaml)
         self._node_map: dict[int, str] = {
@@ -307,7 +308,9 @@ class DSBConverter:
             mem_mb: pd.Series = mem_bytes / (1024.0 * 1024.0)
 
             rx_mb: pd.Series = agg[rx_col].diff() / (1024.0 * 1024.0)
+            rx_mb = rx_mb.mask(rx_mb < 0).ffill().fillna(0.0)
             tx_mb: pd.Series = agg[tx_col].diff() / (1024.0 * 1024.0)
+            tx_mb = tx_mb.mask(tx_mb < 0).ffill().fillna(0.0)
 
             for i in range(len(agg)):
                 if pd.isna(cpu_pct.iloc[i]):
@@ -358,13 +361,18 @@ class DSBConverter:
         agg = agg.sort_values("timestamp").reset_index(drop=True)
 
         t_sec: pd.Series = agg["timestamp"] / 1_000_000.0
-        # T_w[i] = t[i+1] - t[i]; ultima finestra → fill con mediana
+        # T_w[i] = t[i+1] - t[i]
         t_w: pd.Series = t_sec.diff().shift(-1)
-        median_tw: float = float(t_w.median())
-        t_w = t_w.fillna(median_tw)
 
         error_rate: pd.Series = agg["n_anomalous_traces"] / agg["n_traces"]
-        throughput: pd.Series = agg["n_traces"] / t_w
+        fallback_duration = self._topology.get("window_duration_seconds")
+        if fallback_duration is None:
+            fallback_duration = 30.0
+            self._logger.warning(
+                "[%s] 'window_duration_seconds' non definito in topology.yaml: "
+                "uso fallback 30.0s",
+                source_file,
+            )
 
         records: list[dict] = []
         for edge in self._edges:
@@ -383,6 +391,10 @@ class DSBConverter:
             latency_ms: pd.Series = agg[lat_col] / 1000.0  # µs → ms
 
             for i in range(len(agg)):
+                delta_t_seconds = t_w.iloc[i]
+                if pd.isna(delta_t_seconds) or delta_t_seconds <= 0:
+                    delta_t_seconds = fallback_duration
+
                 records.append(
                     {
                         "timestamp": agg.iloc[i]["timestamp"],
@@ -392,7 +404,7 @@ class DSBConverter:
                         "target": edge["target"],
                         "latency_ms": latency_ms.iloc[i],
                         "error_rate": error_rate.iloc[i],
-                        "throughput_rps": throughput.iloc[i],
+                        "throughput_rps": agg.iloc[i]["n_traces"] / delta_t_seconds,
                         "source_file": source_file,
                     }
                 )
