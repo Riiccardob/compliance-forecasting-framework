@@ -1,0 +1,49 @@
+# pipeline_params.yaml - Parametri algoritmici della pipeline
+# Tutti i valori qui sono soggetti a tuning senza toccare la topologia.
+
+version: "1.0"
+
+pbo:
+  weight_metric: throughput_rps
+  ewma_alpha: 0.3
+  gold_standard_label: 0           # label_trace == 0 → finestra nominale
+
+forecasting:
+  horizon_steps: 12
+  baseline_model: linear_regression
+  default_model: prophet
+  deep_model: lstm
+  divergence_threshold: 0.20
+  lstm:
+    input_window: 24
+    hidden_size: 64
+    num_layers: 2
+    dropout: 0.2
+    epochs: 50
+    learning_rate: 0.001
+    nonlinear_metrics:             # metriche che usano LSTM invece di Prophet
+      - mem_mb
+
+causal_analysis:
+  pearson_threshold: 0.7
+  granger_significance: 0.05
+  granger_max_lag: 5
+  transfer_entropy_threshold: 0.1
+
+anomaly_detection:
+  zscore_threshold: 3.0
+  isolation_forest:
+    n_estimators: 100
+    contamination: 0.1
+    random_state: 42
+  cusum:
+    tolerance_factor: 0.5
+    alert_threshold: 5.0
+  structural_validator:
+    trend_intervals: 3
+    distance_threshold: 0.15
+
+alert_generation:
+  lead_time_thresholds:
+    red_days: 2
+    orange_days: 7

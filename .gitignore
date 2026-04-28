@@ -182,3 +182,4 @@ cython_debug/
 
 DATASET/
 venv/
+docs/paper
