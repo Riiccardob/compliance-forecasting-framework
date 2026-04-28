@@ -122,6 +122,12 @@ class ConfigLoader:
         with path.open(encoding="utf-8") as fh:
             data: dict = yaml.safe_load(fh)
 
+        if not isinstance(data, dict):
+            raise ValueError(
+                f"{path.name} non contiene un mapping YAML valido "
+                f"(ottenuto: {type(data).__name__})"
+            )
+
         for key in required_keys:
             if key not in data:
                 raise ValueError(

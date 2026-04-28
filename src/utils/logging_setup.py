@@ -24,6 +24,12 @@ class LoggingSetup:
             Logger configurato con handler su stderr e formato standard.
         """
         logger = logging.getLogger(name)
+        _VALID_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        if level.upper() not in _VALID_LEVELS:
+            raise ValueError(
+                f"Livello di log non valido: '{level}'. "
+                f"Valori accettati: {sorted(_VALID_LEVELS)}"
+            )
         logger.setLevel(getattr(logging, level.upper()))
 
         if not logger.handlers:
