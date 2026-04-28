@@ -50,6 +50,8 @@ edge_metrics:
 compliance_sets:
   H_crit:
     description: "Real-time Dependability - percorso critico di latenza"
+    topology_type: linear
+    # Percorso certificato lineare: PAS applicabile.
     nodes:
       - nginx-web-server
       - nginx-thrift
@@ -73,6 +75,9 @@ compliance_sets:
 
   H_cache:
     description: "Cache Efficiency - monitoraggio layer di caching"
+    topology_type: parallel
+    # Topologia con rami paralleli: PAS non applicabile.
+    # Il monitoraggio strutturale usa la norma di Frobenius come fallback.
     nodes:
       - home-timeline-service
       - home-timeline-redis

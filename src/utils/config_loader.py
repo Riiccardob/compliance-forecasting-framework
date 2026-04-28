@@ -1,0 +1,131 @@
+"""Caricamento e validazione dei file di configurazione del framework."""
+from pathlib import Path
+
+import yaml
+
+from src.utils.logging_setup import LoggingSetup
+
+logger = LoggingSetup.configure(__name__, "INFO")
+
+_TOPOLOGY_REQUIRED_KEYS = (
+    "metadata",
+    "nodes",
+    "edges",
+    "compliance_sets",
+    "node_metrics",
+    "edge_metrics",
+    "data_paths",
+)
+
+_PIPELINE_REQUIRED_KEYS = (
+    "version",
+    "pbo",
+    "forecasting",
+    "causal_analysis",
+    "anomaly_detection",
+    "alert_generation",
+)
+
+
+class ConfigLoader:
+    """Carica e valida topology.yaml e pipeline_params.yaml.
+
+    Entrambi i file vengono letti lazy (alla prima chiamata del metodo
+    corrispondente). La validazione è eager: alla prima chiamata si
+    verifica la presenza di tutte le chiavi obbligatorie.
+    """
+
+    def __init__(self, topology_path: Path, pipeline_path: Path) -> None:
+        """Inizializza il loader con i path ai due file di configurazione.
+
+        Parameters
+        ----------
+        topology_path:
+            Path al file topology.yaml.
+        pipeline_path:
+            Path al file pipeline_params.yaml.
+        """
+        self._topology_path = Path(topology_path)
+        self._pipeline_path = Path(pipeline_path)
+        self._topology: dict | None = None
+        self._pipeline: dict | None = None
+
+    def load_topology(self) -> dict:
+        """Carica e valida topology.yaml.
+
+        Returns
+        -------
+        dict
+            Contenuto del file YAML come dizionario.
+
+        Raises
+        ------
+        FileNotFoundError
+            Se il file non esiste; il messaggio include il path completo.
+        ValueError
+            Se manca una chiave obbligatoria; il messaggio include il nome
+            della prima chiave mancante trovata.
+        """
+        if self._topology is None:
+            self._topology = self._load_and_validate(
+                self._topology_path, _TOPOLOGY_REQUIRED_KEYS
+            )
+            logger.info("topology.yaml caricato da: %s", self._topology_path)
+        return self._topology
+
+    def load_pipeline_params(self) -> dict:
+        """Carica e valida pipeline_params.yaml.
+
+        Returns
+        -------
+        dict
+            Contenuto del file YAML come dizionario.
+
+        Raises
+        ------
+        FileNotFoundError
+            Se il file non esiste; il messaggio include il path completo.
+        ValueError
+            Se manca una chiave obbligatoria; il messaggio include il nome
+            della prima chiave mancante trovata.
+        """
+        if self._pipeline is None:
+            self._pipeline = self._load_and_validate(
+                self._pipeline_path, _PIPELINE_REQUIRED_KEYS
+            )
+            logger.info("pipeline_params.yaml caricato da: %s", self._pipeline_path)
+        return self._pipeline
+
+    @staticmethod
+    def _load_and_validate(path: Path, required_keys: tuple[str, ...]) -> dict:
+        """Legge un file YAML e verifica la presenza delle chiavi obbligatorie.
+
+        Parameters
+        ----------
+        path:
+            Path al file YAML da leggere.
+        required_keys:
+            Chiavi obbligatorie al livello radice del dizionario.
+
+        Raises
+        ------
+        FileNotFoundError
+            Se il file non esiste.
+        ValueError
+            Se manca almeno una chiave obbligatoria.
+        """
+        if not path.exists():
+            raise FileNotFoundError(
+                f"File di configurazione non trovato: {path.resolve()}"
+            )
+
+        with path.open(encoding="utf-8") as fh:
+            data: dict = yaml.safe_load(fh)
+
+        for key in required_keys:
+            if key not in data:
+                raise ValueError(
+                    f"Chiave obbligatoria mancante in {path.name}: '{key}'"
+                )
+
+        return data
