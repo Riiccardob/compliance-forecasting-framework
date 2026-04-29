@@ -194,12 +194,13 @@ def test_edge_metrics_exact(topology: dict) -> None:
 
 
 def test_malformed_yaml_raises(tmp_path: Path) -> None:
-    """Un file YAML sintaticamente invalido solleva ValueError."""
+    """YAML sintaticamente invalido solleva ValueError con messaggio
+    esplicito — non propaga yaml.YAMLError raw."""
     malformed = tmp_path / "malformed.yaml"
     malformed.write_text(
-        "metadata:\n  key: valid\nnodes: [\n  - broken", encoding="utf-8"
+        "metadata:\n  key: valid\nnodes: [\n  - broken",
+        encoding="utf-8",
     )
     loader = ConfigLoader(malformed, _PIPELINE_PATH)
-    with pytest.raises((ValueError, Exception)) as exc_info:
+    with pytest.raises(ValueError, match="sintaticamente non valido"):
         loader.load_topology()
-    assert exc_info.type is not None
