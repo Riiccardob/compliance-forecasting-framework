@@ -73,6 +73,46 @@ class ATGBuilder:
         edge_df = pd.read_csv(self._edge_metrics_path)
         gt_df = pd.read_csv(self._ground_truth_path)
 
+        n_gt_dup = int(gt_df.duplicated(subset=["timestamp"]).sum())
+        if n_gt_dup > 0:
+            logger.warning(
+                "ground_truth contiene %d righe con timestamp duplicato "
+                "(esperimenti distinti con timestamp µs coincidenti). "
+                "Mantenuta la prima occorrenza per timestamp.",
+                n_gt_dup,
+            )
+            gt_df = gt_df.drop_duplicates(subset=["timestamp"], keep="first")
+
+        n_nm_dup = int(
+            node_df.duplicated(subset=["timestamp", "node_id"]).sum()
+        )
+        if n_nm_dup > 0:
+            logger.warning(
+                "node_metrics contiene %d righe duplicate su "
+                "(timestamp, node_id) — esperimenti distinti con "
+                "timestamp µs coincidenti. Mantenuta la prima "
+                "occorrenza per coppia.",
+                n_nm_dup,
+            )
+            node_df = node_df.drop_duplicates(
+                subset=["timestamp", "node_id"], keep="first"
+            )
+
+        n_em_dup = int(
+            edge_df.duplicated(subset=["timestamp", "edge_id"]).sum()
+        )
+        if n_em_dup > 0:
+            logger.warning(
+                "edge_metrics contiene %d righe duplicate su "
+                "(timestamp, edge_id) — esperimenti distinti con "
+                "timestamp µs coincidenti. Mantenuta la prima "
+                "occorrenza per coppia.",
+                n_em_dup,
+            )
+            edge_df = edge_df.drop_duplicates(
+                subset=["timestamp", "edge_id"], keep="first"
+            )
+
         node_ts = set(node_df["timestamp"].unique())
         edge_ts = set(edge_df["timestamp"].unique())
         gt_ts = set(gt_df["timestamp"].unique())
