@@ -1,4 +1,5 @@
-"""Caricamento e validazione dei file di configurazione del framework."""
+"""Caricamento e validazione dei file di configurazione del framework"""
+import copy
 from pathlib import Path
 
 import yaml
@@ -28,11 +29,12 @@ _PIPELINE_REQUIRED_KEYS = (
 
 
 class ConfigLoader:
-    """Carica e valida topology.yaml e pipeline_params.yaml.
+    """Carica e valida topology.yaml e pipeline_params.yaml
 
-    Entrambi i file vengono letti lazy (alla prima chiamata del metodo
-    corrispondente). La validazione è eager: alla prima chiamata si
-    verifica la presenza di tutte le chiavi obbligatorie.
+    Entrambi i file vengono letti in modo lazy 
+        --> prima chiamata del metodo corrispondente
+    La validazione è eager 
+        --> alla prima chiamata si verifica la presenza di tutte le chiavi obbligatorie.
     """
 
     def __init__(self, topology_path: Path, pipeline_path: Path) -> None:
@@ -40,7 +42,7 @@ class ConfigLoader:
 
         Parameters
         ----------
-        topology_path:
+        topology_path: 
             Path al file topology.yaml.
         pipeline_path:
             Path al file pipeline_params.yaml.
@@ -71,7 +73,7 @@ class ConfigLoader:
                 self._topology_path, _TOPOLOGY_REQUIRED_KEYS
             )
             logger.info("topology.yaml caricato da: %s", self._topology_path)
-        return self._topology
+        return copy.deepcopy(self._topology)
 
     def load_pipeline_params(self) -> dict:
         """Carica e valida pipeline_params.yaml.
@@ -94,7 +96,7 @@ class ConfigLoader:
                 self._pipeline_path, _PIPELINE_REQUIRED_KEYS
             )
             logger.info("pipeline_params.yaml caricato da: %s", self._pipeline_path)
-        return self._pipeline
+        return copy.deepcopy(self._pipeline)
 
     @staticmethod
     def _load_and_validate(path: Path, required_keys: tuple[str, ...]) -> dict:
