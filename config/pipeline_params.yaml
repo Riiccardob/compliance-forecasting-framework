@@ -5,7 +5,7 @@ version: "1.0"
 
 pbo:
   weight_metric: throughput_rps
-  ewma_alpha: 0.3
+  ewma_alpha: 0.3  # reserved - not yet consumed by PBOBuilder
   gold_standard_label: 0           # label_trace == 0 → finestra nominale
 
 forecasting:

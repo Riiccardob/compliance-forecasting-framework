@@ -6,6 +6,9 @@ class LoggingSetup:
     """Factory per la creazione di logger nominati con formato standard."""
 
     _FORMAT = "%(asctime)s | %(name)s | %(levelname)s | %(message)s"
+    _VALID_LEVELS: frozenset[str] = frozenset(
+        {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+    )
 
     @staticmethod
     def configure(name: str, level: str) -> logging.Logger:
@@ -24,13 +27,13 @@ class LoggingSetup:
             Logger configurato con handler su stderr e formato standard.
         """
         logger = logging.getLogger(name)
-        _VALID_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
-        if level.upper() not in _VALID_LEVELS:
+        if level.upper() not in LoggingSetup._VALID_LEVELS:
             raise ValueError(
                 f"Livello di log non valido: '{level}'. "
-                f"Valori accettati: {sorted(_VALID_LEVELS)}"
+                f"Valori accettati: {sorted(LoggingSetup._VALID_LEVELS)}"
             )
         logger.setLevel(getattr(logging, level.upper()))
+        logger.propagate = False
 
         if not logger.handlers:
             handler = logging.StreamHandler()

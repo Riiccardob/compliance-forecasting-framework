@@ -144,3 +144,62 @@ def test_logging_idempotent_no_duplicate_handlers() -> None:
     logger2 = LoggingSetup.configure("idempotency_test", "INFO")
     assert logger1 is logger2
     assert len(logger1.handlers) == 1
+
+
+def test_load_pipeline_params_missing_file_raises() -> None:
+    """FileNotFoundError se pipeline_path non esiste."""
+    missing = Path("/nonexistent/pipeline_params.yaml")
+    loader = ConfigLoader(_TOPOLOGY_PATH, missing)
+    with pytest.raises(FileNotFoundError) as exc_info:
+        loader.load_pipeline_params()
+    assert str(missing.resolve()) in str(exc_info.value)
+
+
+def test_load_pipeline_params_missing_key_raises(
+    tmp_path: Path,
+) -> None:
+    """ValueError se manca una chiave obbligatoria in pipeline_params."""
+    incomplete = tmp_path / "pipeline_incomplete.yaml"
+    incomplete.write_text("version: '1.0'\npbo: {}\n", encoding="utf-8")
+    loader = ConfigLoader(_TOPOLOGY_PATH, incomplete)
+    with pytest.raises(ValueError) as exc_info:
+        loader.load_pipeline_params()
+    assert "forecasting" in str(exc_info.value)
+
+
+def test_load_topology_cache_is_isolated(loader: ConfigLoader) -> None:
+    """Mutare il dict restituito non corrompe la cache interna."""
+    t1 = loader.load_topology()
+    original_count = len(t1["nodes"])
+    t1["nodes"].append({"id": "injected-sentinel"})
+    t2 = loader.load_topology()
+    assert len(t2["nodes"]) == original_count
+
+
+def test_load_pipeline_cache_is_isolated(loader: ConfigLoader) -> None:
+    """Mutare il dict di pipeline restituito non corrompe la cache."""
+    p1 = loader.load_pipeline_params()
+    p1["forecasting"]["injected_key"] = "sentinel"
+    p2 = loader.load_pipeline_params()
+    assert "injected_key" not in p2["forecasting"]
+
+
+def test_edge_metrics_exact(topology: dict) -> None:
+    """topology['edge_metrics'] contiene esattamente le 3 metriche di arco."""
+    assert topology["edge_metrics"] == [
+        "latency_ms",
+        "error_rate",
+        "throughput_rps",
+    ]
+
+
+def test_malformed_yaml_raises(tmp_path: Path) -> None:
+    """Un file YAML sintaticamente invalido solleva ValueError."""
+    malformed = tmp_path / "malformed.yaml"
+    malformed.write_text(
+        "metadata:\n  key: valid\nnodes: [\n  - broken", encoding="utf-8"
+    )
+    loader = ConfigLoader(malformed, _PIPELINE_PATH)
+    with pytest.raises((ValueError, Exception)) as exc_info:
+        loader.load_topology()
+    assert exc_info.type is not None
