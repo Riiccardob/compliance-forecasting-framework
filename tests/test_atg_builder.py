@@ -255,6 +255,40 @@ def test_get_anomalous_snapshots_by_type_count(
 
 #  Test: ValueError su timestamp disallineati 
 
+def test_duplicate_gt_timestamp_deduplicates(
+    config: ConfigLoader, tmp_path: Path
+) -> None:
+    """Timestamp duplicati in ground_truth con label diverse:
+    build() deduplica tenendo la prima occorrenza senza eccezioni."""
+    nm = _make_node_metrics([_T0])
+    em = _make_edge_metrics([_T0])
+
+    gt_rows = [
+        {"timestamp": _T0, "window_id": "w_a", "fault_type": "cpu",
+         "date": "aug9", "duration": "25min", "rps": 400,
+         "replica_idx": 0, "label_trace": 0,
+         "anomaly_node_ids": "[]", "source_file": "exp_a.csv"},
+        {"timestamp": _T0, "window_id": "w_b", "fault_type": "cpu",
+         "date": "aug9", "duration": "25min", "rps": 400,
+         "replica_idx": 1, "label_trace": 1,
+         "anomaly_node_ids": "[]", "source_file": "exp_b.csv"},
+    ]
+    gt = pd.DataFrame(gt_rows)
+
+    nm_path = tmp_path / "nm_dup.csv"
+    em_path = tmp_path / "em_dup.csv"
+    gt_path = tmp_path / "gt_dup.csv"
+    nm.to_csv(nm_path, index=False)
+    em.to_csv(em_path, index=False)
+    gt.to_csv(gt_path, index=False)
+
+    atg = ATGBuilder(config, nm_path, em_path, gt_path)
+    snaps = atg.build()
+
+    assert len(snaps) == 1
+    assert snaps[0]["label"] == 0
+
+
 def test_timestamp_mismatch_raises(
     config: ConfigLoader, tmp_path: Path
 ) -> None:
@@ -274,3 +308,73 @@ def test_timestamp_mismatch_raises(
     atg = ATGBuilder(config, nm_path, em_path, gt_path)
     with pytest.raises(ValueError):
         atg.build()
+
+
+def test_duplicate_node_timestamp_deduplicates(
+    config: ConfigLoader, tmp_path: Path
+) -> None:
+    """Righe duplicate su (timestamp, node_id) con valori diversi:
+    build() deduplica tenendo la prima occorrenza."""
+    nm_rows = []
+    for node in _NODES:
+        nm_rows.append({
+            "timestamp": _T0, "window_id": "w_a", "node_id": node,
+            "cpu_percent": 10.0, "mem_mb": 100.0,
+            "net_rx_mb": 1.0, "net_tx_mb": 0.5, "source_file": "exp_a.csv",
+        })
+        nm_rows.append({
+            "timestamp": _T0, "window_id": "w_b", "node_id": node,
+            "cpu_percent": 99.0, "mem_mb": 200.0,
+            "net_rx_mb": 5.0, "net_tx_mb": 3.0, "source_file": "exp_b.csv",
+        })
+    nm = pd.DataFrame(nm_rows)
+    em = _make_edge_metrics([_T0])
+    gt = _make_ground_truth([_T0])
+
+    nm_path = tmp_path / "nm_node_dup.csv"
+    em_path = tmp_path / "em_node_dup.csv"
+    gt_path = tmp_path / "gt_node_dup.csv"
+    nm.to_csv(nm_path, index=False)
+    em.to_csv(em_path, index=False)
+    gt.to_csv(gt_path, index=False)
+
+    snaps = ATGBuilder(config, nm_path, em_path, gt_path).build()
+
+    assert len(snaps) == 1
+    assert snaps[0]["nodes"]["nginx-web-server"]["cpu_percent"] == 10.0
+
+
+def test_duplicate_edge_timestamp_deduplicates(
+    config: ConfigLoader, tmp_path: Path
+) -> None:
+    """Righe duplicate su (timestamp, edge_id) con valori diversi:
+    build() deduplica tenendo la prima occorrenza."""
+    em_rows = []
+    for edge_id, source, target in _EDGES:
+        em_rows.append({
+            "timestamp": _T0, "window_id": "w_a", "edge_id": edge_id,
+            "source": source, "target": target,
+            "latency_ms": 10.0, "error_rate": 0.0, "throughput_rps": 5.0,
+            "source_file": "exp_a.csv",
+        })
+        em_rows.append({
+            "timestamp": _T0, "window_id": "w_b", "edge_id": edge_id,
+            "source": source, "target": target,
+            "latency_ms": 999.0, "error_rate": 1.0, "throughput_rps": 0.0,
+            "source_file": "exp_b.csv",
+        })
+    nm = _make_node_metrics([_T0])
+    em = pd.DataFrame(em_rows)
+    gt = _make_ground_truth([_T0])
+
+    nm_path = tmp_path / "nm_edge_dup.csv"
+    em_path = tmp_path / "em_edge_dup.csv"
+    gt_path = tmp_path / "gt_edge_dup.csv"
+    nm.to_csv(nm_path, index=False)
+    em.to_csv(em_path, index=False)
+    gt.to_csv(gt_path, index=False)
+
+    snaps = ATGBuilder(config, nm_path, em_path, gt_path).build()
+
+    assert len(snaps) == 1
+    assert snaps[0]["edges"]["e1"]["latency_ms"] == 10.0
