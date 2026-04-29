@@ -184,3 +184,5 @@ DATASET/
 venv/
 docs/paper
 docs/modules
+framework.zip
+data/raw

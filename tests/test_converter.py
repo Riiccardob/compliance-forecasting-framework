@@ -261,3 +261,68 @@ class TestDSBConverter:
         ]
         assert len(rec) == 1
         assert abs(rec.iloc[0]["error_rate"] - 0.0) < 0.001
+
+    def test_window_duration_seconds_from_yaml_no_warning(
+        self, converter: DSBConverter, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Quando window_duration_seconds è presente in metadata,
+        il warning 'non definito' non viene emesso."""
+        import logging
+        with caplog.at_level(logging.WARNING,
+                             logger="src.ingestion.converter"):
+            agg = converter._aggregate_window_metrics(_make_base_raw())
+            converter._compute_edge_metrics(agg, "source.csv")
+        warning_texts = [r.message for r in caplog.records
+                         if "window_duration_seconds" in r.message]
+        assert len(warning_texts) == 0, (
+            f"Warning inatteso emesso: {warning_texts}"
+        )
+
+    def test_mem_bfill_on_leading_nan(
+        self, converter: DSBConverter
+    ) -> None:
+        """Leading NaN su mem_mb (prima window con mem_bytes=0)
+        viene risolto con backward-fill."""
+        raw = _make_base_raw()
+        raw.loc[raw["window_id"] == "10_0",
+                "0_container_memory_usage_bytes"] = 0
+
+        agg = converter._aggregate_window_metrics(raw)
+        node_df = converter._compute_node_metrics(agg, "source.csv")
+
+        rec = node_df[
+            (node_df["window_id"] == "10_1")
+            & (node_df["node_id"] == "nginx-web-server")
+        ]
+        assert len(rec) == 1
+        assert not pd.isna(rec.iloc[0]["mem_mb"])
+
+    def test_convert_all_writes_three_csvs(
+        self, converter: DSBConverter, tmp_path: Path
+    ) -> None:
+        """convert_all scrive i tre CSV canonici nella directory
+        di output specificata."""
+        raw1 = _make_base_raw()
+        raw2 = _make_base_raw()
+        raw2["window_id"] = raw2["window_id"].str.replace("10_", "20_")
+
+        f1 = tmp_path / "cpu_aug9_25min_400_0_graph_2.csv"
+        f2 = tmp_path / "cpu_aug9_25min_400_1_graph_2.csv"
+        raw1.to_csv(f1, index=False)
+        raw2.to_csv(f2, index=False)
+
+        out_dir = tmp_path / "converted"
+        out_dir.mkdir()
+
+        import unittest.mock as mock
+        patched_paths = {
+            "node_metrics_csv": str(out_dir / "node_metrics.csv"),
+            "edge_metrics_csv": str(out_dir / "edge_metrics.csv"),
+            "ground_truth_csv": str(out_dir / "ground_truth.csv"),
+        }
+        with mock.patch.object(converter, "_data_paths", patched_paths):
+            converter.convert_all(tmp_path)
+
+        assert (out_dir / "node_metrics.csv").exists()
+        assert (out_dir / "edge_metrics.csv").exists()
+        assert (out_dir / "ground_truth.csv").exists()

@@ -121,8 +121,13 @@ class ConfigLoader:
                 f"File di configurazione non trovato: {path.resolve()}"
             )
 
-        with path.open(encoding="utf-8") as fh:
-            data: dict = yaml.safe_load(fh)
+        try:
+            with path.open(encoding="utf-8") as fh:
+                data: dict = yaml.safe_load(fh)
+        except yaml.YAMLError as exc:
+            raise ValueError(
+                f"{path.name} contiene YAML sintaticamente non valido: {exc}"
+            ) from exc
 
         if not isinstance(data, dict):
             raise ValueError(

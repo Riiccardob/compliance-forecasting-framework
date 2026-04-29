@@ -2,7 +2,6 @@
 import json
 import re
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 
@@ -304,7 +303,7 @@ class DSBConverter:
             cpu_pct: pd.Series = (agg[cpu_col].diff() / delta_t_sec) * 100.0
 
             mem_bytes: pd.Series = agg[mem_col].copy()
-            mem_bytes = mem_bytes.replace(0.0, float("nan")).ffill()
+            mem_bytes = mem_bytes.replace(0.0, float("nan")).ffill().bfill()
             mem_mb: pd.Series = mem_bytes / (1024.0 * 1024.0)
 
             rx_mb: pd.Series = agg[rx_col].diff() / (1024.0 * 1024.0)
@@ -341,8 +340,10 @@ class DSBConverter:
         """Calcola ``latency_ms``, ``error_rate``, ``throughput_rps``.
 
         ``throughput_rps`` = ``n_traces`` / T_w dove T_w è l'intervallo
-        verso la finestra successiva (``diff().shift(-1)``). Per l'ultima
-        finestra si usa la mediana dei T_w del file.
+        verso la finestra successiva (``diff().shift(-1)``). Se delta_t
+        è NaN o zero (caso single-window), si usa
+        window_duration_seconds da topology.yaml (metadata.
+        window_duration_seconds, default 30.0s).
 
         Parameters
         ----------
@@ -365,7 +366,9 @@ class DSBConverter:
         t_w: pd.Series = t_sec.diff().shift(-1)
 
         error_rate: pd.Series = agg["n_anomalous_traces"] / agg["n_traces"]
-        fallback_duration = self._topology.get("window_duration_seconds")
+        fallback_duration = (
+            self._topology.get("metadata", {}).get("window_duration_seconds")
+        )
         if fallback_duration is None:
             fallback_duration = 30.0
             self._logger.warning(
