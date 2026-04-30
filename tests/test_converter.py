@@ -262,6 +262,41 @@ class TestDSBConverter:
         assert len(rec) == 1
         assert abs(rec.iloc[0]["error_rate"] - 0.0) < 0.001
 
+    def test_cpu_negative_delta_masked_and_forward_filled(
+        self, converter: DSBConverter
+    ) -> None:
+        """Delta CPU negativo (reset counter container) viene mascherato
+        a NaN e forward-filled. Non devono esserci valori negativi."""
+        raw = _make_base_raw()
+        # Counter CPU decresce: simula restart container tra w0 e w1
+        raw.loc[raw["window_id"] == "10_1",
+                "0_container_cpu_usage_seconds_total"] = _CPU_W0 - 0.5
+
+        agg = converter._aggregate_window_metrics(raw)
+        node_df = converter._compute_node_metrics(agg, "source.csv")
+
+        rec = node_df[
+            (node_df["window_id"] == "10_1")
+            & (node_df["node_id"] == "nginx-web-server")
+        ]
+        assert len(rec) == 1
+        val = rec.iloc[0]["cpu_percent"]
+        # Nessun valore negativo tollerato
+        assert val >= 0.0
+
+    def test_filename_with_prefix_token(
+        self, converter: DSBConverter
+    ) -> None:
+        """Token opzionale (es. 'test') tra fault_type e date viene
+        ignorato e gli altri campi vengono estratti correttamente."""
+        meta = converter._parse_filename(
+            "cpu_test_july24_800_0_graph_2.csv"
+        )
+        assert meta["fault_type"] == "cpu"
+        assert meta["date"] == "july24"
+        assert meta["rps"] == 800
+        assert meta["replica_idx"] == 0
+
     def test_window_duration_seconds_from_yaml_no_warning(
         self, converter: DSBConverter, caplog: pytest.LogCaptureFixture
     ) -> None:
@@ -314,14 +349,17 @@ class TestDSBConverter:
         out_dir = tmp_path / "converted"
         out_dir.mkdir()
 
-        import unittest.mock as mock
-        patched_paths = {
+        original_paths = dict(converter._data_paths)
+        converter._data_paths.update({
             "node_metrics_csv": str(out_dir / "node_metrics.csv"),
             "edge_metrics_csv": str(out_dir / "edge_metrics.csv"),
             "ground_truth_csv": str(out_dir / "ground_truth.csv"),
-        }
-        with mock.patch.object(converter, "_data_paths", patched_paths):
+        })
+        try:
             converter.convert_all(tmp_path)
+        finally:
+            converter._data_paths.clear()
+            converter._data_paths.update(original_paths)
 
         assert (out_dir / "node_metrics.csv").exists()
         assert (out_dir / "edge_metrics.csv").exists()

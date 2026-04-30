@@ -9,9 +9,10 @@ from src.utils.config_loader import ConfigLoader
 from src.utils.logging_setup import LoggingSetup
 
 # Pattern tollerante per i nomi file GAMMA:
-# {fault_type}_{date}[_{duration}][_{token(s)}]_{rps}_{replica_idx}_graph_2.csv
+# {fault_type}[_{token(s)}]_{date}[_{duration}][_{token(s)}]_{rps}_{replica_idx}_graph_2.csv
 _FILENAME_PATTERN = re.compile(
     r"^(?P<fault_type>cpu_mem|cpu|mem|net)"
+    r"(?:_(?:repeat|rerun|test))*"
     r"_(?P<date>[a-z]+\d+)"
     r"(?:_(?P<duration>\d+min))?"
     r"(?:_(?:repeat|rerun|test))*"
@@ -301,6 +302,11 @@ class DSBConverter:
                 continue
 
             cpu_pct: pd.Series = (agg[cpu_col].diff() / delta_t_sec) * 100.0
+            # Negative delta = counter reset (container restart). Preserve the
+            # leading NaN from diff() so the first window is still dropped.
+            _diff_nan = cpu_pct.isna()
+            cpu_pct = cpu_pct.mask(cpu_pct < 0).ffill().fillna(0.0)
+            cpu_pct = cpu_pct.where(~_diff_nan)
 
             mem_bytes: pd.Series = agg[mem_col].copy()
             mem_bytes = mem_bytes.replace(0.0, float("nan")).ffill().bfill()

@@ -1,4 +1,5 @@
 """Test per ConfigLoader: caricamento e validazione dei file di configurazione."""
+import logging
 from pathlib import Path
 
 import pytest
@@ -140,10 +141,15 @@ def test_invalid_log_level_raises() -> None:
 
 
 def test_logging_idempotent_no_duplicate_handlers() -> None:
+    """Chiamate multiple a configure() sullo stesso nome non
+    duplicano gli handler e non cambiano il livello."""
     logger1 = LoggingSetup.configure("idempotency_test", "INFO")
-    logger2 = LoggingSetup.configure("idempotency_test", "INFO")
+    logger2 = LoggingSetup.configure("idempotency_test", "DEBUG")
     assert logger1 is logger2
     assert len(logger1.handlers) == 1
+    # Il livello rimane quello della prima configurazione (INFO),
+    # non viene sovrascritto dalla seconda chiamata (DEBUG).
+    assert logger1.level == logging.INFO
 
 
 def test_load_pipeline_params_missing_file_raises() -> None:
