@@ -1,6 +1,4 @@
-"""Script one-shot per eseguire il DSBConverter sull'intero dataset raw."""
 from pathlib import Path
-
 from src.utils.config_loader import ConfigLoader
 from src.ingestion.converter import DSBConverter
 
@@ -11,8 +9,13 @@ def main() -> None:
         root / "config" / "topology.yaml",
         root / "config" / "pipeline_params.yaml",
     )
-    topology = config.load_topology()
-    raw_dir = root / topology["data_paths"]["raw_dir"]
+    raw_dir = (
+        root
+        / "DATASET"
+        / "processed_dataset"
+        / "home"
+        / "multi-modal-data-separate"
+    )
     converter = DSBConverter(config)
     converter.convert_all(raw_dir)
 
