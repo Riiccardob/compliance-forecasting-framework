@@ -93,7 +93,7 @@ compliance_sets:
         threshold: 0.10
 
 data_paths:
-  raw_dir: "data/raw"  # vedi run_etl.py per il path DATASET reale
+  raw_dir: "data/raw" 
   node_metrics_csv: "data/converted/node_metrics.csv"
   edge_metrics_csv: "data/converted/edge_metrics.csv"
   ground_truth_csv: "data/converted/ground_truth.csv"

@@ -190,6 +190,29 @@ def test_load_pipeline_cache_is_isolated(loader: ConfigLoader) -> None:
     assert "injected_key" not in p2["forecasting"]
 
 
+def test_load_topology_cache_deep_isolation(
+    loader: ConfigLoader,
+) -> None:
+    """Mutare una struttura annidata nel dict restituito non corrompe
+    la cache interna (deepcopy protegge anche i livelli annidati)."""
+    t1 = loader.load_topology()
+    original_len = len(t1["compliance_sets"]["H_crit"]["nodes"])
+    t1["compliance_sets"]["H_crit"]["nodes"].append("injected-sentinel")
+    t2 = loader.load_topology()
+    assert len(t2["compliance_sets"]["H_crit"]["nodes"]) == original_len
+
+
+def test_load_pipeline_cache_deep_isolation(
+    loader: ConfigLoader,
+) -> None:
+    """Mutare una struttura annidata nel dict pipeline restituito
+    non corrompe la cache interna."""
+    p1 = loader.load_pipeline_params()
+    p1["anomaly_detection"]["cusum"]["ewma_alpha"] = 999.0
+    p2 = loader.load_pipeline_params()
+    assert p2["anomaly_detection"]["cusum"]["ewma_alpha"] != 999.0
+
+
 def test_edge_metrics_exact(topology: dict) -> None:
     """topology['edge_metrics'] contiene esattamente le 3 metriche di arco."""
     assert topology["edge_metrics"] == [

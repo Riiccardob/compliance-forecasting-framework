@@ -244,10 +244,9 @@ class TestDSBConverter:
         ]
         assert len(rec_w1) == 1
         val = rec_w1.iloc[0]["net_rx_mb"]
-        # Dopo forward-fill il valore deve essere non negativo.
-        # Il delta negativo viene scartato (NaN) e sostituito con il valore
-        # precedente disponibile - che in questo mock è 0.0 (prima window
-        # scartata per cpu, nessun valore precedente valido → bfill o 0).
+        # delta negativo → NaN via mask → ffill (nessun precedente
+        # valido, prima window scartata per CPU) → fillna(0.0).
+        # Per net_rx/tx non esiste bfill: solo ffill + fillna.
         assert not pd.isna(val)
         assert val >= 0.0
 
@@ -281,8 +280,9 @@ class TestDSBConverter:
         ]
         assert len(rec) == 1
         val = rec.iloc[0]["cpu_percent"]
-        # Nessun valore negativo tollerato
-        assert val >= 0.0
+        # Con questo mock la catena mask → ffill (nessun precedente) →
+        # fillna(0.0) → where produce deterministicamente 0.0.
+        assert abs(val - 0.0) < 1e-9
 
     def test_filename_with_prefix_token(
         self, converter: DSBConverter
