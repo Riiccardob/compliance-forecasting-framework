@@ -138,6 +138,10 @@ class TopologyBuilder:
         set[str]
             Insieme dei nodi condivisi tra i due compliance set.
         """
+        if h_i not in self._cs_node_sets:
+            raise KeyError(f"Compliance set non trovato: '{h_i}'")
+        if h_j not in self._cs_node_sets:
+            raise KeyError(f"Compliance set non trovato: '{h_j}'")
         return self._cs_node_sets[h_i] & self._cs_node_sets[h_j]
 
     def get_edges_for_compliance_set(self, name: str) -> list[tuple[str, str]]:
@@ -153,6 +157,8 @@ class TopologyBuilder:
         list[tuple[str, str]]
             Lista di archi (source, target) interni al compliance set.
         """
+        if name not in self._cs_node_sets:
+            raise KeyError(f"Compliance set non trovato: '{name}'")
         node_set = self._cs_node_sets[name]
         return [
             (e["source"], e["target"])

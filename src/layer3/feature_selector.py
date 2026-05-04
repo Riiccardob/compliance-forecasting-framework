@@ -4,7 +4,6 @@ import pandas as pd
 from src.layer1.topology_builder import TopologyBuilder
 from src.utils.config_loader import ConfigLoader
 from src.utils.logging_setup import LoggingSetup
-from tests.test_config_loader import topology
 
 
 class FeatureSelector:
@@ -95,7 +94,7 @@ class FeatureSelector:
         result: dict[str, pd.DataFrame] = {}
 
         # M_direct — feature di nodo
-        for node_id in cs_nodes:
+        for node_id in sorted(cs_nodes):
             for metric in self._node_metrics:
                 key = f"node:{node_id}:{metric}"
                 result[key] = self._build_node_series(

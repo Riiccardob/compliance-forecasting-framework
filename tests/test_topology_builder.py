@@ -159,3 +159,43 @@ def test_critical_path_invalid_raises(builder: TopologyBuilder) -> None:
     """get_critical_path su nome inesistente solleva KeyError."""
     with pytest.raises(KeyError):
         builder.get_critical_path("H_invalid")
+
+def test_edges_h_crit_content(builder: TopologyBuilder) -> None:
+    """A(H_crit) contiene esattamente le coppie (e1,e2,e4,e6)."""
+    edges = set(builder.get_edges_for_compliance_set("H_crit"))
+    assert ("nginx-web-server", "nginx-thrift") in edges
+    assert ("nginx-thrift", "home-timeline-service") in edges
+    assert ("home-timeline-service", "post-storage-service") in edges
+    assert ("post-storage-service", "post-storage-mongodb") in edges
+
+
+def test_edges_h_cache_content(builder: TopologyBuilder) -> None:
+    """A(H_cache) contiene esattamente le coppie (e3,e4,e5)."""
+    edges = set(builder.get_edges_for_compliance_set("H_cache"))
+    assert ("home-timeline-service", "home-timeline-redis") in edges
+    assert ("home-timeline-service", "post-storage-service") in edges
+    assert ("post-storage-service", "post-storage-memcached") in edges
+
+
+def test_critical_path_h_crit_sequence(builder: TopologyBuilder) -> None:
+    """Il critical path di H_crit è esattamente la sequenza attesa."""
+    path = builder.get_critical_path("H_crit")
+    assert path == [
+        "nginx-web-server",
+        "nginx-thrift",
+        "home-timeline-service",
+        "post-storage-service",
+        "post-storage-mongodb",
+    ]
+
+
+def test_get_shared_nodes_invalid_raises(builder: TopologyBuilder) -> None:
+    """get_shared_nodes con nome invalido solleva KeyError descrittivo."""
+    with pytest.raises(KeyError, match="Compliance set non trovato"):
+        builder.get_shared_nodes("H_invalid", "H_crit")
+
+
+def test_get_edges_invalid_raises(builder: TopologyBuilder) -> None:
+    """get_edges_for_compliance_set con nome invalido solleva KeyError."""
+    with pytest.raises(KeyError, match="Compliance set non trovato"):
+        builder.get_edges_for_compliance_set("H_invalid")

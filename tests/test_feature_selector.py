@@ -247,3 +247,14 @@ def test_get_feature_names_interference_count_h_cache(
     """get_feature_names('H_cache')['interference'] ha 1 elemento (e2)."""
     names = feature_selector.get_feature_names("H_cache")
     assert len(names["interference"]) == 1
+
+
+def test_select_features_key_order_deterministic(
+    feature_selector: FeatureSelector, mock_snapshots: list[dict]
+) -> None:
+    """L'ordine delle chiavi node: in select_features è deterministico
+    e coincide con quello di get_feature_names."""
+    result = feature_selector.select_features("H_crit", mock_snapshots)
+    names = feature_selector.get_feature_names("H_crit")
+    result_direct_keys = [k for k in result if not k.startswith("interf:")]
+    assert result_direct_keys == names["direct"]
