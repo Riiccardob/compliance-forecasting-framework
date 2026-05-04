@@ -5,7 +5,6 @@ version: "1.0"
 
 pbo:
   weight_metric: throughput_rps
-  ewma_alpha: 0.3  # reserved — not yet consumed by PBOBuilder
   gold_standard_label: 0           # label_trace == 0 → finestra nominale
 
 forecasting:
@@ -43,6 +42,8 @@ anomaly_detection:
     contamination: 0.1
     random_state: 42
   cusum:
+    ewma_alpha: 0.3  # smoothing factor per il filtro EWMA applicato
+                     # al PAS prima del CUSUM (v. methodology.tex §3.2.3)
     tolerance_factor: 0.5
     alert_threshold: 5.0
   structural_validator:
