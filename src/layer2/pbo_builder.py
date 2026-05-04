@@ -185,7 +185,9 @@ class PBOBuilder:
         ValueError
             Se topology_type != "linear" (PAS non applicabile).
         """
-        cs = self._topology["compliance_sets"][compliance_set_name]
+        cs = self._topology["compliance_sets"].get(compliance_set_name)
+        if cs is None:
+            raise KeyError(f"Compliance set non trovato: '{compliance_set_name}'")
         if cs.get("topology_type") != "linear":
             raise ValueError(
                 f"PAS non applicabile per '{compliance_set_name}': "
@@ -193,6 +195,12 @@ class PBOBuilder:
                 "Usa compute_frobenius_distance come fallback."
             )
         path = self._topology_builder.get_critical_path(compliance_set_name)
+        if len(path) < 2:
+            raise ValueError(
+                f"Il critical path di '{compliance_set_name}' ha "
+                f"{len(path)} nodi: PAS non calcolabile su un percorso "
+                "privo di archi. Verificare la sequenza in topology.yaml."
+            )
         path_edge_ids = [
             self._edge_lookup[(path[i], path[i + 1])]
             for i in range(len(path) - 1)

@@ -1,4 +1,5 @@
 """Test per PBOBuilder - Probabilistic Behavioral Overlay."""
+import math
 from pathlib import Path
 from typing import Any
 
@@ -266,3 +267,47 @@ def test_gold_standard_covers_all_topology_edges(
     snaps = [snap_no_e6, snap_with_e6]
     gold = pbo.compute_gold_standard(ws, snaps)
     assert "e6" in gold
+
+
+def test_pas_h_crit_exact_value_nominal(
+    pbo: PBOBuilder, weight_series: list[dict]
+) -> None:
+    """PA(H_crit, t0) = w(e1)×w(e2)×w(e4)×w(e6) = 1.0×1.0×0.5×0.6 = 0.30.
+
+    Con _TP_NOMINAL: e1 e e2 hanno sorgenti con un solo arco uscente (w=1.0),
+    e4 = 10/(10+10) = 0.5, e6 = 12/(8+12) = 0.6.
+    """
+    pas_series = pbo.compute_path_adherence(weight_series, "H_crit")
+    t0_entry = next(e for e in pas_series if e["timestamp"] == _T0)
+    assert abs(t0_entry["pas"] - 0.30) < 1e-9
+
+
+def test_frobenius_exact_value_at_anomaly(
+    pbo: PBOBuilder,
+    weight_series: list[dict],
+    gold_standard: dict[str, float],
+) -> None:
+    """frobenius(t2) = sqrt(Δe3² + Δe4²) = sqrt(0.16+0.16) = sqrt(0.32).
+
+    A t2 con _TP_ANOMALY: e3=0.1, e4=0.9 vs W_gold e3=0.5, e4=0.5.
+    Δe3 = −0.4, Δe4 = +0.4, tutti gli altri archi invariati.
+    """
+    frob_series = pbo.compute_frobenius_distance(weight_series, gold_standard)
+    t2_entry = next(e for e in frob_series if e["timestamp"] == _T2)
+    assert abs(t2_entry["frobenius"] - math.sqrt(0.32)) < 1e-9
+
+
+def test_pas_invalid_compliance_set_raises(
+    pbo: PBOBuilder, weight_series: list[dict]
+) -> None:
+    """compute_path_adherence su nome inesistente solleva KeyError."""
+    with pytest.raises(KeyError, match="Compliance set non trovato"):
+        pbo.compute_path_adherence(weight_series, "H_nonexistent")
+
+
+def test_gold_standard_key_arcs(
+    gold_standard: dict[str, float],
+) -> None:
+    """W_gold: e1=1.0 (sorgente con singolo arco uscente), e6=12/(8+12)=0.6."""
+    assert abs(gold_standard["e1"] - 1.0) < 1e-9
+    assert abs(gold_standard["e6"] - 0.6) < 1e-9

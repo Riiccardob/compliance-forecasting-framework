@@ -378,3 +378,30 @@ def test_duplicate_edge_timestamp_deduplicates(
 
     assert len(snaps) == 1
     assert snaps[0]["edges"]["e1"]["latency_ms"] == 10.0
+
+
+def test_snapshot_node_value_exact(snapshots: list[dict]) -> None:
+    """I valori numerici nel dict nodes corrispondono ai dati mock."""
+    t0_snap = next(s for s in snapshots if s["timestamp"] == _T0)
+    node = t0_snap["nodes"]["nginx-web-server"]
+    assert abs(node["cpu_percent"] - 5.0) < 1e-9
+    assert abs(node["mem_mb"] - 100.0) < 1e-9
+    assert abs(node["net_rx_mb"] - 1.0) < 1e-9
+    assert abs(node["net_tx_mb"] - 0.5) < 1e-9
+
+
+def test_snapshot_edge_value_exact(snapshots: list[dict]) -> None:
+    """I valori numerici nel dict edges corrispondono ai dati mock."""
+    t0_snap = next(s for s in snapshots if s["timestamp"] == _T0)
+    edge = t0_snap["edges"]["e1"]
+    assert abs(edge["latency_ms"] - 10.0) < 1e-9
+    assert abs(edge["throughput_rps"] - 5.0) < 1e-9
+
+
+def test_get_node_feature_matrix_unknown_node_returns_empty(
+    builder: ATGBuilder, snapshots: list[dict]
+) -> None:
+    """get_node_feature_matrix su node_id inesistente restituisce
+    DataFrame vuoto (nessun KeyError)."""
+    df = builder.get_node_feature_matrix(snapshots, "nonexistent-service")
+    assert df.empty

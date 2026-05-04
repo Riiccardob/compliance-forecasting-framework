@@ -10,10 +10,6 @@ from src.utils.logging_setup import LoggingSetup
 
 logger = LoggingSetup.configure(__name__, "INFO")
 
-_NODE_FEATURE_COLS: list[str] = ["cpu_percent", "mem_mb", "net_rx_mb", "net_tx_mb"]
-_EDGE_FEATURE_COLS: list[str] = ["latency_ms", "error_rate", "throughput_rps"]
-
-
 class ATGBuilder:
     """Carica i tre CSV canonici e costruisce la sequenza di snapshot ATG.
 
@@ -52,6 +48,8 @@ class ATGBuilder:
         self._node_metrics_path = Path(node_metrics_path)
         self._edge_metrics_path = Path(edge_metrics_path)
         self._ground_truth_path = Path(ground_truth_path)
+        self._node_metrics: list[str] = self._topology["node_metrics"]
+        self._edge_metrics: list[str] = self._topology["edge_metrics"]
 
     def build(self) -> list[dict[str, Any]]:
         """Carica i tre CSV e restituisce la lista ordinata di snapshot temporali.
@@ -126,7 +124,7 @@ class ATGBuilder:
             )
 
         # NaN check su feature di nodo
-        available_cols = [c for c in _NODE_FEATURE_COLS if c in node_df.columns]
+        available_cols = [c for c in self._node_metrics if c in node_df.columns]
         nan_counts = node_df[available_cols].isna().sum()
         total_nan = int(nan_counts.sum())
         if total_nan > 0:
@@ -228,9 +226,8 @@ class ATGBuilder:
         records = [
             {
                 "timestamp": s["timestamp"],
-                "latency_ms": s["edges"][edge_id]["latency_ms"],
-                "error_rate": s["edges"][edge_id]["error_rate"],
-                "throughput_rps": s["edges"][edge_id]["throughput_rps"],
+                **{col: s["edges"][edge_id][col]
+                   for col in self._edge_metrics},
             }
             for s in snapshots
             if edge_id in s["edges"]
@@ -263,27 +260,24 @@ class ATGBuilder:
             result = [s for s in result if s["anomaly_type"] == anomaly_type]
         return result
 
-    @staticmethod
-    def _build_nodes(rows: pd.DataFrame) -> dict[str, dict[str, float]]:
+    def _build_nodes(
+        self, rows: pd.DataFrame
+    ) -> dict[str, dict[str, float]]:
+        cols = self._node_metrics
         return {
-            row["node_id"]: {
-                "cpu_percent": row["cpu_percent"],
-                "mem_mb": row["mem_mb"],
-                "net_rx_mb": row["net_rx_mb"],
-                "net_tx_mb": row["net_tx_mb"],
-            }
+            row["node_id"]: {col: row[col] for col in cols}
             for _, row in rows.iterrows()
         }
 
-    @staticmethod
-    def _build_edges(rows: pd.DataFrame) -> dict[str, dict[str, Any]]:
+    def _build_edges(
+        self, rows: pd.DataFrame
+    ) -> dict[str, dict[str, Any]]:
+        cols = self._edge_metrics
         return {
             row["edge_id"]: {
                 "source": row["source"],
                 "target": row["target"],
-                "latency_ms": row["latency_ms"],
-                "error_rate": row["error_rate"],
-                "throughput_rps": row["throughput_rps"],
+                **{col: row[col] for col in cols},
             }
             for _, row in rows.iterrows()
         }
