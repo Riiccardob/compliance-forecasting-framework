@@ -1,10 +1,10 @@
-"""Fase I - orchestratore del forecasting per-metrica con routing Prophet/LSTM/ARIMA."""
+"""Fase I - orchestratore del forecasting per-metrica con routing Prophet/LSTM/ARIMA/Linear."""
 from typing import Any
 
 import numpy as np
 import pandas as pd
 from prophet import Prophet
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import LinearRegression, Ridge
 
 from src.utils.config_loader import ConfigLoader
 from src.utils.logging_setup import LoggingSetup
@@ -13,9 +13,14 @@ from src.utils.logging_setup import LoggingSetup
 class StatForecaster:
     """Addestra e applica modelli di forecasting per ogni feature di FeatureSelector.
 
-    Il routing del modello è determinato staticamente da pipeline_params.yaml:
+    Il routing del modello è determinato da pipeline_params.yaml e da un
+    eventuale ``model_override`` passato a ``fit()``:
+
+    - chiave in ``model_override`` → modello specificato nell'override
     - metriche in ``forecasting.lstm.nonlinear_metrics`` → LSTM (Ridge placeholder)
     - tutte le altre → Prophet (default)
+
+    Modelli disponibili: ``"prophet"``, ``"lstm"``, ``"arima"``, ``"linear"``.
 
     Se il training set di una metrica nonlinear ha meno di
     ``input_window × 2`` campioni, il routing degrada automaticamente
@@ -38,6 +43,11 @@ class StatForecaster:
         self._nonlinear_metrics: set[str] = set(fc["lstm"]["nonlinear_metrics"])
         self._input_window: int = fc["lstm"]["input_window"]
 
+        arima_cfg = fc.get("arima", {})
+        self._arima_max_p: int = arima_cfg.get("max_p", 2)
+        self._arima_max_d: int = arima_cfg.get("max_d", 1)
+        self._arima_max_q: int = arima_cfg.get("max_q", 2)
+
         self._models: dict[str, Any] = {}
         self._routing: dict[str, str] = {}
         self._train_data: dict[str, pd.DataFrame] = {}
@@ -51,6 +61,7 @@ class StatForecaster:
         self,
         features: dict[str, pd.DataFrame],
         nominal_snapshots: list[dict] | None = None,
+        model_override: dict[str, str] | None = None,
     ) -> None:
         """Addestra un modello per ogni feature nel dizionario.
 
@@ -60,6 +71,10 @@ class StatForecaster:
             Output di FeatureSelector.select_features().
         nominal_snapshots:
             Snapshot nominali (label==0). Se None usa tutte le righe.
+        model_override:
+            Mappa feature_key → nome modello. Sovrascrive il routing
+            automatico per le chiavi specificate. Valori ammessi:
+            ``"prophet"``, ``"lstm"``, ``"arima"``, ``"linear"``.
         """
         self._models = {}
         self._routing = {}
@@ -77,27 +92,18 @@ class StatForecaster:
             else:
                 train_df = df.dropna()
 
-            # Routing: nonlinear → LSTM se dati sufficienti, altrimenti Prophet
-            if metric_name in self._nonlinear_metrics:
-                if len(train_df) < self._input_window * 2:
-                    self._logger.warning(
-                        "Serie '%s' ha %d campioni < input_window×2=%d. "
-                        "Fallback da LSTM a Prophet.",
-                        key, len(train_df), self._input_window * 2,
-                    )
-                    routing = "prophet"
-                else:
-                    routing = "lstm"
-            else:
-                routing = "prophet"
-
+            routing = self._route_model(key, metric_name, len(train_df), model_override)
             self._routing[key] = routing
             self._train_data[key] = train_df
 
             if routing == "prophet":
                 self._models[key] = self._fit_prophet(train_df)
-            else:
+            elif routing == "lstm":
                 self._models[key] = self._fit_lstm_placeholder(train_df)
+            elif routing == "arima":
+                self._models[key] = self._fit_arima(key, train_df)
+            else:  # linear
+                self._models[key] = self._fit_linear(key, train_df)
 
         self._is_fitted = True
         self._logger.info(
@@ -135,12 +141,18 @@ class StatForecaster:
             freq_us = self._infer_freq_us(train_df)
             last_ts = int(train_df.index[-1]) if len(train_df) > 0 else 0
 
-            if self._routing[key] == "prophet":
+            routing = self._routing[key]
+            if routing == "prophet":
                 result[key] = self._predict_prophet(model, h, last_ts, freq_us)
-            else:
+            elif routing == "lstm":
                 result[key] = self._predict_lstm_placeholder(
                     model, train_df, h, last_ts, freq_us
                 )
+            elif routing == "arima":
+                result[key] = self._predict_arima(model, h, last_ts, freq_us)
+            else:  # linear
+                model_lr, std = model
+                result[key] = self._predict_linear(model_lr, std, last_ts, h, freq_us)
 
         return result
 
@@ -150,7 +162,8 @@ class StatForecaster:
         Returns
         -------
         dict[str, str]
-            Mappa feature_key → nome del modello ("prophet" o "lstm").
+            Mappa feature_key → nome del modello
+            (``"prophet"``, ``"lstm"``, ``"arima"``, ``"linear"``).
 
         Raises
         ------
@@ -162,6 +175,33 @@ class StatForecaster:
                 "StatForecaster non ancora addestrato. Chiama fit() prima di get_model_routing()."
             )
         return dict(self._routing)
+
+    # ------------------------------------------------------------------
+    # Routing
+    # ------------------------------------------------------------------
+
+    def _route_model(
+        self,
+        key: str,
+        metric_name: str,
+        n_samples: int,
+        model_override: dict[str, str] | None,
+    ) -> str:
+        """Determina il modello per una feature."""
+        if model_override and key in model_override:
+            return model_override[key]
+
+        if metric_name in self._nonlinear_metrics:
+            if n_samples < self._input_window * 2:
+                self._logger.warning(
+                    "Serie '%s' ha %d campioni < input_window×2=%d. "
+                    "Fallback da LSTM a Prophet.",
+                    key, n_samples, self._input_window * 2,
+                )
+                return "prophet"
+            return "lstm"
+
+        return "prophet"
 
     # ------------------------------------------------------------------
     # Fitting
@@ -191,6 +231,43 @@ class StatForecaster:
         model = Ridge()
         model.fit(X, y)
         return model
+
+    def _fit_arima(self, key: str, df: pd.DataFrame) -> Any:
+        """Addestra ARIMA con selezione automatica dell'ordine (p,d,q) via AIC."""
+        from statsmodels.tsa.statespace.sarimax import SARIMAX
+
+        y = df["value"].dropna().values.astype(float)
+        best_aic = float("inf")
+        best_model = None
+        for p in range(self._arima_max_p + 1):
+            for d in range(self._arima_max_d + 1):
+                for q in range(self._arima_max_q + 1):
+                    try:
+                        m = SARIMAX(
+                            y,
+                            order=(p, d, q),
+                            enforce_stationarity=False,
+                            enforce_invertibility=False,
+                        )
+                        r = m.fit(disp=False)
+                        if r.aic < best_aic:
+                            best_aic = r.aic
+                            best_model = r
+                    except Exception:
+                        continue
+        if best_model is None:
+            raise RuntimeError(f"ARIMA fitting fallito per {key}")
+        return best_model
+
+    def _fit_linear(self, key: str, df: pd.DataFrame) -> tuple[LinearRegression, float]:
+        """Regressione lineare su indice temporale → valore. Baseline stazionario."""
+        X = df.index.values.reshape(-1, 1).astype(float)
+        y = df["value"].dropna().values.astype(float)
+        X = X[-len(y):]
+        model = LinearRegression().fit(X, y)
+        residuals = y - model.predict(X)
+        std = float(np.std(residuals)) if len(residuals) > 1 else 0.0
+        return model, std
 
     # ------------------------------------------------------------------
     # Predizione
@@ -244,6 +321,43 @@ class StatForecaster:
                 "yhat": yhats_arr,
                 "yhat_lower": yhats_arr - margin,
                 "yhat_upper": yhats_arr + margin,
+            },
+            index=pd.Index(future_ts, name="timestamp"),
+        )
+
+    def _predict_arima(
+        self, fitted_model: Any, horizon_steps: int, last_ts: int, freq_us: int
+    ) -> pd.DataFrame:
+        future_ts = [last_ts + (i + 1) * freq_us for i in range(horizon_steps)]
+        forecast_res = fitted_model.get_forecast(steps=horizon_steps)
+        yhat = np.asarray(forecast_res.predicted_mean)
+        conf = np.asarray(forecast_res.conf_int(alpha=0.05))
+        return pd.DataFrame(
+            {
+                "yhat": yhat,
+                "yhat_lower": conf[:, 0],
+                "yhat_upper": conf[:, 1],
+            },
+            index=pd.Index(future_ts, name="timestamp"),
+        )
+
+    def _predict_linear(
+        self,
+        model: LinearRegression,
+        std: float,
+        last_ts: int,
+        horizon_steps: int,
+        freq_us: int,
+    ) -> pd.DataFrame:
+        """Proietta l'orizzonte futuro per la regressione lineare."""
+        future_ts = [last_ts + (i + 1) * freq_us for i in range(horizon_steps)]
+        future_X = np.array(future_ts, dtype=float).reshape(-1, 1)
+        yhat = model.predict(future_X)
+        return pd.DataFrame(
+            {
+                "yhat": yhat,
+                "yhat_lower": yhat - 1.96 * std,
+                "yhat_upper": yhat + 1.96 * std,
             },
             index=pd.Index(future_ts, name="timestamp"),
         )
