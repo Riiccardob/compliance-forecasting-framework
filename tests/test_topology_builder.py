@@ -199,3 +199,11 @@ def test_get_edges_invalid_raises(builder: TopologyBuilder) -> None:
     """get_edges_for_compliance_set con nome invalido solleva KeyError."""
     with pytest.raises(KeyError, match="Compliance set non trovato"):
         builder.get_edges_for_compliance_set("H_invalid")
+
+
+def test_get_interference_edges_invalid_raises(
+    builder: TopologyBuilder,
+) -> None:
+    """get_interference_edges con nome invalido solleva KeyError."""
+    with pytest.raises(KeyError, match="Compliance set non trovato"):
+        builder.get_interference_edges("H_invalid", "H_crit")

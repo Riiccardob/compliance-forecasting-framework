@@ -263,21 +263,16 @@ class ATGBuilder:
     def _build_nodes(
         self, rows: pd.DataFrame
     ) -> dict[str, dict[str, float]]:
-        cols = self._node_metrics
         return {
-            row["node_id"]: {col: row[col] for col in cols}
-            for _, row in rows.iterrows()
+            r["node_id"]: {col: r[col] for col in self._node_metrics}
+            for r in rows[["node_id"] + self._node_metrics].to_dict("records")
         }
 
     def _build_edges(
         self, rows: pd.DataFrame
     ) -> dict[str, dict[str, Any]]:
-        cols = self._edge_metrics
+        edge_cols = ["edge_id", "source", "target"] + self._edge_metrics
         return {
-            row["edge_id"]: {
-                "source": row["source"],
-                "target": row["target"],
-                **{col: row[col] for col in cols},
-            }
-            for _, row in rows.iterrows()
+            r["edge_id"]: {k: r[k] for k in ["source", "target"] + self._edge_metrics}
+            for r in rows[edge_cols].to_dict("records")
         }
