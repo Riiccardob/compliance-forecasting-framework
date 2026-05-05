@@ -75,6 +75,9 @@ class DSBConverter:
 
         self._data_paths: dict = topology["data_paths"]
 
+        graph_id = topology.get("metadata", {}).get("graph_id", "graph_2")
+        self._graph_suffix: str = f"_{graph_id}.csv"
+
     # ------------------------------------------------------------------
     # API pubblica
     # ------------------------------------------------------------------
@@ -91,9 +94,9 @@ class DSBConverter:
         raw_dir:
             Directory radice contenente i CSV raw GAMMA.
         """
-        files = sorted(raw_dir.rglob("*_graph_2.csv"))
+        files = sorted(raw_dir.rglob(f"*{self._graph_suffix}"))
         if not files:
-            self._logger.warning("Nessun file *_graph_2.csv trovato in: %s", raw_dir)
+            self._logger.warning("Nessun file *%s trovato in: %s", self._graph_suffix, raw_dir)
             return
 
         node_frames: list[pd.DataFrame] = []

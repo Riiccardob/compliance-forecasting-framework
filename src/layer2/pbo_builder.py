@@ -101,7 +101,7 @@ class PBOBuilder:
                 total_tp = sum(
                     snap["edges"][eid][self._weight_metric] for eid in available
                 )
-                if total_tp <= 0:
+                if total_tp <= 0 or math.isnan(total_tp):
                     w_uniform = 1.0 / len(available)
                     for eid in available:
                         weights[eid] = w_uniform

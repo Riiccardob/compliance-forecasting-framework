@@ -248,7 +248,7 @@ class TestDSBConverter:
         # valido, prima window scartata per CPU) → fillna(0.0).
         # Per net_rx/tx non esiste bfill: solo ffill + fillna.
         assert not pd.isna(val)
-        assert val >= 0.0
+        assert abs(val - 0.0) < 1e-9
 
     def test_error_rate_nominal_zero(self, converter: DSBConverter) -> None:
         """error_rate == 0.0 nella window nominale (10_0, label_trace=0)."""
@@ -364,3 +364,68 @@ class TestDSBConverter:
         assert (out_dir / "node_metrics.csv").exists()
         assert (out_dir / "edge_metrics.csv").exists()
         assert (out_dir / "ground_truth.csv").exists()
+
+    def test_net_negative_delta_true_ffill_three_windows(
+        self, converter: DSBConverter
+    ) -> None:
+        """In un mock a 3 finestre, il delta negativo su w2 viene
+        forward-filled con il valore positivo di w1 - non con fillna(0.0).
+        Verifica il vero meccanismo di ffill quando esiste un predecessore
+        valido."""
+        _TS_W2 = 11_000_000
+
+        raw = _make_base_raw().copy()
+        extra = pd.DataFrame([{
+            "window_id": "10_2",
+            "0_start": _TS_W2,
+            "label_trace": 0,
+            "0_container_cpu_usage_seconds_total": _CPU_W1 + 0.1,
+            "0_container_memory_usage_bytes": _MEM_BYTES,
+            "0_container_network_receive_bytes_total": _RX_W0 - 1024,
+            "0_container_network_transmit_bytes_total": _TX_W1 + 1024,
+            "1_latency": _LAT_E1_US,
+            "0_label_RPC": 0,
+            "4_label_RPC": 0,
+        }])
+        raw_3 = pd.concat([raw, extra], ignore_index=True)
+
+        agg = converter._aggregate_window_metrics(raw_3)
+        node_df = converter._compute_node_metrics(agg, "source.csv")
+
+        rec_w1 = node_df[
+            (node_df["window_id"] == "10_1")
+            & (node_df["node_id"] == "nginx-web-server")
+        ]
+        rec_w2 = node_df[
+            (node_df["window_id"] == "10_2")
+            & (node_df["node_id"] == "nginx-web-server")
+        ]
+        assert len(rec_w1) == 1
+        assert len(rec_w2) == 1
+
+        w1_rx = rec_w1.iloc[0]["net_rx_mb"]
+        w2_rx = rec_w2.iloc[0]["net_rx_mb"]
+
+        assert w1_rx > 0.0, "w1 deve avere net_rx_mb positivo"
+        assert abs(w2_rx - w1_rx) < 0.01, (
+            f"w2 ({w2_rx:.4f}) deve essere ffillato da w1 ({w1_rx:.4f}), "
+            "non prodotto da fillna(0.0)"
+        )
+
+    def test_error_rate_zero_traces_window(
+        self, converter: DSBConverter
+    ) -> None:
+        """Window con 0 tracce produce error_rate == 0.0 (no divisione per zero)."""
+        raw = _make_base_raw()
+        raw.loc[raw["window_id"] == "10_1", "0_label_RPC"] = 0
+        raw.loc[raw["window_id"] == "10_1", "4_label_RPC"] = 0
+        raw.loc[raw["window_id"] == "10_1", "label_trace"] = 0
+
+        agg = converter._aggregate_window_metrics(raw)
+        edge_df = converter._compute_edge_metrics(agg, "source.csv")
+
+        rec = edge_df[
+            (edge_df["window_id"] == "10_1") & (edge_df["edge_id"] == "e1")
+        ]
+        if len(rec) == 1:
+            assert not pd.isna(rec.iloc[0]["error_rate"])

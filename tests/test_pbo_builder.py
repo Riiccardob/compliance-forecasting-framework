@@ -311,3 +311,26 @@ def test_gold_standard_key_arcs(
     """W_gold: e1=1.0 (sorgente con singolo arco uscente), e6=12/(8+12)=0.6."""
     assert abs(gold_standard["e1"] - 1.0) < 1e-9
     assert abs(gold_standard["e6"] - 0.6) < 1e-9
+
+
+def test_weight_nan_throughput_uses_uniform_fallback(
+    pbo: PBOBuilder,
+) -> None:
+    """NaN in throughput_rps attiva il fallback uniforme
+    senza propagare NaN nella matrice stocastica."""
+    import math
+    snap = _make_snapshot(
+        _T0, 0, "cpu",
+        {
+            "e1": 5.0, "e2": 5.0,
+            "e3": float("nan"), "e4": 10.0,
+            "e5": 8.0, "e6": 12.0,
+        },
+    )
+    ws = pbo.compute_transition_weights([snap])
+    w = ws[0]["weights"]
+    # Nessun NaN si propaga
+    assert not math.isnan(w.get("e3", 0.0))
+    assert not math.isnan(w.get("e4", 0.0))
+    # Proprietà stocastica: e3 e e4 sommano a 1.0
+    assert abs(w["e3"] + w["e4"] - 1.0) < 1e-9
