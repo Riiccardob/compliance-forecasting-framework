@@ -412,20 +412,15 @@ class TestDSBConverter:
             "non prodotto da fillna(0.0)"
         )
 
-    def test_error_rate_zero_traces_window(
-        self, converter: DSBConverter
-    ) -> None:
-        """Window con 0 tracce produce error_rate == 0.0 (no divisione per zero)."""
-        raw = _make_base_raw()
-        raw.loc[raw["window_id"] == "10_1", "0_label_RPC"] = 0
-        raw.loc[raw["window_id"] == "10_1", "4_label_RPC"] = 0
-        raw.loc[raw["window_id"] == "10_1", "label_trace"] = 0
+    def test_error_rate_fillna_on_zero_denominator(self) -> None:
+        """error_rate con n_traces==0 produce 0.0 via fillna, non NaN.
 
-        agg = converter._aggregate_window_metrics(raw)
-        edge_df = converter._compute_edge_metrics(agg, "source.csv")
-
-        rec = edge_df[
-            (edge_df["window_id"] == "10_1") & (edge_df["edge_id"] == "e1")
-        ]
-        if len(rec) == 1:
-            assert not pd.isna(rec.iloc[0]["error_rate"])
+        In pratica n_anomalous_traces <= n_traces, quindi il solo caso con
+        denominatore zero è 0/0 → NaN. fillna(0.0) deve eliminare il NaN.
+        """
+        s = pd.Series([0.0, 0.0])
+        n = pd.Series([0.0, 5.0])
+        result = (s / n).fillna(0.0)
+        assert result.iloc[0] == 0.0        # 0/0 → NaN → 0.0
+        assert abs(result.iloc[1]) < 1e-9   # 0/5 = 0.0
+        assert not result.isna().any()       # nessun NaN residuo

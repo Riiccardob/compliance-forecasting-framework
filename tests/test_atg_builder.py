@@ -405,3 +405,100 @@ def test_get_node_feature_matrix_unknown_node_returns_empty(
     DataFrame vuoto (nessun KeyError)."""
     df = builder.get_node_feature_matrix(snapshots, "nonexistent-service")
     assert df.empty
+
+
+def test_get_edge_feature_matrix_unknown_edge_returns_empty(
+    builder: ATGBuilder, snapshots: list[dict]
+) -> None:
+    """get_edge_feature_matrix su edge_id inesistente restituisce
+    DataFrame vuoto senza sollevare eccezioni."""
+    df = builder.get_edge_feature_matrix(snapshots, "e_nonexistent")
+    assert isinstance(df, pd.DataFrame)
+    assert df.empty
+
+
+def test_fault_type_nan_produces_none_anomaly_type(
+    config: ConfigLoader, tmp_path: Path
+) -> None:
+    """fault_type NaN nel ground truth produce anomaly_type=None,
+    non la stringa 'nan'."""
+    nm = _make_node_metrics([_T1])
+    em = _make_edge_metrics([_T1])
+    gt_rows = [{
+        "timestamp": _T1, "window_id": f"w_{_T1}",
+        "fault_type": float("nan"),
+        "date": "aug9", "duration": "25min", "rps": 400,
+        "replica_idx": 0, "label_trace": 1,
+        "anomaly_node_ids": json.dumps(["nginx-web-server"]),
+        "source_file": "mock.csv",
+    }]
+    gt = pd.DataFrame(gt_rows)
+    nm_path = tmp_path / "nm_nanft.csv"
+    em_path = tmp_path / "em_nanft.csv"
+    gt_path = tmp_path / "gt_nanft.csv"
+    nm.to_csv(nm_path, index=False)
+    em.to_csv(em_path, index=False)
+    gt.to_csv(gt_path, index=False)
+
+    snapshots = ATGBuilder(config, nm_path, em_path, gt_path).build()
+    anomalous = [s for s in snapshots if s["label"] == 1]
+    for snap in anomalous:
+        assert snap["anomaly_type"] is None, (
+            f"atteso None, ottenuto {snap['anomaly_type']!r}"
+        )
+
+
+def test_anomaly_node_ids_malformed_json_produces_empty_list(
+    config: ConfigLoader, tmp_path: Path
+) -> None:
+    """anomaly_node_ids malformato produce lista vuota con warning,
+    senza sollevare eccezioni."""
+    nm = _make_node_metrics([_T1])
+    em = _make_edge_metrics([_T1])
+    gt_rows = [{
+        "timestamp": _T1, "window_id": f"w_{_T1}",
+        "fault_type": "cpu", "date": "aug9", "duration": "25min",
+        "rps": 400, "replica_idx": 0, "label_trace": 1,
+        "anomaly_node_ids": "NOT_VALID_JSON{{{",
+        "source_file": "mock.csv",
+    }]
+    gt = pd.DataFrame(gt_rows)
+    nm_path = tmp_path / "nm_malinv.csv"
+    em_path = tmp_path / "em_malinv.csv"
+    gt_path = tmp_path / "gt_malinv.csv"
+    nm.to_csv(nm_path, index=False)
+    em.to_csv(em_path, index=False)
+    gt.to_csv(gt_path, index=False)
+
+    snapshots = ATGBuilder(config, nm_path, em_path, gt_path).build()
+    anomalous = [s for s in snapshots if s["label"] == 1]
+    for snap in anomalous:
+        assert snap["anomaly_node_ids"] == []
+
+
+def test_anomaly_node_ids_dict_json_produces_empty_list(
+    config: ConfigLoader, tmp_path: Path
+) -> None:
+    """anomaly_node_ids JSON valido ma non lista (es. {})
+    viene normalizzato a []."""
+    nm = _make_node_metrics([_T1])
+    em = _make_edge_metrics([_T1])
+    gt_rows = [{
+        "timestamp": _T1, "window_id": f"w_{_T1}",
+        "fault_type": "cpu", "date": "aug9", "duration": "25min",
+        "rps": 400, "replica_idx": 0, "label_trace": 1,
+        "anomaly_node_ids": json.dumps({"key": "value"}),
+        "source_file": "mock.csv",
+    }]
+    gt = pd.DataFrame(gt_rows)
+    nm_path = tmp_path / "nm_dictj.csv"
+    em_path = tmp_path / "em_dictj.csv"
+    gt_path = tmp_path / "gt_dictj.csv"
+    nm.to_csv(nm_path, index=False)
+    em.to_csv(em_path, index=False)
+    gt.to_csv(gt_path, index=False)
+
+    snapshots = ATGBuilder(config, nm_path, em_path, gt_path).build()
+    anomalous = [s for s in snapshots if s["label"] == 1]
+    for snap in anomalous:
+        assert snap["anomaly_node_ids"] == []
