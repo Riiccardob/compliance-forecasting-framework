@@ -1,4 +1,6 @@
 """Fase I - Mapping M: feature selection topologica per compliance set."""
+from unittest import result
+
 import pandas as pd
 
 from src.layer1.topology_builder import TopologyBuilder
@@ -21,6 +23,8 @@ class FeatureSelector:
         e u ∉ H_Φi.  Rappresenta il carico esterno sulle risorse condivise.
     """
 
+    _INTERF_METRIC: str = "throughput_rps"
+
     def __init__(
         self,
         config: ConfigLoader,
@@ -41,6 +45,12 @@ class FeatureSelector:
         topology = config.load_topology()
         self._node_metrics: list[str] = topology["node_metrics"]
         self._edge_metrics: list[str] = topology["edge_metrics"]
+        if self._INTERF_METRIC not in self._edge_metrics:
+           raise ValueError(
+               f"La metrica di interferenza '{self._INTERF_METRIC}' "
+               "non è in edge_metrics di topology.yaml. "
+               "M_interf non può essere calcolato."
+           )
         self._all_cs_names: list[str] = list(
             topology["compliance_sets"].keys()
         )
@@ -117,9 +127,9 @@ class FeatureSelector:
             edge_id = self._edge_id_lookup.get((src, tgt))
             if edge_id is None:
                 continue
-            key = f"interf:{edge_id}:throughput_rps"
+            key = f"interf:{edge_id}:{self._INTERF_METRIC}"
             result[key] = self._build_edge_series(
-                edge_id, "throughput_rps", snapshots
+                edge_id, self._INTERF_METRIC, snapshots
             )
 
         self._logger.debug(
@@ -165,12 +175,12 @@ class FeatureSelector:
                 direct.append(f"node:{node_id}:{metric}")
         for src, tgt in internal_edges:
             edge_id = self._edge_id_lookup.get((src, tgt))
-            if edge_id:
+            if edge_id is not None:
                 for metric in self._edge_metrics:
                     direct.append(f"edge:{edge_id}:{metric}")
 
         interference: list[str] = [
-            f"interf:{self._edge_id_lookup[(src, tgt)]}:throughput_rps"
+            f"interf:{self._edge_id_lookup[(src, tgt)]}:{self._INTERF_METRIC}"
             for src, tgt in interf_edges
             if (src, tgt) in self._edge_id_lookup
         ]
@@ -211,7 +221,7 @@ class FeatureSelector:
                 self._logger.warning(
                     "Nodo '%s' assente nello snapshot ts=%d", node_id, ts
                 )
-                val = pd.NA
+                val = float("nan")
             else:
                 val = node_data.get(metric, pd.NA)
             timestamps.append(ts)
@@ -234,7 +244,7 @@ class FeatureSelector:
                 self._logger.warning(
                     "Arco '%s' assente nello snapshot ts=%d", edge_id, ts
                 )
-                val = pd.NA
+                val = float("nan")
             else:
                 val = edge_data.get(metric, pd.NA)
             timestamps.append(ts)

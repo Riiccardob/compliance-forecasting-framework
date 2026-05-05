@@ -258,3 +258,52 @@ def test_select_features_key_order_deterministic(
     names = feature_selector.get_feature_names("H_crit")
     result_direct_keys = [k for k in result if not k.startswith("interf:")]
     assert result_direct_keys == names["direct"]
+
+
+def test_missing_node_series_has_float_nan_dtype(
+    feature_selector: FeatureSelector,
+) -> None:
+    """Snapshot privo di un nodo: la serie restituisce float64
+    con float('nan'), non dtype=object con pd.NA."""
+    import math
+    snap = {
+        "timestamp": _T0,
+        "nodes": {
+            n: {"cpu_percent": 5.0, "mem_mb": 100.0,
+                "net_rx_mb": 1.0, "net_tx_mb": 0.5}
+            for n in _NODES if n != "nginx-web-server"
+        },
+        "edges": {
+            eid: {"source": src, "target": tgt,
+                  "latency_ms": 10.0, "error_rate": 0.0,
+                  "throughput_rps": _TP[eid]}
+            for eid, src, tgt in _EDGES
+        },
+        "label": 0,
+        "anomaly_type": None,
+        "anomaly_node_ids": [],
+    }
+    result = feature_selector.select_features("H_crit", [snap])
+    df = result["node:nginx-web-server:cpu_percent"]
+    assert df["value"].dtype == float, (
+        f"Atteso dtype float64, ottenuto {df['value'].dtype}"
+    )
+    assert math.isnan(df.loc[_T0, "value"])
+
+
+def test_get_feature_names_unknown_raises(
+    feature_selector: FeatureSelector,
+) -> None:
+    """get_feature_names su nome inesistente solleva KeyError."""
+    with pytest.raises(KeyError):
+        feature_selector.get_feature_names("H_nonexistent")
+
+
+def test_interf_value_numeric(
+    feature_selector: FeatureSelector, mock_snapshots: list[dict]
+) -> None:
+    """Il valore della feature di interferenza 'interf:e2:throughput_rps'
+    a T0 corrisponde a _TP['e2'] = 5.0."""
+    result = feature_selector.select_features("H_cache", mock_snapshots)
+    df = result["interf:e2:throughput_rps"]
+    assert abs(df.loc[_T0, "value"] - _TP["e2"]) < 1e-9
