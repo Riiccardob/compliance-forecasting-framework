@@ -8,6 +8,8 @@ import pytest
 from src.utils.config_loader import ConfigLoader
 from src.phase1.stat_forecaster import StatForecaster
 
+warnings.filterwarnings("ignore", category=UserWarning)
+
 _ROOT = Path(__file__).parent.parent
 _TOPOLOGY_PATH = _ROOT / "config" / "topology.yaml"
 _PIPELINE_PATH = _ROOT / "config" / "pipeline_params.yaml"
@@ -182,3 +184,48 @@ def test_get_model_routing_after_fit_returns_dict(
     routing = forecaster.get_model_routing()
     assert isinstance(routing, dict)
     assert set(routing.keys()) == set(mock_features.keys())
+
+
+def test_arima_fit_and_predict(
+    config: ConfigLoader, mock_features: dict[str, pd.DataFrame]
+) -> None:
+    """ARIMA addestrato con model_override produce previsioni con le colonne attese
+    e yhat_lower ≤ yhat ≤ yhat_upper."""
+    forecaster = StatForecaster(config)
+    forecaster.fit(
+        mock_features,
+        model_override={"node:nginx-web-server:cpu_percent": "arima"},
+    )
+    preds = forecaster.predict(horizon_steps=3)
+    df = preds["node:nginx-web-server:cpu_percent"]
+    assert list(df.columns) == ["yhat", "yhat_lower", "yhat_upper"]
+    assert (df["yhat_lower"] <= df["yhat"] + 1e-9).all()
+    assert (df["yhat"] <= df["yhat_upper"] + 1e-9).all()
+
+
+def test_linear_fit_and_predict(
+    config: ConfigLoader, mock_features: dict[str, pd.DataFrame]
+) -> None:
+    """Linear Regression addestrato con model_override produce previsioni con
+    le colonne attese."""
+    forecaster = StatForecaster(config)
+    forecaster.fit(
+        mock_features,
+        model_override={"node:nginx-web-server:cpu_percent": "linear"},
+    )
+    preds = forecaster.predict(horizon_steps=3)
+    df = preds["node:nginx-web-server:cpu_percent"]
+    assert list(df.columns) == ["yhat", "yhat_lower", "yhat_upper"]
+
+
+def test_routing_reflects_override(
+    config: ConfigLoader, mock_features: dict[str, pd.DataFrame]
+) -> None:
+    """get_model_routing() riflette il model_override passato a fit()."""
+    forecaster = StatForecaster(config)
+    forecaster.fit(
+        mock_features,
+        model_override={"node:nginx-web-server:cpu_percent": "arima"},
+    )
+    routing = forecaster.get_model_routing()
+    assert routing["node:nginx-web-server:cpu_percent"] == "arima"
