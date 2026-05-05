@@ -115,12 +115,14 @@ class ATGBuilder:
         edge_ts = set(edge_df["timestamp"].unique())
         gt_ts = set(gt_df["timestamp"].unique())
 
-        if len(node_ts) != len(edge_ts):
+        if len(node_ts) != len(edge_ts) or len(node_ts) != len(gt_ts):
             logger.warning(
-                "Timestamp unici differiscono: node_metrics=%d, edge_metrics=%d "
-                "(atteso nel dataset DSB: prima window scartata per nodo).",
+                "Timestamp non allineati: node=%d, edge=%d, gt=%d — "
+                "verranno usati solo i %d timestamp comuni.",
                 len(node_ts),
                 len(edge_ts),
+                len(gt_ts),
+                len(node_ts & edge_ts & gt_ts),
             )
 
         # NaN check su feature di nodo
@@ -137,8 +139,8 @@ class ATGBuilder:
         common_ts = sorted(node_ts & edge_ts & gt_ts)
         if not common_ts:
             raise ValueError(
-                f"Nessun timestamp comune tra node_metrics ({len(node_ts)} ts) "
-                f"e edge_metrics ({len(edge_ts)} ts). "
+                f"Nessun timestamp comune tra node_metrics ({len(node_ts)} ts), "
+                f"edge_metrics ({len(edge_ts)} ts) e ground_truth ({len(gt_ts)} ts). "
                 "Verificare la coerenza dei file di input."
             )
 
@@ -161,9 +163,39 @@ class ATGBuilder:
                 gt_row = gt_row.iloc[0]
 
             label = int(gt_row["label_trace"])
+            if label not in (0, 1):
+                logger.warning(
+                    "Label non riconosciuta %r al timestamp %d — "
+                    "lo snapshot sarà né nominale né anomalo.",
+                    label, ts,
+                )
+            fault_type_raw = gt_row["fault_type"]
+            anomaly_node_ids_raw = gt_row["anomaly_node_ids"]
             if label == 1:
-                anomaly_type: str | None = str(gt_row["fault_type"])
-                anomaly_node_ids: list[str] = json.loads(str(gt_row["anomaly_node_ids"]))
+                anomaly_type: str | None = (
+                    None if pd.isna(fault_type_raw) else str(fault_type_raw)
+                )
+                try:
+                    parsed = (
+                        json.loads(str(anomaly_node_ids_raw))
+                        if not pd.isna(anomaly_node_ids_raw)
+                        else []
+                    )
+                    if not isinstance(parsed, list):
+                        logger.warning(
+                            "anomaly_node_ids al ts=%d non è una lista "
+                            "(%s) — normalizzato a [].",
+                            ts, type(parsed).__name__,
+                        )
+                        anomaly_node_ids: list[str] = []
+                    else:
+                        anomaly_node_ids = parsed
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    logger.warning(
+                        "anomaly_node_ids malformato al ts=%d: %s",
+                        ts, anomaly_node_ids_raw,
+                    )
+                    anomaly_node_ids = []
             else:
                 anomaly_type = None
                 anomaly_node_ids = []

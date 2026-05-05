@@ -1,6 +1,4 @@
 """Fase I — Mapping M: feature selection topologica per compliance set."""
-from unittest import result
-
 import pandas as pd
 
 from src.layer1.topology_builder import TopologyBuilder

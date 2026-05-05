@@ -50,6 +50,14 @@ class PBOBuilder:
         self._weight_metric: str = pbo_cfg["weight_metric"]
         self._gold_standard_label: int = int(pbo_cfg["gold_standard_label"])
 
+        edge_metrics: list[str] = self._topology.get("edge_metrics", [])
+        if self._weight_metric not in edge_metrics:
+            raise ValueError(
+                f"weight_metric '{self._weight_metric}' "
+                "non è presente in edge_metrics di topology.yaml. "
+                f"Metriche disponibili: {edge_metrics}"
+            )
+
         # Raggruppa archi per nodo sorgente — O(1) lookup in compute_transition_weights
         self._source_to_edges: dict[str, list[str]] = {}
         for edge in self._edges:
@@ -98,16 +106,39 @@ class PBOBuilder:
                 available = [eid for eid in edge_ids if eid in snap["edges"]]
                 if not available:
                     continue
-                total_tp = sum(
-                    snap["edges"][eid][self._weight_metric] for eid in available
+                raw_values: dict[str, float] = {}
+                for eid in available:
+                    v = snap["edges"][eid][self._weight_metric]
+                    try:
+                        raw_values[eid] = float(v)
+                    except (TypeError, ValueError):
+                        raw_values[eid] = float("nan")
+
+                has_invalid = any(
+                    not math.isfinite(v) or v < 0
+                    for v in raw_values.values()
                 )
-                if total_tp <= 0 or math.isnan(total_tp):
+                total_tp = sum(
+                    v for v in raw_values.values()
+                    if math.isfinite(v) and v >= 0
+                )
+
+                if has_invalid:
+                    logger.warning(
+                        "Valori non validi in weight_metric '%s' "
+                        "per sorgente '%s' al ts=%d — "
+                        "usando pesi uniformi.",
+                        self._weight_metric, src,
+                        snap["timestamp"],
+                    )
+
+                if has_invalid or total_tp <= 0:
                     w_uniform = 1.0 / len(available)
                     for eid in available:
                         weights[eid] = w_uniform
                 else:
                     for eid in available:
-                        weights[eid] = snap["edges"][eid][self._weight_metric] / total_tp
+                        weights[eid] = raw_values[eid] / total_tp
             result.append({"timestamp": snap["timestamp"], "weights": weights})
         return result
 
@@ -152,6 +183,19 @@ class PBOBuilder:
             raise ValueError(
                 f"Nessuno snapshot con label == {self._gold_standard_label} "
                 "disponibile per calibrare W_gold."
+            )
+        n_nominal_in_snapshots = sum(
+            1 for s in snapshots
+            if s["label"] == self._gold_standard_label
+        )
+        n_used = len(nominal_weights)
+        if n_used < n_nominal_in_snapshots:
+            logger.warning(
+                "%d snapshot nominali su %d non trovati in "
+                "weight_series — W_gold calibrato su %d snapshot.",
+                n_nominal_in_snapshots - n_used,
+                n_nominal_in_snapshots,
+                n_used,
             )
         all_eids = [e["id"] for e in self._edges]
         gold = {
@@ -201,10 +245,18 @@ class PBOBuilder:
                 f"{len(path)} nodi: PAS non calcolabile su un percorso "
                 "privo di archi. Verificare la sequenza in topology.yaml."
             )
-        path_edge_ids = [
-            self._edge_lookup[(path[i], path[i + 1])]
-            for i in range(len(path) - 1)
-        ]
+        path_edge_ids: list[str] = []
+        for i in range(len(path) - 1):
+            pair = (path[i], path[i + 1])
+            eid = self._edge_lookup.get(pair)
+            if eid is None:
+                raise ValueError(
+                    f"Critical path di '{compliance_set_name}': "
+                    f"arco '{path[i]}' → '{path[i + 1]}' "
+                    "non esiste in topology.yaml. "
+                    "Verifica la sequenza in critical_path."
+                )
+            path_edge_ids.append(eid)
         result: list[dict[str, Any]] = []
         for entry in weight_series:
             weights = entry["weights"]

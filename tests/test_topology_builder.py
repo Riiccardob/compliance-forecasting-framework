@@ -13,8 +13,12 @@ _PIPELINE_PATH = _ROOT / "config" / "pipeline_params.yaml"
 
 
 @pytest.fixture
-def builder() -> TopologyBuilder:
-    config = ConfigLoader(_TOPOLOGY_PATH, _PIPELINE_PATH)
+def config() -> ConfigLoader:
+    return ConfigLoader(_TOPOLOGY_PATH, _PIPELINE_PATH)
+
+
+@pytest.fixture
+def builder(config: ConfigLoader) -> TopologyBuilder:
     return TopologyBuilder(config)
 
 
@@ -207,3 +211,64 @@ def test_get_interference_edges_invalid_raises(
     """get_interference_edges con nome invalido solleva KeyError."""
     with pytest.raises(KeyError, match="Compliance set non trovato"):
         builder.get_interference_edges("H_invalid", "H_crit")
+
+
+def test_edge_id_attribute_in_graph(builder: TopologyBuilder) -> None:
+    """Ogni arco nel DiGraph ha attributo 'id' corrispondente
+    all'edge_id in topology.yaml."""
+    g = builder.build()
+    attr = g.edges["nginx-web-server", "nginx-thrift"]
+    assert attr.get("id") == "e1"
+
+
+def test_compliance_set_node_not_in_v_raises(
+    config: ConfigLoader,
+) -> None:
+    """__init__ solleva ValueError se un nodo del compliance set
+    non esiste in topology['nodes']."""
+    import copy
+    from unittest.mock import patch
+    topo = config.load_topology()
+    bad_topo = copy.deepcopy(topo)
+    bad_topo["compliance_sets"]["H_crit"]["nodes"].append(
+        "nonexistent-service"
+    )
+    with patch.object(
+        type(config), "load_topology", return_value=bad_topo
+    ):
+        with pytest.raises(ValueError, match="non presente in topology"):
+            TopologyBuilder(config)
+
+
+def test_critical_path_invalid_arc_raises(
+    config: ConfigLoader,
+) -> None:
+    """get_critical_path solleva ValueError se il path contiene
+    una coppia consecutiva senza arco reale."""
+    import copy
+    from unittest.mock import patch
+    topo = config.load_topology()
+    bad_topo = copy.deepcopy(topo)
+    bad_topo["compliance_sets"]["H_crit"]["critical_path"][
+        "sequence"
+    ] = ["nginx-web-server", "post-storage-mongodb"]
+    with patch.object(
+        type(config), "load_topology", return_value=bad_topo
+    ):
+        bad_builder = TopologyBuilder(config)
+    with pytest.raises(ValueError, match="non esiste in topology"):
+        bad_builder.get_critical_path("H_crit")
+
+
+def test_build_invalid_endpoint_raises(config: ConfigLoader) -> None:
+    """build() solleva ValueError se un arco punta a un nodo non dichiarato."""
+    import copy
+    from unittest.mock import patch
+
+    topo = config.load_topology()
+    bad_topo = copy.deepcopy(topo)
+    bad_topo["edges"][0]["target"] = "nonexistent-node"
+    with patch.object(type(config), "load_topology", return_value=bad_topo):
+        bad_builder = TopologyBuilder(config)
+    with pytest.raises(ValueError, match="non presente in topology"):
+        bad_builder.build()

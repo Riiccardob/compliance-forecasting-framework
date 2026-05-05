@@ -148,7 +148,7 @@ def test_gold_standard_uses_only_nominal(
 
 
 def test_gold_standard_no_nominal_raises(
-    pbo: PBOBuilder, weight_series: list[dict]
+    pbo: PBOBuilder,
 ) -> None:
     """ValueError se tutti gli snapshot hanno label==1."""
     all_anomalous = [
@@ -311,6 +311,72 @@ def test_gold_standard_key_arcs(
     """W_gold: e1=1.0 (sorgente con singolo arco uscente), e6=12/(8+12)=0.6."""
     assert abs(gold_standard["e1"] - 1.0) < 1e-9
     assert abs(gold_standard["e6"] - 0.6) < 1e-9
+
+
+def test_weight_negative_throughput_uses_uniform_fallback(
+    pbo: PBOBuilder,
+) -> None:
+    """Throughput negativo su un arco attiva fallback uniforme.
+    Il peso negativo viola la proprietà stocastica."""
+    snap = _make_snapshot(
+        _T0, 0, "cpu",
+        {"e1": 5.0, "e2": 5.0, "e3": -1.0, "e4": 10.0,
+         "e5": 8.0, "e6": 12.0},
+    )
+    ws = pbo.compute_transition_weights([snap])
+    w = ws[0]["weights"]
+    # home-timeline-service ha e3 e e4 — fallback uniforme = 0.5
+    assert abs(w["e3"] - 0.5) < 1e-9
+    assert abs(w["e4"] - 0.5) < 1e-9
+
+
+def test_weight_invalid_metric_raises_at_init(
+    config: ConfigLoader,
+    topology_builder: TopologyBuilder,
+) -> None:
+    """weight_metric non in edge_metrics solleva ValueError in __init__."""
+    from unittest.mock import patch
+    import copy
+    pipeline = config.load_pipeline_params()
+    bad_pipeline = copy.deepcopy(pipeline)
+    bad_pipeline["pbo"]["weight_metric"] = "nonexistent_metric"
+    with patch.object(type(config), "load_pipeline_params",
+                      return_value=bad_pipeline):
+        with pytest.raises(ValueError, match="weight_metric"):
+            PBOBuilder(config, topology_builder)
+
+
+def test_path_adherence_missing_arc_raises(
+    pbo: PBOBuilder, weight_series: list[dict]
+) -> None:
+    """compute_path_adherence con critical_path che contiene
+    un arco mancante solleva ValueError descrittivo."""
+    from unittest.mock import patch
+    bad_path = [
+        "nginx-web-server", "post-storage-service", "post-storage-mongodb"
+    ]
+    with patch.object(
+        pbo._topology_builder, "get_critical_path", return_value=bad_path
+    ):
+        with pytest.raises(ValueError, match="non esiste in topology"):
+            pbo.compute_path_adherence(weight_series, "H_crit")
+
+
+def test_gold_standard_covers_absent_edge(
+    pbo: PBOBuilder,
+    weight_series: list[dict],
+    mock_snapshots: list[dict],
+) -> None:
+    """W_gold include e6 anche se e6 è assente da uno snapshot
+    nominale — viene trattato come peso 0.0 per quel timestamp."""
+    import copy
+    ws_mod = copy.deepcopy(weight_series)
+    ws_mod[0]["weights"].pop("e6", None)
+    gold = pbo.compute_gold_standard(ws_mod, mock_snapshots)
+    # e6 deve comunque esistere nel gold (media su 2 nominali:
+    # 0.0 dal primo snapshot + 0.6 dal secondo = 0.3)
+    assert "e6" in gold
+    assert abs(gold["e6"] - 0.3) < 1e-9
 
 
 def test_weight_nan_throughput_uses_uniform_fallback(

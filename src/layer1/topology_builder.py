@@ -35,6 +35,20 @@ class TopologyBuilder:
             name: set(cs["nodes"])
             for name, cs in self._compliance_sets.items()
         }
+
+        declared_node_ids: set[str] = {
+            n["id"] for n in self._topology["nodes"]
+        }
+        for cs_name, cs in self._topology["compliance_sets"].items():
+            for node_id in cs.get("nodes", []):
+                if node_id not in declared_node_ids:
+                    raise ValueError(
+                        f"Compliance set '{cs_name}': nodo "
+                        f"'{node_id}' non presente in "
+                        "topology['nodes']. "
+                        "Verifica topology.yaml."
+                    )
+
         logger.info(
             "TopologyBuilder inizializzato: %d nodi, %d archi, %d compliance set",
             len(self._topology["nodes"]),
@@ -62,6 +76,17 @@ class TopologyBuilder:
         for node in self._topology["nodes"]:
             g.add_node(node["id"])
 
+        declared_nodes = {n["id"] for n in self._topology["nodes"]}
+        for edge in self._topology["edges"]:
+            for endpoint_key in ("source", "target"):
+                ep = edge[endpoint_key]
+                if ep not in declared_nodes:
+                    raise ValueError(
+                        f"Arco '{edge['id']}': endpoint '{ep}' "
+                        "non presente in topology['nodes']. "
+                        "Verifica topology.yaml."
+                    )
+
         for edge in self._topology["edges"]:
             u, v = edge["source"], edge["target"]
             hyperedges = [
@@ -69,7 +94,7 @@ class TopologyBuilder:
                 for name, node_set in self._cs_node_sets.items()
                 if u in node_set and v in node_set
             ]
-            g.add_edge(u, v, hyperedges=hyperedges)
+            g.add_edge(u, v, id=edge["id"], hyperedges=hyperedges)
             logger.debug("Arco %s → %s annotato con: %s", u, v, hyperedges)
 
         self._graph = g
@@ -121,7 +146,35 @@ class TopologyBuilder:
         if name not in self._compliance_sets:
             raise KeyError(f"Compliance set non trovato: '{name}'")
         cs = self._compliance_sets[name]
-        return list(cs.get("critical_path", {}).get("sequence", []))
+        path = list(cs.get("critical_path", {}).get("sequence", []))
+        if not path and cs.get("topology_type") == "linear":
+            logger.warning(
+                "Compliance set '%s' ha topology_type='linear' "
+                "ma non ha critical_path definito in topology.yaml. "
+                "PAS non sarà calcolabile.", name
+            )
+        if path:
+            valid_edges: set[tuple[str, str]] = {
+                (e["source"], e["target"])
+                for e in self._topology["edges"]
+            }
+            cs_nodes = self._cs_node_sets[name]
+            for node in path:
+                if node not in cs_nodes:
+                    logger.warning(
+                        "critical_path di '%s': nodo '%s' "
+                        "non appartiene al compliance set.",
+                        name, node,
+                    )
+            for i in range(len(path) - 1):
+                pair = (path[i], path[i + 1])
+                if pair not in valid_edges:
+                    raise ValueError(
+                        f"critical_path di '{name}': arco "
+                        f"'{path[i]}' → '{path[i + 1]}' "
+                        "non esiste in topology.yaml."
+                    )
+        return path
 
     def get_shared_nodes(self, h_i: str, h_j: str) -> set[str]:
         """Implementa Shared(H_Φi, H_Φj) = H_Φi ∩ H_Φj.
