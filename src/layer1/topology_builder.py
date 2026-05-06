@@ -1,4 +1,5 @@
 """Costruisce l'ipergrafo di certificazione H_cert usando Annotazione Semantica."""
+import copy
 from typing import Any
 
 import networkx as nx
@@ -69,7 +70,7 @@ class TopologyBuilder:
             Grafo orientato con 7 nodi e 6 archi annotati.
         """
         if self._graph is not None:
-            return self._graph
+            return copy.deepcopy(self._graph)
 
         g = nx.DiGraph()
 
@@ -97,9 +98,21 @@ class TopologyBuilder:
             g.add_edge(u, v, id=edge["id"], hyperedges=hyperedges)
             logger.debug("Arco %s → %s annotato con: %s", u, v, hyperedges)
 
+        all_node_ids: set[str] = {n["id"] for n in self._topology["nodes"]}
+        covered: set[str] = set()
+        for cs in self._topology["compliance_sets"].values():
+            covered.update(cs.get("nodes", []))
+        isolated = all_node_ids - covered
+        if isolated:
+            logger.warning(
+                "Nodi in V non appartenenti ad alcun compliance set "
+                "(blind spot di monitoraggio): %s",
+                sorted(isolated),
+            )
+
         self._graph = g
         logger.info("Grafo H_cert costruito: %d nodi, %d archi", g.number_of_nodes(), g.number_of_edges())
-        return g
+        return copy.deepcopy(self._graph)
 
     def get_compliance_set_nodes(self, name: str) -> set[str]:
         """Restituisce l'insieme dei nodi del compliance set.
@@ -146,35 +159,46 @@ class TopologyBuilder:
         if name not in self._compliance_sets:
             raise KeyError(f"Compliance set non trovato: '{name}'")
         cs = self._compliance_sets[name]
-        path = list(cs.get("critical_path", {}).get("sequence", []))
-        if not path and cs.get("topology_type") == "linear":
+        topology_type = cs.get("topology_type", "")
+        if topology_type == "linear":
+            path = list(cs.get("critical_path", {}).get("sequence", []))
+            if not path:
+                logger.warning(
+                    "Compliance set '%s' ha topology_type='linear' "
+                    "ma non ha critical_path definito in topology.yaml. "
+                    "PAS non sarà calcolabile.", name
+                )
+            if path:
+                valid_edges: set[tuple[str, str]] = {
+                    (e["source"], e["target"])
+                    for e in self._topology["edges"]
+                }
+                cs_nodes = self._cs_node_sets[name]
+                for node in path:
+                    if node not in cs_nodes:
+                        logger.warning(
+                            "critical_path di '%s': nodo '%s' "
+                            "non appartiene al compliance set.",
+                            name, node,
+                        )
+                for i in range(len(path) - 1):
+                    pair = (path[i], path[i + 1])
+                    if pair not in valid_edges:
+                        raise ValueError(
+                            f"critical_path di '{name}': arco "
+                            f"'{path[i]}' → '{path[i + 1]}' "
+                            "non esiste in topology.yaml."
+                        )
+            return path
+        elif topology_type == "parallel":
+            return []
+        else:
             logger.warning(
-                "Compliance set '%s' ha topology_type='linear' "
-                "ma non ha critical_path definito in topology.yaml. "
-                "PAS non sarà calcolabile.", name
+                "topology_type '%s' non riconosciuto per compliance "
+                "set '%s' - critical_path non calcolabile.",
+                topology_type, name,
             )
-        if path:
-            valid_edges: set[tuple[str, str]] = {
-                (e["source"], e["target"])
-                for e in self._topology["edges"]
-            }
-            cs_nodes = self._cs_node_sets[name]
-            for node in path:
-                if node not in cs_nodes:
-                    logger.warning(
-                        "critical_path di '%s': nodo '%s' "
-                        "non appartiene al compliance set.",
-                        name, node,
-                    )
-            for i in range(len(path) - 1):
-                pair = (path[i], path[i + 1])
-                if pair not in valid_edges:
-                    raise ValueError(
-                        f"critical_path di '{name}': arco "
-                        f"'{path[i]}' → '{path[i + 1]}' "
-                        "non esiste in topology.yaml."
-                    )
-        return path
+            return []
 
     def get_shared_nodes(self, h_i: str, h_j: str) -> set[str]:
         """Implementa Shared(H_Φi, H_Φj) = H_Φi ∩ H_Φj.
@@ -241,6 +265,12 @@ class TopologyBuilder:
         list[tuple[str, str]]
             Lista di archi di interferenza. Lista vuota se M_interf = ∅.
         """
+        if target_cs == other_cs:
+            raise ValueError(
+                f"target_cs e other_cs non possono essere identici: "
+                f"'{target_cs}'. "
+                "L'auto-interferenza non è definita semanticamente."
+            )
         shared = self.get_shared_nodes(target_cs, other_cs)
         target_nodes = self._cs_node_sets[target_cs]
         return [
