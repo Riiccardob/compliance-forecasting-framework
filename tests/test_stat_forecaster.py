@@ -72,10 +72,19 @@ def test_routing_cpu_percent_is_prophet(
 
 
 def test_routing_mem_mb_is_lstm(
-    forecaster: StatForecaster, mock_features: dict[str, pd.DataFrame]
+    forecaster: StatForecaster,
 ) -> None:
-    """mem_mb è in nonlinear_metrics e _N=50 ≥ input_window×2=48 → LSTM (Ridge placeholder)."""
-    forecaster.fit(mock_features)
+    """mem_mb è in nonlinear_metrics e n >= input_window×2 → LSTM (Ridge placeholder).
+
+    N è derivato da forecaster._input_window per non dipendere dal valore
+    hardcoded nel YAML.
+    """
+    input_window = forecaster._input_window
+    n = input_window * 2 + 5  # garantisce n >= soglia + margine
+    features = {
+        "node:home-timeline-service:mem_mb": _make_series(n),
+    }
+    forecaster.fit(features)
     assert forecaster.get_model_routing()["node:home-timeline-service:mem_mb"] == "lstm"
 
 
@@ -176,6 +185,30 @@ def test_fit_ignores_anomalous_snapshots(
         assert len(df) == 12, f"Atteso 12 righe per '{key}', ottenuto {len(df)}"
 
 
+def test_fit_handles_nan_in_training_series(
+    forecaster: StatForecaster,
+) -> None:
+    """fit() non solleva eccezioni quando il training set contiene NaN.
+    Il dropna() in fit() scarta silenziosamente i NaN prima del fitting."""
+    import numpy as np
+
+    n = 50
+    timestamps = [i * 5_000_000 for i in range(n)]
+    values = [float(i) for i in range(n)]
+    for i in [3, 7, 12, 18, 25, 30, 35, 40, 44, 48]:
+        values[i] = float("nan")
+    df = pd.DataFrame(
+        {"value": values},
+        index=pd.Index(timestamps, name="timestamp"),
+    )
+    features = {"node:nginx-web-server:cpu_percent": df}
+    forecaster.fit(features)
+    result = forecaster.predict()
+    assert "node:nginx-web-server:cpu_percent" in result
+    df_pred = result["node:nginx-web-server:cpu_percent"]
+    assert "yhat" in df_pred.columns
+
+
 def test_get_model_routing_after_fit_returns_dict(
     forecaster: StatForecaster, mock_features: dict[str, pd.DataFrame]
 ) -> None:
@@ -216,6 +249,30 @@ def test_linear_fit_and_predict(
     preds = forecaster.predict(horizon_steps=3)
     df = preds["node:nginx-web-server:cpu_percent"]
     assert list(df.columns) == ["yhat", "yhat_lower", "yhat_upper"]
+
+
+def test_linear_predict_interval_monotone(
+    forecaster: StatForecaster,
+) -> None:
+    """yhat_lower ≤ yhat ≤ yhat_upper per il modello linear."""
+    n = 50
+    timestamps = [i * 5_000_000 for i in range(n)]
+    values = [float(i) * 1.5 + 3.0 for i in range(n)]
+    df = pd.DataFrame(
+        {"value": values},
+        index=pd.Index(timestamps, name="timestamp"),
+    )
+    features = {"node:nginx-web-server:cpu_percent": df}
+    forecaster.fit(
+        features,
+        model_override={"node:nginx-web-server:cpu_percent": "linear"},
+    )
+    result = forecaster.predict()
+    df_pred = result["node:nginx-web-server:cpu_percent"]
+    tol = 1e-9
+    assert (df_pred["yhat_lower"] <= df_pred["yhat"] + tol).all() and (
+        df_pred["yhat"] <= df_pred["yhat_upper"] + tol
+    ).all(), "Linear: yhat_lower ≤ yhat ≤ yhat_upper violato"
 
 
 def test_routing_reflects_override(
