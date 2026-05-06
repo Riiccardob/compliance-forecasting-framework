@@ -2,7 +2,6 @@
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
 import pytest
 
 from src.layer1.topology_builder import TopologyBuilder
@@ -100,57 +99,109 @@ def test_select_returns_dict(
 
 
 def test_h_crit_direct_node_count(
-    feature_selector: FeatureSelector, mock_snapshots: list[dict]
+    feature_selector: FeatureSelector,
+    topology_builder: TopologyBuilder,
+    config: ConfigLoader,
+    mock_snapshots: list[dict],
 ) -> None:
-    """M_direct(H_crit): 5 nodi × 4 metriche = 20 chiavi 'node:'."""
+    """M_direct(H_crit): n_nodi × n_node_metrics chiavi 'node:'."""
+    topo = config.load_topology()
+    expected = (
+        len(topology_builder.get_compliance_set_nodes("H_crit"))
+        * len(topo["node_metrics"])
+    )
     result = feature_selector.select_features("H_crit", mock_snapshots)
     node_keys = [k for k in result if k.startswith("node:")]
-    assert len(node_keys) == 20
+    assert len(node_keys) == expected
 
 
 def test_h_crit_direct_edge_count(
-    feature_selector: FeatureSelector, mock_snapshots: list[dict]
+    feature_selector: FeatureSelector,
+    topology_builder: TopologyBuilder,
+    config: ConfigLoader,
+    mock_snapshots: list[dict],
 ) -> None:
-    """M_direct(H_crit): A(H_crit) = {e1,e2,e4,e6} × 3 metriche = 12 chiavi 'edge:'."""
+    """M_direct(H_crit): |A(H_crit)| × n_edge_metrics chiavi 'edge:'."""
+    topo = config.load_topology()
+    expected = (
+        len(topology_builder.get_edges_for_compliance_set("H_crit"))
+        * len(topo["edge_metrics"])
+    )
     result = feature_selector.select_features("H_crit", mock_snapshots)
     edge_keys = [k for k in result if k.startswith("edge:")]
-    assert len(edge_keys) == 12
+    assert len(edge_keys) == expected
 
 
 def test_h_crit_no_interference(
-    feature_selector: FeatureSelector, mock_snapshots: list[dict]
+    feature_selector: FeatureSelector,
+    topology_builder: TopologyBuilder,
+    config: ConfigLoader,
+    mock_snapshots: list[dict],
 ) -> None:
-    """M_interf(H_crit, H_cache) = ∅ - nessuna chiave 'interf:' per H_crit."""
+    """M_interf(H_crit) = ∅ - nessuna chiave 'interf:' per H_crit."""
+    topo = config.load_topology()
+    cs_names = list(topo["compliance_sets"].keys())
+    seen: set[tuple[str, str]] = set()
+    for other in cs_names:
+        if other == "H_crit":
+            continue
+        seen.update(topology_builder.get_interference_edges("H_crit", other))
     result = feature_selector.select_features("H_crit", mock_snapshots)
     interf_keys = [k for k in result if k.startswith("interf:")]
-    assert len(interf_keys) == 0
+    assert len(interf_keys) == len(seen)
 
 
 def test_h_cache_direct_node_count(
-    feature_selector: FeatureSelector, mock_snapshots: list[dict]
+    feature_selector: FeatureSelector,
+    topology_builder: TopologyBuilder,
+    config: ConfigLoader,
+    mock_snapshots: list[dict],
 ) -> None:
-    """M_direct(H_cache): 4 nodi × 4 metriche = 16 chiavi 'node:'."""
+    """M_direct(H_cache): n_nodi × n_node_metrics chiavi 'node:'."""
+    topo = config.load_topology()
+    expected = (
+        len(topology_builder.get_compliance_set_nodes("H_cache"))
+        * len(topo["node_metrics"])
+    )
     result = feature_selector.select_features("H_cache", mock_snapshots)
     node_keys = [k for k in result if k.startswith("node:")]
-    assert len(node_keys) == 16
+    assert len(node_keys) == expected
 
 
 def test_h_cache_direct_edge_count(
-    feature_selector: FeatureSelector, mock_snapshots: list[dict]
+    feature_selector: FeatureSelector,
+    topology_builder: TopologyBuilder,
+    config: ConfigLoader,
+    mock_snapshots: list[dict],
 ) -> None:
-    """M_direct(H_cache): A(H_cache) = {e3,e4,e5} × 3 metriche = 9 chiavi 'edge:'."""
+    """M_direct(H_cache): |A(H_cache)| × n_edge_metrics chiavi 'edge:'."""
+    topo = config.load_topology()
+    expected = (
+        len(topology_builder.get_edges_for_compliance_set("H_cache"))
+        * len(topo["edge_metrics"])
+    )
     result = feature_selector.select_features("H_cache", mock_snapshots)
     edge_keys = [k for k in result if k.startswith("edge:")]
-    assert len(edge_keys) == 9
+    assert len(edge_keys) == expected
 
 
 def test_h_cache_has_interference(
-    feature_selector: FeatureSelector, mock_snapshots: list[dict]
+    feature_selector: FeatureSelector,
+    topology_builder: TopologyBuilder,
+    config: ConfigLoader,
+    mock_snapshots: list[dict],
 ) -> None:
-    """M_interf(H_cache, H_crit) = {e2} - esattamente 1 chiave 'interf:'."""
+    """M_interf(H_cache) ha archi di interferenza da tutti gli altri CS."""
+    topo = config.load_topology()
+    cs_names = list(topo["compliance_sets"].keys())
+    seen: set[tuple[str, str]] = set()
+    for other in cs_names:
+        if other == "H_cache":
+            continue
+        seen.update(topology_builder.get_interference_edges("H_cache", other))
     result = feature_selector.select_features("H_cache", mock_snapshots)
     interf_keys = [k for k in result if k.startswith("interf:")]
-    assert len(interf_keys) == 1
+    assert len(interf_keys) == len(seen)
 
 
 def test_h_cache_interference_key_format(
@@ -227,26 +278,53 @@ def test_unknown_compliance_set_raises(
 
 def test_get_feature_names_direct_count_h_crit(
     feature_selector: FeatureSelector,
+    topology_builder: TopologyBuilder,
+    config: ConfigLoader,
 ) -> None:
-    """get_feature_names('H_crit')['direct'] ha 32 elementi (20 nodo + 12 arco)."""
+    """get_feature_names('H_crit')['direct'] = n_nodi×n_node_m + n_archi×n_edge_m."""
+    topo = config.load_topology()
+    expected = (
+        len(topology_builder.get_compliance_set_nodes("H_crit"))
+        * len(topo["node_metrics"])
+        + len(topology_builder.get_edges_for_compliance_set("H_crit"))
+        * len(topo["edge_metrics"])
+    )
     names = feature_selector.get_feature_names("H_crit")
-    assert len(names["direct"]) == 32
+    assert len(names["direct"]) == expected
 
 
 def test_get_feature_names_interference_count_h_crit(
     feature_selector: FeatureSelector,
+    topology_builder: TopologyBuilder,
+    config: ConfigLoader,
 ) -> None:
-    """get_feature_names('H_crit')['interference'] ha 0 elementi."""
+    """get_feature_names('H_crit')['interference'] riflette M_interf dalla topologia."""
+    topo = config.load_topology()
+    cs_names = list(topo["compliance_sets"].keys())
+    seen: set[tuple[str, str]] = set()
+    for other in cs_names:
+        if other == "H_crit":
+            continue
+        seen.update(topology_builder.get_interference_edges("H_crit", other))
     names = feature_selector.get_feature_names("H_crit")
-    assert len(names["interference"]) == 0
+    assert len(names["interference"]) == len(seen)
 
 
 def test_get_feature_names_interference_count_h_cache(
     feature_selector: FeatureSelector,
+    topology_builder: TopologyBuilder,
+    config: ConfigLoader,
 ) -> None:
-    """get_feature_names('H_cache')['interference'] ha 1 elemento (e2)."""
+    """get_feature_names('H_cache')['interference'] riflette M_interf dalla topologia."""
+    topo = config.load_topology()
+    cs_names = list(topo["compliance_sets"].keys())
+    seen: set[tuple[str, str]] = set()
+    for other in cs_names:
+        if other == "H_cache":
+            continue
+        seen.update(topology_builder.get_interference_edges("H_cache", other))
     names = feature_selector.get_feature_names("H_cache")
-    assert len(names["interference"]) == 1
+    assert len(names["interference"]) == len(seen)
 
 
 def test_select_features_key_order_deterministic(
@@ -307,3 +385,37 @@ def test_interf_value_numeric(
     result = feature_selector.select_features("H_cache", mock_snapshots)
     df = result["interf:e2:throughput_rps"]
     assert abs(df.loc[_T0, "value"] - _TP["e2"]) < 1e-9
+
+
+def test_select_features_empty_snapshots(
+    feature_selector: FeatureSelector,
+) -> None:
+    """select_features con lista snapshot vuota restituisce dict con chiavi
+    corrette e DataFrame a 0 righe per ogni chiave."""
+    result = feature_selector.select_features("H_crit", [])
+    assert isinstance(result, dict)
+    assert len(result) > 0
+    for key, df in result.items():
+        assert hasattr(df, "columns"), f"Chiave {key!r}: atteso DataFrame"
+        assert len(df) == 0, f"Chiave {key!r}: atteso 0 righe, trovato {len(df)}"
+        assert "value" in df.columns
+
+
+def test_missing_interf_metric_produces_warning_not_error(
+    config: ConfigLoader, topology_builder: TopologyBuilder
+) -> None:
+    """Se throughput_rps è assente da edge_metrics, FeatureSelector si inizializza
+    con warning (non ValueError) e M_interf è vuoto per tutti i compliance set."""
+    import copy
+    from unittest.mock import patch
+
+    topo = config.load_topology()
+    bad_topo = copy.deepcopy(topo)
+    bad_topo["edge_metrics"] = [
+        m for m in bad_topo["edge_metrics"] if m != "throughput_rps"
+    ]
+    with patch.object(type(config), "load_topology", return_value=bad_topo):
+        fs = FeatureSelector(config, topology_builder)
+    result = fs.select_features("H_cache", [])
+    interf_keys = [k for k in result if k.startswith("interf:")]
+    assert len(interf_keys) == 0

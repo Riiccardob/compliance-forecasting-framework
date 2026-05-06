@@ -400,3 +400,63 @@ def test_weight_nan_throughput_uses_uniform_fallback(
     assert not math.isnan(w.get("e4", 0.0))
     # Proprietà stocastica: e3 e e4 sommano a 1.0
     assert abs(w["e3"] + w["e4"] - 1.0) < 1e-9
+
+
+def test_gold_standard_warns_on_misaligned_series(
+    pbo: PBOBuilder,
+) -> None:
+    """compute_gold_standard emette warning quando alcuni timestamp
+    nominali di snapshots non hanno corrispondenza in weight_series."""
+    from unittest.mock import patch
+    # 3 snapshot nominali, ma weight_series ha solo 2 dei 3 timestamp
+    snap0 = _make_snapshot(_T0, 0, "cpu", _TP_NOMINAL)
+    snap1 = _make_snapshot(_T1, 0, "cpu", _TP_NOMINAL)
+    snap2 = _make_snapshot(_T2, 0, "cpu", _TP_NOMINAL)  # tutti nominali
+    all_snaps = [snap0, snap1, snap2]
+    # weight_series ha solo T0 e T1, non T2
+    ws_partial = [
+        {"timestamp": _T0, "weights": {"e1": 1.0, "e2": 1.0,
+                                        "e3": 0.5, "e4": 0.5,
+                                        "e5": 0.4, "e6": 0.6}},
+        {"timestamp": _T1, "weights": {"e1": 1.0, "e2": 1.0,
+                                        "e3": 0.5, "e4": 0.5,
+                                        "e5": 0.4, "e6": 0.6}},
+    ]
+    with patch.object(pbo._logger if hasattr(pbo, "_logger")
+                      else __import__("logging").getLogger(
+                          "src.layer2.pbo_builder"),
+                      "warning") as mock_warn:
+        gold = pbo.compute_gold_standard(ws_partial, all_snaps)
+    # Il warning deve essere emesso (T2 mancante in weight_series)
+    assert mock_warn.called
+    # Il gold standard è calcolato su T0 e T1 (non T2)
+    assert abs(gold["e3"] - 0.5) < 1e-9
+
+
+def test_frobenius_explicit_zero_weight_contributes(
+    pbo: PBOBuilder,
+    gold_standard: dict[str, float],
+) -> None:
+    """Un arco con peso esplicitamente 0.0 nel dict (non assente)
+    contribuisce correttamente alla distanza di Frobenius.
+    Verifica che il codice non distingua tra assente e 0.0 esplicito."""
+    import math
+    # weight_series con e3 = 0.0 esplicito (non assente dal dict)
+    # W_gold ha e3 = 0.5, quindi contributo = (0.0 - 0.5)^2 = 0.25
+    weights_with_explicit_zero = {
+        "e1": 1.0, "e2": 1.0,
+        "e3": 0.0,  # esplicito nel dict
+        "e4": 1.0,
+        "e5": 0.4, "e6": 0.6,
+    }
+    ws = [{"timestamp": _T0, "weights": weights_with_explicit_zero}]
+    frob = pbo.compute_frobenius_distance(ws, gold_standard)
+    assert len(frob) == 1
+    # e3: (0.0 - 0.5)^2 = 0.25 contribuisce alla somma
+    assert frob[0]["frobenius"] > 0.0
+    # Il valore deve essere lo stesso che si ottiene se e3 fosse assente
+    weights_with_absent = {k: v for k, v in weights_with_explicit_zero.items()
+                           if k != "e3"}
+    ws_absent = [{"timestamp": _T0, "weights": weights_with_absent}]
+    frob_absent = pbo.compute_frobenius_distance(ws_absent, gold_standard)
+    assert abs(frob[0]["frobenius"] - frob_absent[0]["frobenius"]) < 1e-9
