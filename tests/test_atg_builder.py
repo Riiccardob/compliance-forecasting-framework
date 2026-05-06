@@ -139,6 +139,26 @@ def snapshots(builder: ATGBuilder) -> list[dict]:
     return builder.build()
 
 
+@pytest.fixture
+def atg(builder: ATGBuilder) -> ATGBuilder:
+    return builder
+
+
+@pytest.fixture
+def node_df() -> pd.DataFrame:
+    return _make_node_metrics([_T0, _T1, _T2])
+
+
+@pytest.fixture
+def edge_df() -> pd.DataFrame:
+    return _make_edge_metrics([_T0, _T1, _T2])
+
+
+@pytest.fixture
+def gt_df() -> pd.DataFrame:
+    return _make_ground_truth([_T0, _T1, _T2])
+
+
 # ── Test: struttura della lista di snapshot ───────────────────────────────────
 
 def test_build_returns_list(snapshots: list[dict]) -> None:
@@ -502,3 +522,74 @@ def test_anomaly_node_ids_dict_json_produces_empty_list(
     anomalous = [s for s in snapshots if s["label"] == 1]
     for snap in anomalous:
         assert snap["anomaly_node_ids"] == []
+
+
+# ── Test: V/E consistency check ───────────────────────────────────────────────
+
+def test_extra_node_in_csv_warns(
+    atg: ATGBuilder,
+    node_df: pd.DataFrame,
+    edge_df: pd.DataFrame,
+    gt_df: pd.DataFrame,
+) -> None:
+    """Un node_id sconosciuto in node_metrics emette warning su extra_nodes."""
+    from unittest.mock import patch
+    extra_rows = pd.DataFrame([{
+        "timestamp": ts,
+        "window_id": f"w_{ts}",
+        "node_id": "unknown-service",
+        "cpu_percent": 5.0,
+        "mem_mb": 100.0,
+        "net_rx_mb": 1.0,
+        "net_tx_mb": 0.5,
+        "source_file": "mock.csv",
+    } for ts in [_T0, _T1, _T2]])
+    node_extra = pd.concat([node_df, extra_rows], ignore_index=True)
+    with patch.object(atg._logger, "warning") as mock_warn:
+        atg.build(node_extra, edge_df, gt_df)
+    call_strings = " ".join(str(c) for c in mock_warn.call_args_list)
+    assert "unknown-service" in call_strings
+
+
+def test_missing_node_in_csv_warns(
+    atg: ATGBuilder,
+    node_df: pd.DataFrame,
+    edge_df: pd.DataFrame,
+    gt_df: pd.DataFrame,
+) -> None:
+    """Un node_id atteso da topology assente in node_metrics emette warning."""
+    from unittest.mock import patch
+    node_missing = node_df[node_df["node_id"] != "nginx-web-server"].copy()
+    with patch.object(atg._logger, "warning") as mock_warn:
+        atg.build(node_missing, edge_df, gt_df)
+    call_strings = " ".join(str(c) for c in mock_warn.call_args_list)
+    assert "nginx-web-server" in call_strings
+
+
+def test_label_out_of_range_included_but_not_classified(
+    atg: ATGBuilder,
+) -> None:
+    """label_trace fuori intervallo emette warning ma lo snapshot è incluso
+    con label intatto, anomaly_type=None e anomaly_node_ids=[]."""
+    from unittest.mock import patch
+    nm = _make_node_metrics([_T0])
+    em = _make_edge_metrics([_T0])
+    gt_invalid = pd.DataFrame([{
+        "timestamp": _T0,
+        "window_id": f"w_{_T0}",
+        "fault_type": "cpu",
+        "date": "aug9",
+        "duration": "25min",
+        "rps": 400,
+        "replica_idx": 0,
+        "label_trace": 2,
+        "anomaly_node_ids": "[]",
+        "source_file": "mock.csv",
+    }])
+    with patch.object(atg._logger, "warning") as mock_warn:
+        snaps = atg.build(nm, em, gt_invalid)
+    assert len(snaps) == 1
+    assert snaps[0]["label"] == 2
+    assert snaps[0]["anomaly_type"] is None
+    assert snaps[0]["anomaly_node_ids"] == []
+    mock_warn.assert_called()

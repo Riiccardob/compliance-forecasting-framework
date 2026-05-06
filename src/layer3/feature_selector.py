@@ -44,11 +44,15 @@ class FeatureSelector:
         self._node_metrics: list[str] = topology["node_metrics"]
         self._edge_metrics: list[str] = topology["edge_metrics"]
         if self._INTERF_METRIC not in self._edge_metrics:
-           raise ValueError(
-               f"La metrica di interferenza '{self._INTERF_METRIC}' "
-               "non è in edge_metrics di topology.yaml. "
-               "M_interf non può essere calcolato."
-           )
+            self._logger.warning(
+                "La metrica di interferenza '%s' non è in "
+                "edge_metrics di topology.yaml. "
+                "M_interf sarà sempre vuoto per tutti i compliance set.",
+                self._INTERF_METRIC,
+            )
+            self._interf_available: bool = False
+        else:
+            self._interf_available = True
         self._all_cs_names: list[str] = list(
             topology["compliance_sets"].keys()
         )
@@ -193,6 +197,8 @@ class FeatureSelector:
         self, compliance_set_name: str
     ) -> list[tuple[str, str]]:
         """Raccoglie M_interf da tutti gli altri compliance set."""
+        if not self._interf_available:
+            return []
         seen: set[tuple[str, str]] = set()
         result: list[tuple[str, str]] = []
         for other in self._all_cs_names:
