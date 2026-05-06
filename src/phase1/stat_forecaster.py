@@ -366,10 +366,17 @@ class StatForecaster:
     # Utilità
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _infer_freq_us(df: pd.DataFrame) -> int:
+    def _infer_freq_us(self, df: pd.DataFrame) -> int:
         """Stima la frequenza di campionamento in µs dalla mediana dei diff."""
         if len(df) < 2:
             return 5_000_000  # default: 5 s in µs
         diffs = np.diff(df.index.values.astype(np.int64))
-        return int(np.median(diffs))
+        freq = int(np.median(diffs))
+        if freq <= 0:
+            self._logger.warning(
+                "_infer_freq_us: frequenza stimata %d µs ≤ 0 "
+                "(timestamp identici o decrescenti) — fallback a 5 s.",
+                freq,
+            )
+            return 5_000_000
+        return freq

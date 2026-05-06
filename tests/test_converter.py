@@ -439,9 +439,15 @@ class TestDSBConverter:
             (node_df["window_id"] == "10_1")
             & (node_df["node_id"] == "nginx-web-server")
         ]
-        if len(rec) == 1:
-            val = rec.iloc[0]["cpu_percent"]
-            assert not math.isinf(val), "cpu_percent non deve essere inf"
+        assert len(rec) == 1, (
+            f"Atteso 1 record per window 10_1 / nginx-web-server, "
+            f"trovato {len(rec)}"
+        )
+        val = rec.iloc[0]["cpu_percent"]
+        assert not math.isinf(val), "cpu_percent non deve essere inf"
+        assert abs(val) < 1e-9 or math.isnan(val), (
+            f"cpu_percent atteso 0 o NaN per delta_t=0, ottenuto {val}"
+        )
 
     def test_convert_all_empty_directory_does_not_crash(
         self, converter: DSBConverter, tmp_path: Path
@@ -469,6 +475,10 @@ class TestDSBConverter:
         edge_df = converter._compute_edge_metrics(agg, "source.csv")
 
         expected_duration = converter._window_duration_s
+        assert abs(expected_duration - 5.0) < 1e-9, (
+            f"window_duration_s atteso 5.0, ottenuto {expected_duration}. "
+            "Verifica topology.yaml metadata.window_duration_seconds."
+        )
         n_traces = single_window["label_trace"].count()
         expected_throughput = n_traces / expected_duration
 
@@ -482,15 +492,23 @@ class TestDSBConverter:
                     "Hardcoded fallback may have been reintroduced."
                 )
 
-    def test_error_rate_fillna_on_zero_denominator(self) -> None:
+    def test_error_rate_fillna_on_zero_denominator(
+        self, converter: DSBConverter
+    ) -> None:
         """error_rate con n_traces==0 produce 0.0 via fillna, non NaN.
 
-        In pratica n_anomalous_traces <= n_traces, quindi il solo caso con
-        denominatore zero è 0/0 → NaN. fillna(0.0) deve eliminare il NaN.
+        Una finestra con label_trace=NaN ha count()=0 → n_traces=0 →
+        n_anomalous_traces/n_traces = 0/0 = NaN → fillna(0.0) → 0.0.
         """
-        s = pd.Series([0.0, 0.0])
-        n = pd.Series([0.0, 5.0])
-        result = (s / n).fillna(0.0)
-        assert result.iloc[0] == 0.0        # 0/0 → NaN → 0.0
-        assert abs(result.iloc[1]) < 1e-9   # 0/5 = 0.0
-        assert not result.isna().any()       # nessun NaN residuo
+        raw = _make_base_raw()
+        raw.loc[raw["window_id"] == "10_1", "label_trace"] = float("nan")
+        agg = converter._aggregate_window_metrics(raw)
+        edge_df = converter._compute_edge_metrics(agg, "source.csv")
+        rec = edge_df[edge_df["window_id"] == "10_1"]
+        assert len(rec) > 0, "Nessun record per window 10_1"
+        assert not rec["error_rate"].isna().any(), (
+            "error_rate non deve contenere NaN per n_traces=0"
+        )
+        assert (rec["error_rate"] == 0.0).all(), (
+            "error_rate deve essere 0.0 quando n_traces=0 (0/0 → fillna)"
+        )
