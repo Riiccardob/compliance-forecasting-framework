@@ -171,7 +171,10 @@ def test_granger_detects_linear_causality(
     effect_s = _make_series(effect_vals)
     result = analyzer._granger_test(cause_s, effect_s, max_lag=5, significance=0.05)
     assert result is not None, "Granger doveva rilevare causalità"
-    assert result["intensity"] >= 0.0
+    assert result["intensity"] > 0.0, (
+           f"ΔR² atteso > 0 per relazione causale forte, "
+           f"ottenuto {result['intensity']:.6f}"
+       )
     assert result["lag"] >= 1
 
 
@@ -180,9 +183,9 @@ def test_granger_returns_none_on_independent_series(
 ) -> None:
     """Due serie di rumore bianco indipendente: Granger restituisce None."""
     rng = np.random.default_rng(0)
-    n = 50
-    cause_s = _make_series(rng.normal(0, 1, n))
-    effect_s = _make_series(rng.normal(0, 1, n))
+    n = 100
+    cause_s = _make_series(np.random.default_rng(0).normal(0, 1, n))
+    effect_s = _make_series(np.random.default_rng(1).normal(0, 1, n))
     result = analyzer._granger_test(cause_s, effect_s, max_lag=5, significance=0.05)
     assert result is None, "Granger non doveva rilevare causalità su rumore indipendente"
 
@@ -315,3 +318,34 @@ def test_missing_causal_analysis_key_raises(
     ):
         with pytest.raises(ValueError, match="pearson_threshold"):
             CausalAnalyzer(config, topology_builder)
+
+
+def test_get_causal_pairs_unknown_cs_raises(
+    analyzer: CausalAnalyzer,
+    mock_features_h_crit: dict[str, pd.DataFrame],
+) -> None:
+    """get_causal_pairs() solleva KeyError per compliance set inesistente,
+    coerentemente con analyze()."""
+    with pytest.raises(KeyError):
+        analyzer.get_causal_pairs("H_nonexistent", mock_features_h_crit)
+
+
+def test_granger_intensity_positive_on_causal_series(
+    analyzer: CausalAnalyzer,
+) -> None:
+    """ΔR² (intensity) è strettamente positivo per relazione causale forte.
+    Guard di regressione contro il bug di accesso alla struttura OLS."""
+    rng = np.random.default_rng(0)
+    n = 50
+    cause_vals = rng.normal(0, 1, n)
+    effect_vals = np.concatenate(
+        [[cause_vals[0]], cause_vals[:-1]]
+    ) + rng.normal(0, 0.05, n)
+    cause_s = pd.Series(cause_vals.astype(float))
+    effect_s = pd.Series(effect_vals.astype(float))
+    result = analyzer._granger_test(cause_s, effect_s, max_lag=5, significance=0.05)
+    assert result is not None
+    assert result["intensity"] > 0.0, (
+        f"ΔR² atteso > 0.0, ottenuto {result['intensity']:.6f}. "
+        "Possibile accesso sbagliato alla struttura OLS di statsmodels."
+    )

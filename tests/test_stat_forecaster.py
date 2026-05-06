@@ -251,6 +251,26 @@ def test_linear_fit_and_predict(
     assert list(df.columns) == ["yhat", "yhat_lower", "yhat_upper"]
 
 
+def test_infer_freq_us_guard_on_identical_timestamps(
+    forecaster: StatForecaster,
+) -> None:
+    """_infer_freq_us con tutti i timestamp identici (mediana dei diff = 0)
+    emette logger.warning e restituisce il fallback 5_000_000 µs (5 s)."""
+    from unittest.mock import patch
+
+    n = 5
+    identical_ts = [1_000_000] * n  # tutti uguali → diff = 0
+    df = pd.DataFrame(
+        {"value": [1.0] * n},
+        index=pd.Index(identical_ts, name="timestamp"),
+    )
+    with patch.object(forecaster._logger, "warning") as mock_warn:
+        freq = forecaster._infer_freq_us(df)
+
+    assert freq == 5_000_000, f"Atteso fallback 5_000_000 µs, ottenuto {freq}"
+    assert mock_warn.called, "_logger.warning non emesso per freq <= 0"
+
+
 def test_linear_predict_interval_monotone(
     forecaster: StatForecaster,
 ) -> None:

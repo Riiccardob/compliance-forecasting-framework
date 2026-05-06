@@ -1,4 +1,6 @@
 """Fase II - Analisi causale guidata dalla topologia su M_Φi."""
+import contextlib
+import io
 from typing import Any
 
 import numpy as np
@@ -208,6 +210,10 @@ class CausalAnalyzer:
             Lista di ``(source_key, target_key, category)`` dove
             ``category ∈ {"intra", "inter", "node_arc"}``.
         """
+        if compliance_set_name not in self._topology["compliance_sets"]:
+           raise KeyError(
+               f"Compliance set non trovato: '{compliance_set_name}'"
+           )
         return self._build_candidate_pairs(
             compliance_set_name, list(features.keys())
         )
@@ -288,7 +294,9 @@ class CausalAnalyzer:
         data = np.column_stack([effect_vals, cause_vals])
 
         try:
-            results = grangercausalitytests(data, maxlag=max_lag, verbose=False)
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                results = grangercausalitytests(data, maxlag=max_lag)
         except Exception as exc:
             self._logger.warning("grangercausalitytests fallito: %s", exc)
             return None
@@ -308,11 +316,16 @@ class CausalAnalyzer:
             return None
 
         try:
-            r2_restr = float(results[best_lag][1].rsquared)
-            r2_full = float(results[best_lag][2].rsquared)
+            ols_models = results[best_lag][1]
+            r2_restr = float(ols_models[0].rsquared)
+            r2_full  = float(ols_models[1].rsquared)
             delta_r2 = max(0.0, r2_full - r2_restr)
-        except (IndexError, AttributeError):
+        except (IndexError, AttributeError, TypeError):
             delta_r2 = 0.0
+            self._logger.warning(
+                "Impossibile estrarre ΔR² per lag=%d - intensità impostata a 0.0.",
+                best_lag,
+            )
 
         return {"intensity": delta_r2, "lag": best_lag}
 
@@ -512,6 +525,11 @@ class CausalAnalyzer:
                                     features[vk], features[fb]
                                 )
                                 min_n = self._granger_max_lag + 2
+                                interf_edge_id = fa.split(":")[1]
+                                fb_edge_id = fb.split(":")[1]
+                                if fb_edge_id == interf_edge_id:
+                                    continue  # catena auto-referenziale: interf e internal arc
+                                                # sono lo stesso arco, skip semantico
                                 r1 = (
                                     self._granger_test(
                                         sa, sv1,
@@ -620,9 +638,18 @@ class CausalAnalyzer:
             effect_vals = np.diff(effect_vals)
             cause_vals = np.diff(cause_vals)
             n_diff += 1
-            if n_diff == 2:
-                self._logger.warning(
-                    "Serie ancora non stazionaria dopo 2 differenziazioni - "
-                    "si procede comunque."
-                )
+        if n_diff == 2:
+           try:
+               _, p_final, *_ = adfuller(effect_vals, autolag="AIC")
+               if p_final > 0.05:
+                   self._logger.warning(
+                       "Serie ancora non stazionaria (p=%.3f) dopo "
+                       "2 differenziazioni - si procede comunque.",
+                       p_final,
+                   )
+           except Exception:
+               self._logger.warning(
+                   "Impossibile verificare stazionarietà dopo "
+                   "2 differenziazioni - si procede comunque."
+               )
         return effect_vals, cause_vals, n_diff

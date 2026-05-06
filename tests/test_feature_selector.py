@@ -428,3 +428,28 @@ def test_missing_interf_metric_produces_warning_not_error(
     result = fs.select_features("H_cache", [])
     interf_keys = [k for k in result if k.startswith("interf:")]
     assert len(interf_keys) == 0
+
+
+def test_node_nan_value_preserved_as_float_nan(
+    feature_selector: FeatureSelector,
+) -> None:
+    """Un valore numerico intero nel nodo produce dtype float64 nella serie.
+
+    Guard di regressione contro la mancanza del cast float() in
+    _build_node_series: senza float(raw), un valore int puro (es. 5)
+    può produrre una colonna dtype=int64 o object invece di float64.
+    """
+    snap = {
+        "timestamp": _T0,
+        "nodes": {
+            "nginx-web-server": {"cpu_percent": 5},  # int, non float
+        },
+        "edges": {},
+    }
+    result = feature_selector.select_features("H_crit", [snap])
+    df = result["node:nginx-web-server:cpu_percent"]
+    assert df["value"].dtype == float, (
+        f"dtype atteso float64, ottenuto {df['value'].dtype}. "
+        "Manca il cast float() in _build_node_series."
+    )
+    assert abs(df["value"].iloc[0] - 5.0) < 1e-9

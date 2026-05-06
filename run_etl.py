@@ -9,13 +9,8 @@ def main() -> None:
         root / "config" / "topology.yaml",
         root / "config" / "pipeline_params.yaml",
     )
-    raw_dir = (
-        root
-        / "DATASET"
-        / "processed_dataset"
-        / "home"
-        / "multi-modal-data-separate"
-    )
+    topo = config.load_topology()
+    raw_dir = root / topo["data_paths"]["raw_dir"]
     converter = DSBConverter(config)
     converter.convert_all(raw_dir)
 
