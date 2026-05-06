@@ -131,6 +131,12 @@ class PBOBuilder:
                         self._weight_metric, src,
                         snap["timestamp"],
                     )
+                elif total_tp <= 0:
+                    logger.warning(
+                        "Throughput totale uscente da '%s' al ts=%d è "
+                        "zero o negativo (total=%.4f) — usando pesi uniformi.",
+                        src, snap["timestamp"], total_tp,
+                    )
 
                 if has_invalid or total_tp <= 0:
                     w_uniform = 1.0 / len(available)

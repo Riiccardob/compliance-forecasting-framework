@@ -526,6 +526,26 @@ def test_anomaly_node_ids_dict_json_produces_empty_list(
 
 # ── Test: V/E consistency check ───────────────────────────────────────────────
 
+def test_build_warns_on_isolated_node(
+    atg: ATGBuilder,
+    node_df: pd.DataFrame,
+    edge_df: pd.DataFrame,
+    gt_df: pd.DataFrame,
+) -> None:
+    """build() emette warning se un nodo di topology.yaml è assente
+    da node_metrics.csv (nodo non monitorato)."""
+    import copy
+    from unittest.mock import patch
+
+    bad_topology = copy.deepcopy(atg._topology)
+    bad_topology["nodes"].append({"id": "orphan-service"})
+    with patch.object(atg, "_topology", bad_topology):
+        with patch.object(atg._logger, "warning") as mock_warn:
+            atg.build(node_df, edge_df, gt_df)
+    warning_msgs = " ".join(str(c) for c in mock_warn.call_args_list)
+    assert "orphan-service" in warning_msgs
+
+
 def test_extra_node_in_csv_warns(
     atg: ATGBuilder,
     node_df: pd.DataFrame,
@@ -593,3 +613,43 @@ def test_label_out_of_range_included_but_not_classified(
     assert snaps[0]["anomaly_type"] is None
     assert snaps[0]["anomaly_node_ids"] == []
     mock_warn.assert_called()
+
+
+def test_extra_edge_in_csv_warns(
+    atg: ATGBuilder,
+    node_df: pd.DataFrame,
+    edge_df: pd.DataFrame,
+    gt_df: pd.DataFrame,
+) -> None:
+    """build() emette warning quando edge_metrics.csv contiene un edge_id
+    non dichiarato in topology.yaml."""
+    from unittest.mock import patch
+
+    phantom_rows = edge_df[
+        edge_df["edge_id"] == edge_df["edge_id"].iloc[0]
+    ].copy()
+    phantom_rows["edge_id"] = "e99"
+    edge_extra = pd.concat([edge_df, phantom_rows], ignore_index=True)
+    with patch.object(atg._logger, "warning") as mock_warn:
+        atg.build(node_df, edge_extra, gt_df)
+    warning_msgs = " ".join(str(c) for c in mock_warn.call_args_list)
+    assert "e99" in warning_msgs
+
+
+def test_missing_edge_in_csv_warns(
+    atg: ATGBuilder,
+    node_df: pd.DataFrame,
+    edge_df: pd.DataFrame,
+    gt_df: pd.DataFrame,
+) -> None:
+    """build() emette warning quando topology.yaml dichiara un
+    edge_id assente da edge_metrics.csv."""
+    from unittest.mock import patch
+    # Rimuovi tutti i record di e1 dal CSV degli archi
+    edge_missing = edge_df[edge_df["edge_id"] != "e1"].copy()
+    with patch.object(atg._logger, "warning") as mock_warn:
+        atg.build(node_df, edge_missing, gt_df)
+    warning_msgs = " ".join(
+        str(c) for c in mock_warn.call_args_list
+    )
+    assert "e1" in warning_msgs

@@ -185,7 +185,9 @@ class DSBConverter:
         if m is None:
             self._logger.warning(
                 "Filename '%s' non rispetta il pattern atteso — "
-                "file ignorato.", filename
+                "le metriche verranno processate ma i metadati "
+                "(fault_type, date, rps, replica_idx) saranno None.",
+                filename,
             )
             return {
                 "fault_type": None,

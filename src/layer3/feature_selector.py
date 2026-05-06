@@ -227,7 +227,8 @@ class FeatureSelector:
                 )
                 val = float("nan")
             else:
-                val = node_data.get(metric, pd.NA)
+                raw = node_data.get(metric)
+                val = float("nan") if raw is None else raw
             timestamps.append(ts)
             values.append(val)
         return pd.DataFrame(
@@ -250,7 +251,8 @@ class FeatureSelector:
                 )
                 val = float("nan")
             else:
-                val = edge_data.get(metric, pd.NA)
+                raw = edge_data.get(metric)
+                val = float("nan") if raw is None else raw
             timestamps.append(ts)
             values.append(val)
         return pd.DataFrame(

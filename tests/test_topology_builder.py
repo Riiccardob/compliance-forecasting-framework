@@ -261,6 +261,25 @@ def test_critical_path_invalid_arc_raises(
         bad_builder.get_critical_path("H_crit")
 
 
+def test_critical_path_node_outside_cs_raises(config: ConfigLoader) -> None:
+    """get_critical_path solleva ValueError se il path contiene un nodo
+    non appartenente al compliance set."""
+    import copy
+    from unittest.mock import patch
+
+    topo = config.load_topology()
+    bad_topo = copy.deepcopy(topo)
+    bad_topo["compliance_sets"]["H_crit"]["critical_path"]["sequence"] = [
+        "nginx-web-server",
+        "home-timeline-redis",  # non in H_crit
+        "post-storage-mongodb",
+    ]
+    with patch.object(type(config), "load_topology", return_value=bad_topo):
+        bad_builder = TopologyBuilder(config)
+    with pytest.raises(ValueError, match="non appartiene al compliance set"):
+        bad_builder.get_critical_path("H_crit")
+
+
 def test_build_invalid_endpoint_raises(config: ConfigLoader) -> None:
     """build() solleva ValueError se un arco punta a un nodo non dichiarato."""
     import copy

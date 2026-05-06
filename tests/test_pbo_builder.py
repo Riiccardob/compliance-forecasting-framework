@@ -1,5 +1,6 @@
 """Test per PBOBuilder — Probabilistic Behavioral Overlay."""
 import math
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -422,9 +423,7 @@ def test_gold_standard_warns_on_misaligned_series(
                                         "e3": 0.5, "e4": 0.5,
                                         "e5": 0.4, "e6": 0.6}},
     ]
-    with patch.object(pbo._logger if hasattr(pbo, "_logger")
-                      else __import__("logging").getLogger(
-                          "src.layer2.pbo_builder"),
+    with patch.object(logging.getLogger("src.layer2.pbo_builder"),
                       "warning") as mock_warn:
         gold = pbo.compute_gold_standard(ws_partial, all_snaps)
     # Il warning deve essere emesso (T2 mancante in weight_series)
@@ -460,3 +459,23 @@ def test_frobenius_explicit_zero_weight_contributes(
     ws_absent = [{"timestamp": _T0, "weights": weights_with_absent}]
     frob_absent = pbo.compute_frobenius_distance(ws_absent, gold_standard)
     assert abs(frob[0]["frobenius"] - frob_absent[0]["frobenius"]) < 1e-9
+
+
+def test_zero_total_throughput_emits_warning(
+    pbo: PBOBuilder,
+) -> None:
+    """compute_transition_weights emette warning quando il throughput
+    totale uscente da un nodo è zero (valori validi ma somma zero)."""
+    from unittest.mock import patch
+    snap = _make_snapshot(
+        _T0, 0, "cpu",
+        {"e1": 5.0, "e2": 5.0,
+         "e3": 0.0, "e4": 0.0,   # home-timeline-service: totale zero
+         "e5": 8.0, "e6": 12.0},
+    )
+    with patch.object(logging.getLogger("src.layer2.pbo_builder"),
+                      "warning") as mock_warn:
+        pbo.compute_transition_weights([snap])
+    # Il warning deve essere emesso per home-timeline-service
+    # (e3=0, e4=0, somma=0)
+    assert mock_warn.called
