@@ -452,6 +452,36 @@ class TestDSBConverter:
         empty_dir.mkdir()
         converter.convert_all(empty_dir)  # non deve sollevare eccezioni
 
+    def test_throughput_fallback_uses_yaml_value(
+        self, converter: DSBConverter
+    ) -> None:
+        """When delta_t is not calculable (single window or last
+        window), throughput_rps uses window_duration_seconds from
+        topology.yaml, not a hardcoded value.
+
+        This test acts as a regression guard: if someone reintroduces
+        a hardcoded fallback (e.g. 30.0), the expected value changes
+        and the test fails."""
+        raw = _make_base_raw()
+        single_window = raw[raw["window_id"] == "10_1"].copy()
+
+        agg = converter._aggregate_window_metrics(single_window)
+        edge_df = converter._compute_edge_metrics(agg, "source.csv")
+
+        expected_duration = converter._window_duration_s
+        n_traces = single_window["label_trace"].count()
+        expected_throughput = n_traces / expected_duration
+
+        for _, row in edge_df.iterrows():
+            tp = row["throughput_rps"]
+            if not pd.isna(tp):
+                assert abs(tp - expected_throughput) < 1e-6, (
+                    f"throughput_rps {tp:.4f} != expected "
+                    f"{expected_throughput:.4f} (n={n_traces}, "
+                    f"duration={expected_duration}). "
+                    "Hardcoded fallback may have been reintroduced."
+                )
+
     def test_error_rate_fillna_on_zero_denominator(self) -> None:
         """error_rate con n_traces==0 produce 0.0 via fillna, non NaN.
 
