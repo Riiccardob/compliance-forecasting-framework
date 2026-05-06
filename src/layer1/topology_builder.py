@@ -176,10 +176,12 @@ class TopologyBuilder:
                 cs_nodes = self._cs_node_sets[name]
                 for node in path:
                     if node not in cs_nodes:
-                        logger.warning(
-                            "critical_path di '%s': nodo '%s' "
-                            "non appartiene al compliance set.",
-                            name, node,
+                        raise ValueError(
+                            f"critical_path di '{name}': nodo '{node}' "
+                            f"non appartiene al compliance set '{name}'. "
+                            "Il PAS su questo path sarebbe semanticamente "
+                            "privo di significato. Correggi la sequenza "
+                            "in topology.yaml."
                         )
                 for i in range(len(path) - 1):
                     pair = (path[i], path[i + 1])

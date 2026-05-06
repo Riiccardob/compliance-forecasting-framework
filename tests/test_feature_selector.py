@@ -404,10 +404,12 @@ def test_select_features_empty_snapshots(
 def test_missing_interf_metric_produces_warning_not_error(
     config: ConfigLoader, topology_builder: TopologyBuilder
 ) -> None:
-    """Se throughput_rps è assente da edge_metrics, FeatureSelector si inizializza
-    con warning (non ValueError) e M_interf è vuoto per tutti i compliance set."""
+    """Se throughput_rps è assente da edge_metrics, FeatureSelector emette
+    warning durante __init__ (non ValueError) e M_interf è vuoto."""
     import copy
-    from unittest.mock import patch
+    import logging
+    from unittest.mock import patch, MagicMock
+    from src.utils.logging_setup import LoggingSetup
 
     topo = config.load_topology()
     bad_topo = copy.deepcopy(topo)
@@ -415,7 +417,14 @@ def test_missing_interf_metric_produces_warning_not_error(
         m for m in bad_topo["edge_metrics"] if m != "throughput_rps"
     ]
     with patch.object(type(config), "load_topology", return_value=bad_topo):
-        fs = FeatureSelector(config, topology_builder)
+        mock_logger = MagicMock(spec=logging.Logger)
+        with patch.object(LoggingSetup, "configure", return_value=mock_logger):
+            fs = FeatureSelector(config, topology_builder)
+    assert mock_logger.warning.called
+    warning_text = " ".join(
+        str(c) for c in mock_logger.warning.call_args_list
+    )
+    assert "throughput_rps" in warning_text or "interferenza" in warning_text
     result = fs.select_features("H_cache", [])
     interf_keys = [k for k in result if k.startswith("interf:")]
     assert len(interf_keys) == 0
