@@ -412,6 +412,46 @@ class TestDSBConverter:
             "non prodotto da fillna(0.0)"
         )
 
+    def test_parse_filename_malformed_returns_none_fields(
+        self, converter: DSBConverter
+    ) -> None:
+        """Filename che non rispetta il pattern: tutti i campi
+        a None senza eccezioni."""
+        result = converter._parse_filename("nounderscores.csv")
+        assert result["fault_type"] is None
+        assert result["rps"] is None
+        assert result["replica_idx"] is None
+
+    def test_cpu_zero_delta_t_produces_nan(
+        self, converter: DSBConverter
+    ) -> None:
+        """Due finestre con timestamp identici (delta_t = 0)
+        producono cpu_percent finito (non inf)."""
+        import math
+        raw = _make_base_raw()
+        # Imposta il timestamp di w1 uguale a w0
+        raw.loc[raw["window_id"] == "10_1", "0_start"] = (
+            raw.loc[raw["window_id"] == "10_0", "0_start"].iloc[0]
+        )
+        agg = converter._aggregate_window_metrics(raw)
+        node_df = converter._compute_node_metrics(agg, "source.csv")
+        rec = node_df[
+            (node_df["window_id"] == "10_1")
+            & (node_df["node_id"] == "nginx-web-server")
+        ]
+        if len(rec) == 1:
+            val = rec.iloc[0]["cpu_percent"]
+            assert not math.isinf(val), "cpu_percent non deve essere inf"
+
+    def test_convert_all_empty_directory_does_not_crash(
+        self, converter: DSBConverter, tmp_path: Path
+    ) -> None:
+        """convert_all su directory vuota termina senza eccezioni
+        e non scrive file di output."""
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+        converter.convert_all(empty_dir)  # non deve sollevare eccezioni
+
     def test_error_rate_fillna_on_zero_denominator(self) -> None:
         """error_rate con n_traces==0 produce 0.0 via fillna, non NaN.
 

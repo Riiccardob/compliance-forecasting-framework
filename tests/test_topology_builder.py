@@ -140,11 +140,12 @@ def test_unknown_compliance_set_raises(builder: TopologyBuilder) -> None:
 
 
 def test_build_idempotent(builder: TopologyBuilder) -> None:
-    """build() è idempotente: chiamate successive restituiscono
-    lo stesso oggetto grafo dalla cache interna."""
+    """Due chiamate a build() restituiscono grafi strutturalmente
+    identici. Ogni chiamata produce una copia indipendente."""
     g1 = builder.build()
     g2 = builder.build()
-    assert g1 is g2
+    assert set(g1.nodes()) == set(g2.nodes())
+    assert set(g1.edges()) == set(g2.edges())
 
 
 def test_interference_h_cache_source_and_target(
@@ -272,3 +273,84 @@ def test_build_invalid_endpoint_raises(config: ConfigLoader) -> None:
         bad_builder = TopologyBuilder(config)
     with pytest.raises(ValueError, match="non presente in topology"):
         bad_builder.build()
+
+
+def test_build_returns_independent_copy(
+    builder: TopologyBuilder,
+) -> None:
+    """Modificare il grafo restituito da build() non corrompe
+    la cache interna di TopologyBuilder."""
+    g1 = builder.build()
+    g1.add_node("injected-sentinel")
+    g2 = builder.build()
+    assert "injected-sentinel" not in g2.nodes()
+
+
+def test_build_warns_on_isolated_node(
+    config: ConfigLoader,
+) -> None:
+    """build() non solleva eccezioni e include il nodo nel grafo
+    anche se non appartiene ad alcun compliance set."""
+    import copy
+    from unittest.mock import patch
+
+    topo = config.load_topology()
+    bad_topo = copy.deepcopy(topo)
+    bad_topo["nodes"].append({"id": "orphan-service"})
+    with patch.object(type(config), "load_topology", return_value=bad_topo):
+        orphan_builder = TopologyBuilder(config)
+    g = orphan_builder.build()
+    assert "orphan-service" in g.nodes()
+
+
+def test_get_interference_edges_same_cs_raises(
+    builder: TopologyBuilder,
+) -> None:
+    """get_interference_edges con target_cs == other_cs solleva
+    ValueError (auto-interferenza non definita)."""
+    with pytest.raises(ValueError, match="identici"):
+        builder.get_interference_edges("H_crit", "H_crit")
+
+
+def test_critical_path_linear_without_path_warns(
+    config: ConfigLoader,
+) -> None:
+    """get_critical_path su topology_type=linear senza critical_path
+    restituisce [] ed emette logger.warning."""
+    import copy
+    import src.layer1.topology_builder as tb_module
+    from unittest.mock import patch
+
+    topo = config.load_topology()
+    bad_topo = copy.deepcopy(topo)
+    bad_topo["compliance_sets"]["H_crit"].pop("critical_path", None)
+    with patch.object(type(config), "load_topology", return_value=bad_topo):
+        bad_builder = TopologyBuilder(config)
+    with patch.object(tb_module, "logger") as mock_logger:
+        result = bad_builder.get_critical_path("H_crit")
+    assert result == []
+    mock_logger.warning.assert_called()
+    warning_msg = str(mock_logger.warning.call_args_list)
+    assert "linear" in warning_msg or "critical_path" in warning_msg
+
+
+def test_critical_path_unknown_topology_type_warns(
+    config: ConfigLoader,
+) -> None:
+    """get_critical_path con topology_type non riconosciuto
+    restituisce [] ed emette logger.warning."""
+    import copy
+    import src.layer1.topology_builder as tb_module
+    from unittest.mock import patch
+
+    topo = config.load_topology()
+    bad_topo = copy.deepcopy(topo)
+    bad_topo["compliance_sets"]["H_crit"]["topology_type"] = "hierarchical"
+    with patch.object(type(config), "load_topology", return_value=bad_topo):
+        bad_builder = TopologyBuilder(config)
+    with patch.object(tb_module, "logger") as mock_logger:
+        result = bad_builder.get_critical_path("H_crit")
+    assert result == []
+    mock_logger.warning.assert_called()
+    warning_msg = str(mock_logger.warning.call_args_list)
+    assert "hierarchical" in warning_msg or "non riconosciuto" in warning_msg

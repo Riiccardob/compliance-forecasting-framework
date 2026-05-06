@@ -69,9 +69,23 @@ class ConfigLoader:
             della prima chiave mancante trovata.
         """
         if self._topology is None:
-            self._topology = self._load_and_validate(
+            data = self._load_and_validate(
                 self._topology_path, _TOPOLOGY_REQUIRED_KEYS
             )
+            metadata = data.get("metadata", {})
+            wds = metadata.get("window_duration_seconds")
+            if wds is None:
+                raise ValueError(
+                    f"{self._topology_path.name}: chiave mancante 'metadata."
+                    "window_duration_seconds'. "
+                    "Richiesta da DSBConverter come fallback per delta_t."
+                )
+            if not isinstance(wds, (int, float)) or float(wds) <= 0:
+                raise ValueError(
+                    f"{self._topology_path.name}: metadata.window_duration_seconds = "
+                    f"{wds!r} non è un numero positivo."
+                )
+            self._topology = data
             logger.info("topology.yaml caricato da: %s", self._topology_path)
         return copy.deepcopy(self._topology)
 

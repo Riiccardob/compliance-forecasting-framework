@@ -60,6 +60,9 @@ class DSBConverter:
         }
 
         self._data_paths: dict = topology["data_paths"]
+        self._window_duration_s: float = float(
+            topology["metadata"]["window_duration_seconds"]
+        )
 
         graph_id = topology.get("metadata", {}).get("graph_id", "graph_2")
         self._graph_suffix: str = f"_{graph_id}.csv"
@@ -179,8 +182,11 @@ class DSBConverter:
             non viene riconosciuto.
         """
         m = self._filename_pattern.match(filename)
-        if not m:
-            self._logger.warning("Pattern filename non riconosciuto: %s", filename)
+        if m is None:
+            self._logger.warning(
+                "Filename '%s' non rispetta il pattern atteso — "
+                "file ignorato.", filename
+            )
             return {
                 "fault_type": None,
                 "date": None,
@@ -304,7 +310,9 @@ class DSBConverter:
             # Negative delta = counter reset (container restart). Preserve the
             # leading NaN from diff() so the first window is still dropped.
             _diff_nan = cpu_pct.isna()
-            cpu_pct = cpu_pct.mask(cpu_pct < 0).ffill().fillna(0.0)
+            cpu_pct = cpu_pct.mask(
+                (cpu_pct < 0) | ~delta_t_sec.gt(0)
+            ).ffill().fillna(0.0)
             cpu_pct = cpu_pct.where(~_diff_nan)
 
             mem_bytes: pd.Series = agg[mem_col].copy()
@@ -346,9 +354,8 @@ class DSBConverter:
 
         ``throughput_rps`` = ``n_traces`` / T_w dove T_w è l'intervallo
         verso la finestra successiva (``diff().shift(-1)``). Se delta_t
-        è NaN o zero (caso single-window), si usa
-        window_duration_seconds da topology.yaml (metadata.
-        window_duration_seconds, default 30.0s).
+        è NaN o zero (caso single-window), si usa ``self._window_duration_s``
+        (``metadata.window_duration_seconds`` da topology.yaml).
 
         Parameters
         ----------
@@ -371,16 +378,7 @@ class DSBConverter:
         t_w: pd.Series = t_sec.diff().shift(-1)
 
         error_rate: pd.Series = (agg["n_anomalous_traces"] / agg["n_traces"]).fillna(0.0)
-        fallback_duration = (
-            self._topology.get("metadata", {}).get("window_duration_seconds")
-        )
-        if fallback_duration is None:
-            fallback_duration = 30.0
-            self._logger.warning(
-                "[%s] 'window_duration_seconds' non definito in topology.yaml: "
-                "uso fallback 30.0s",
-                source_file,
-            )
+        fallback_duration = self._window_duration_s
 
         records: list[dict] = []
         for edge in self._edges:
@@ -397,6 +395,13 @@ class DSBConverter:
                 continue
 
             latency_ms: pd.Series = agg[lat_col] / 1000.0  # µs → ms
+
+            if latency_ms.isna().all():
+                self._logger.warning(
+                    "[%s] Tutti i valori di latency per arco '%s' sono NaN — "
+                    "latency_ms sarà NaN per tutte le finestre.",
+                    source_file, edge["id"],
+                )
 
             for i in range(len(agg)):
                 delta_t_seconds = t_w.iloc[i]

@@ -222,6 +222,66 @@ def test_edge_metrics_exact(topology: dict) -> None:
     ]
 
 
+def test_yaml_root_list_raises(tmp_path: Path) -> None:
+    """YAML con radice lista (non dict) solleva ValueError."""
+    list_yaml = tmp_path / "list.yaml"
+    list_yaml.write_text("- item1\n- item2\n", encoding="utf-8")
+    loader = ConfigLoader(list_yaml, _PIPELINE_PATH)
+    with pytest.raises(ValueError):
+        loader.load_topology()
+
+
+def test_window_duration_seconds_missing_raises(
+    tmp_path: Path,
+) -> None:
+    """load_topology solleva ValueError se metadata non ha
+    window_duration_seconds."""
+    bad = tmp_path / "topo_no_wds.yaml"
+    bad.write_text(
+        "metadata:\n"
+        "  system_name: test\n"
+        "nodes: [{id: s1}]\n"
+        "edges: []\n"
+        "compliance_sets: {}\n"
+        "node_metrics: [cpu]\n"
+        "edge_metrics: [latency]\n"
+        "data_paths: {raw_dir: data/raw,\n"
+        "  node_metrics_csv: data/n.csv,\n"
+        "  edge_metrics_csv: data/e.csv,\n"
+        "  ground_truth_csv: data/g.csv}\n",
+        encoding="utf-8",
+    )
+    loader = ConfigLoader(bad, _PIPELINE_PATH)
+    with pytest.raises(ValueError, match="window_duration_seconds"):
+        loader.load_topology()
+
+
+def test_window_duration_seconds_invalid_raises(
+    tmp_path: Path,
+) -> None:
+    """load_topology solleva ValueError se window_duration_seconds
+    è non positivo."""
+    bad = tmp_path / "topo_bad_wds.yaml"
+    bad.write_text(
+        "metadata:\n"
+        "  system_name: test\n"
+        "  window_duration_seconds: -5.0\n"
+        "nodes: [{id: s1}]\n"
+        "edges: []\n"
+        "compliance_sets: {}\n"
+        "node_metrics: [cpu]\n"
+        "edge_metrics: [latency]\n"
+        "data_paths: {raw_dir: data/raw,\n"
+        "  node_metrics_csv: data/n.csv,\n"
+        "  edge_metrics_csv: data/e.csv,\n"
+        "  ground_truth_csv: data/g.csv}\n",
+        encoding="utf-8",
+    )
+    loader = ConfigLoader(bad, _PIPELINE_PATH)
+    with pytest.raises(ValueError):
+        loader.load_topology()
+
+
 def test_malformed_yaml_raises(tmp_path: Path) -> None:
     """YAML sintaticamente invalido solleva ValueError con messaggio
     esplicito — non propaga yaml.YAMLError raw."""
