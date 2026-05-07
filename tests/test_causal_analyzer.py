@@ -330,6 +330,36 @@ def test_get_causal_pairs_unknown_cs_raises(
         analyzer.get_causal_pairs("H_nonexistent", mock_features_h_crit)
 
 
+def test_inter_pairs_have_interf_as_source(
+    analyzer: CausalAnalyzer,
+) -> None:
+    """Le coppie inter hanno sempre la feature interf: come source
+    e la feature node: come target. Questo corrisponde alla direzione
+    causale: throughput esterno → saturazione nodo condiviso."""
+    rng = np.random.default_rng(99)
+    n = 30
+    features = {
+        "node:home-timeline-service:cpu_percent": _make_df(
+            rng.normal(5, 1, n)
+        ),
+        "interf:e2:throughput_rps": _make_df(
+            rng.normal(100, 20, n)
+        ),
+    }
+    pairs = analyzer.get_causal_pairs("H_cache", features)
+    for source, target, category in pairs:
+        if category == "inter":
+            assert source.startswith("interf:"), (
+                f"Coppia inter con source errato: '{source}'. "
+                "Le coppie inter devono avere 'interf:' come source "
+                "(throughput esterno → metrica nodo condiviso)."
+            )
+            assert target.startswith("node:"), (
+                f"Coppia inter con target errato: '{target}'. "
+                "Le coppie inter devono avere 'node:' come target."
+            )
+
+
 def test_granger_intensity_positive_on_causal_series(
     analyzer: CausalAnalyzer,
 ) -> None:

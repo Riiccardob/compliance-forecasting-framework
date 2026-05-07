@@ -457,7 +457,7 @@ class CausalAnalyzer:
                 fs = frozenset([nk, ik])
                 if fs not in seen:
                     seen.add(fs)
-                    pairs.append((nk, ik, "inter"))
+                    pairs.append((ik, nk, "inter"))
 
         return pairs
 
