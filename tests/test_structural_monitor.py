@@ -549,7 +549,6 @@ def test_cusum_signal_when_threshold_exceeded(
         low_monitor = StructuralMonitor(config, tb2, pbo2)
 
     low_monitor._cusum_threshold = 0.0001
-    low_monitor._cusum_k = 0.0  # disabilita margine di tolleranza
     low_monitor.fit(
         "H_crit", mock_features_h_crit, mock_nominal_snapshots,
         mock_weight_series, mock_gold_standard
@@ -678,3 +677,19 @@ def test_missing_anomaly_detection_key_raises(
     with patch.object(type(config), "load_pipeline_params", return_value=bad_pipeline):
         with pytest.raises(ValueError, match="zscore_threshold"):
             StructuralMonitor(config, topology_builder, pbo_builder)
+
+
+# ── Config guard (1) ─────────────────────────────────────────────────────────
+
+def test_cusum_k_loaded_from_yaml(
+    monitor: StructuralMonitor,
+) -> None:
+    """tolerance_factor in pipeline_params.yaml deve essere 0.0
+    (valore che rende CUSUM funzionale per H_crit con PAS_gold=0.25).
+    Guard di regressione: se tolerance_factor > PAS_gold il CUSUM
+    non accumula mai per topologia lineare."""
+    assert monitor._cusum_k == 0.0, (
+        f"tolerance_factor atteso 0.0, trovato {monitor._cusum_k}. "
+        "Con tolerance_factor > PAS_gold (0.25) il CUSUM non accumula "
+        "mai per H_crit. Correggere pipeline_params.yaml."
+    )
