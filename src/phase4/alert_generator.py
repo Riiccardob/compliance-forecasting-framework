@@ -441,7 +441,14 @@ class AlertGenerator:
 
         if candidate_edges:
             best = max(candidate_edges, key=lambda e: float(e.get("intensity", 0.0)))
-            critical_arc: str | None = str(best.get("target"))
+            # Estrai solo l'edge_id dalla feature key (es. "edge:e4:latency_ms" → "e4")
+            target_str = str(best.get("target", ""))
+            target_parts = target_str.split(":")
+            critical_arc: str | None = (
+                target_parts[1]
+                if len(target_parts) >= 2 and target_parts[0] == "edge"
+                else (target_str or None)
+            )
             root_cause: str | None = str(best.get("source"))
         else:
             # Fallback: arco con massimo yhat al lead_time_steps da forecast
@@ -475,7 +482,7 @@ class AlertGenerator:
         edges_for_cs = self._tb.get_edges_for_compliance_set(compliance_set_name)
         step_idx = lead_time_steps - 1
 
-        best_key: str | None = None
+        best_eid: str | None = None
         best_val: float = float("-inf") if property_at_risk != "capacity" else float("inf")
 
         for src, tgt in edges_for_cs:
@@ -493,12 +500,12 @@ class AlertGenerator:
                 continue
             if property_at_risk == "capacity":
                 if val < best_val:
-                    best_val, best_key = val, key
+                    best_val, best_eid = val, eid
             else:
                 if val > best_val:
-                    best_val, best_key = val, key
+                    best_val, best_eid = val, eid
 
-        return best_key
+        return best_eid
 
     def _check_model_uncertainty(
         self, forecasts: dict[str, pd.DataFrame]
