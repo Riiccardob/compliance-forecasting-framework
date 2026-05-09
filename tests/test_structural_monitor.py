@@ -498,8 +498,10 @@ def test_cusum_accumulates_on_degradation(
         ts = _T0 + (20 + i) * _STEP_US
         monitor.monitor("H_crit", mock_features_h_crit, degraded_ws, ts)
 
-    assert monitor._cusum_stat >= initial_stat, (
-        f"CUSUM atteso ≥ {initial_stat}, ottenuto {monitor._cusum_stat}"
+    assert monitor._cusum_stat > 0.0, (
+        f"CUSUM atteso > 0.0 dopo 5 finestre con pesi degradati, "
+        f"ottenuto {monitor._cusum_stat:.8f}. "
+        "Verificare che tolerance_factor=0.0 in pipeline_params.yaml."
     )
 
 
@@ -605,36 +607,93 @@ def test_structural_not_confirmed_below_frobenius_threshold(
 
 
 def test_structural_confirmed_on_persistent_degradation(
-    monitor: StructuralMonitor,
-    mock_features_h_crit: dict[str, pd.DataFrame],
-    mock_nominal_snapshots: list[dict],
-    mock_weight_series: list[dict],
-    mock_gold_standard: dict[str, float],
+    config: ConfigLoader,
+    topology_builder: TopologyBuilder,
+    pbo_builder: PBOBuilder,
 ) -> None:
-    """4 finestre consecutive di degrado: structural_confirmed=True."""
-    monitor.fit(
-        "H_crit", mock_features_h_crit, mock_nominal_snapshots,
-        mock_weight_series, mock_gold_standard
-    )
-    monitor._cusum_threshold = 0.0001
-    monitor._frobenius_threshold = 0.0
+    """structural_confirmed=True dopo 8 finestre di degrado persistente.
 
+    Condizioni necessarie per structural_confirmed=True:
+    1. if_signal=True: zscore spike (cpu=1000) + IF anomaly detection
+    2. cusum_signal=True: alert_threshold=0.0001 + k=0.0 + pesi degradati
+    3. frobenius > distance_threshold=0.0
+    4. Derivata EWMA persistente: almeno consecutive_windows=3 diff negativi
+    """
+    rng = np.random.default_rng(42)
+    n = 40
+
+    # Training con varianza non nulla (necessaria per IF)
+    nominal_snaps = []
+    for i in range(n):
+        ts = _T0 + i * _STEP_US
+        snap = _make_snap(ts, label=0, cpu=float(rng.normal(5.0, 0.5)))
+        nominal_snaps.append(snap)
+
+    ws_nominal = _make_weight_series(n=n)
+    gold = pbo_builder.compute_gold_standard(ws_nominal, nominal_snaps)
+
+    nominal_features: dict[str, pd.DataFrame] = {}
+    cpu_arr = np.array([s["nodes"]["nginx-web-server"]["cpu_percent"]
+                        for s in nominal_snaps])
+    ts_list = [s["timestamp"] for s in nominal_snaps]
+    for node in _H_CRIT_NODES:
+        nominal_features[f"node:{node}:cpu_percent"] = pd.DataFrame(
+            {"value": cpu_arr},
+            index=pd.Index(ts_list, name="timestamp"),
+        )
+        for m in ("mem_mb", "net_rx_mb", "net_tx_mb"):
+            val = 512.0 if m == "mem_mb" else 1.0
+            nominal_features[f"node:{node}:{m}"] = pd.DataFrame(
+                {"value": [val] * n},
+                index=pd.Index(ts_list, name="timestamp"),
+            )
+    for eid in ("e1", "e2", "e4", "e6"):
+        for m in ("latency_ms", "error_rate", "throughput_rps"):
+            nominal_features[f"edge:{eid}:{m}"] = pd.DataFrame(
+                {"value": [10.0] * n},
+                index=pd.Index(ts_list, name="timestamp"),
+            )
+
+    mon = StructuralMonitor(config, topology_builder, pbo_builder)
+    mon.fit("H_crit", nominal_features, nominal_snaps, ws_nominal, gold)
+    mon._cusum_threshold = 0.0001   # soglia CUSUM bassissima
+    mon._frobenius_threshold = 0.0  # qualsiasi Frobenius > 0 è sufficiente
+
+    # Iter 0: pesi nominali → EWMA cold-start a PAS_gold≈0.25
+    # Questo garantisce che le iterazioni successive producano diffs negativi.
+    ws_nominal_one = _make_weight_series(n=1)
+    ts0 = _T0 + n * _STEP_US
+    mon.monitor("H_crit", _make_features_h_crit(cpu=1000.0, latency=10.0, ts=ts0),
+                ws_nominal_one, ts0)
+
+    # Iters 1-8: pesi fortemente degradati → PAS ≈ 0.0099, EWMA decresce
+    # monotonicamente da 0.25 verso 0.0099 → diffs sempre negativi.
     degraded_ws = _make_weight_series(
         n=1, tp_override={"e4": 99.0, "e3": 1.0, "e6": 1.0, "e5": 99.0}
     )
+
     result = None
-    for i in range(8):
-        ts = _T0 + (20 + i) * _STEP_US
-        result = monitor.monitor(
-            "H_crit", mock_features_h_crit, degraded_ws, ts
+    for i in range(1, 9):
+        ts = _T0 + (n + i) * _STEP_US
+        anomalous_features_ts = _make_features_h_crit(cpu=1000.0, latency=10.0, ts=ts)
+        result = mon.monitor(
+            "H_crit", anomalous_features_ts, degraded_ws, ts
         )
+        if result["structural_confirmed"]:
+            break
 
     assert result is not None
-    if result["cusum_signal"] and result["if_signal"]:
-        # structural_confirmed richiede derivata persistente
-        pass  # può essere True o False a seconda dei valori EWMA
-    # Verifica che non solleva eccezioni
-    assert isinstance(result["structural_confirmed"], bool)
+    assert result["structural_confirmed"] is True, (
+        f"structural_confirmed atteso True dopo 8 finestre di degrado "
+        f"persistente. Stato finale: base_signal={result['base_signal']}, "
+        f"if_signal={result['if_signal']}, "
+        f"cusum_signal={result['cusum_signal']}, "
+        f"cusum_stat={result['cusum_stat']:.6f}, "
+        f"frobenius={result['frobenius_distance']}, "
+        f"ewma={result['ewma_value']}. "
+        "Verificare che cpu=1000 attivi base_signal e IF, e che pesi "
+        "degradati accumulino CUSUM con alert_threshold=0.0001."
+    )
 
 
 # ── Robustezza (3) ───────────────────────────────────────────────────────────
@@ -692,4 +751,26 @@ def test_cusum_k_loaded_from_yaml(
         f"tolerance_factor atteso 0.0, trovato {monitor._cusum_k}. "
         "Con tolerance_factor > PAS_gold (0.25) il CUSUM non accumula "
         "mai per H_crit. Correggere pipeline_params.yaml."
+    )
+
+
+# ── Warning (1) ───────────────────────────────────────────────────────────────
+
+def test_monitor_warns_on_compliance_set_mismatch(
+    fitted_monitor: StructuralMonitor,
+    mock_weight_series: list[dict],
+) -> None:
+    """monitor() emette warning se chiamato con un compliance set
+    diverso da quello su cui è stato eseguito fit()."""
+    from unittest.mock import patch
+    with patch.object(fitted_monitor._logger, "warning") as mock_warn:
+        # fit è stato fatto su H_crit, chiamiamo monitor su H_cache
+        fitted_monitor.monitor(
+            "H_cache", _make_features_h_crit(), [mock_weight_series[-1]], _T0
+        )
+    warning_msgs = " ".join(
+        str(c) for c in mock_warn.call_args_list
+    )
+    assert "H_cache" in warning_msgs or "H_crit" in warning_msgs, (
+        "Atteso warning per CS mismatch (fit su H_crit, monitor su H_cache)."
     )

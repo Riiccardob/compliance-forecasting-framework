@@ -288,6 +288,18 @@ class StructuralMonitor:
         if compliance_set_name not in self._topology["compliance_sets"]:
             raise KeyError(f"Compliance set non trovato: '{compliance_set_name}'")
 
+        if self._compliance_set_name and compliance_set_name != self._compliance_set_name:
+            self._logger.warning(
+                "monitor() chiamato con compliance set '%s', ma fit() "
+                "è stato eseguito su '%s'. I parametri interni "
+                "(topology_type='%s', PAS_gold) si riferiscono a '%s'. "
+                "Chiamare fit() di nuovo per il nuovo compliance set.",
+                compliance_set_name,
+                self._compliance_set_name,
+                self._topology_type,
+                self._compliance_set_name,
+            )
+
         # Livello 1a — threshold SLA
         threshold_violations = self._check_threshold(
             compliance_set_name, features, timestamp

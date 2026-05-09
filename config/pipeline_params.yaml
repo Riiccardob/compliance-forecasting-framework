@@ -11,9 +11,10 @@ forecasting:
   horizon_steps: 12
   baseline_model: linear_regression
   default_model: prophet
-  statistical_model: arima        
+  statistical_model: arima
   deep_model: lstm
   divergence_threshold: 0.20
+  step_duration_hours: 24.0  # durata di ogni step previsionale in ore (DSB: finestre 5s, orizzonte in giorni)
   arima:                          
     max_p: 5
     max_d: 2
@@ -51,6 +52,5 @@ anomaly_detection:
     distance_threshold: 0.15
 
 alert_generation:
-  lead_time_thresholds:
-    red_days: 2
-    orange_days: 7
+  yellow_min_days: 7   # lead_time >= 7 giorni → Giallo
+  orange_min_days: 2   # lead_time < 2 giorni → Rosso; 2..7 → Arancione
