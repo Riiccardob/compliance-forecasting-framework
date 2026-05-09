@@ -131,19 +131,24 @@ class AlertGenerator:
             )
 
         # 1. Proprietà monitorata e SLA
-        property_at_risk, sla_threshold, sla_bound, agg_func = (
-            self._detect_property(compliance_set_name)
-        )
+        # check_threshold/check_bound: soglia interna per violation check.
+        # display_threshold/display_bound: valori originali del certificato SLA
+        # (uguali a check per latency/capacity; convertiti per reliability).
+        property_at_risk, check_threshold, check_bound, agg_func, \
+            display_threshold, display_bound = (
+                self._detect_property(compliance_set_name)
+            )
 
         # 2. Aggregazione previsioni
+        # NaN fallback = display_threshold (soglia metrica grezza, es. error_rate=0.05)
         aggregated = self._aggregate_forecasts(
             forecasts, compliance_set_name, agg_func,
-            property_at_risk, sla_threshold,
+            property_at_risk, display_threshold,
         )
 
-        # 3. Lead time
+        # 3. Lead time (confronto con soglia interna convertita)
         lead_time_steps = self._estimate_lead_time(
-            aggregated, sla_threshold, sla_bound
+            aggregated, check_threshold, check_bound
         )
 
         # 4. Nessuna violazione prevista
@@ -195,8 +200,8 @@ class AlertGenerator:
             "lead_time_steps": lead_time_steps,
             "lead_time_hours": lead_time_hours,
             "aggregated_forecast": aggregated,
-            "sla_threshold": sla_threshold,
-            "sla_bound": sla_bound,
+            "sla_threshold": display_threshold,
+            "sla_bound": display_bound,
             "critical_arc": critical_arc,
             "root_cause": root_cause,
             "cross_property_interference": cross_interference,
@@ -222,13 +227,25 @@ class AlertGenerator:
 
     def _detect_property(
         self, compliance_set_name: str
-    ) -> tuple[str, float, str, str]:
+    ) -> tuple[str, float, str, str, float, str]:
         """Determina proprietà, soglia SLA e funzione di aggregazione.
 
         Returns
         -------
         tuple
-            (property_at_risk, sla_threshold, sla_bound, aggregation_function)
+            (property_at_risk, check_threshold, check_bound,
+             aggregation_function, display_threshold, display_bound)
+
+            ``check_threshold/check_bound`` sono usati internamente per
+            il violation check. ``display_threshold/display_bound`` sono
+            i valori originali del certificato SLA, esposti nell'alert
+            per leggibilità dell'operatore.
+
+            Per la proprietà "reliability" i due set differiscono:
+            la SLA error_rate (upper, ε_max) è convertita in reliability
+            (lower, 1-ε_max) secondo Eq. 3.32 di methodology.tex, perché
+            la product_complement produce un valore in [0,1] che deve
+            essere confrontato con una soglia inferiore.
 
         Raises
         ------
@@ -252,19 +269,30 @@ class AlertGenerator:
             threshold = float(sla[latency_key]["threshold"])
             bound = str(sla[latency_key]["bound"])
             agg = "sum" if topology_type == "linear" else "max"
-            return "latency", threshold, bound, agg
+            return "latency", threshold, bound, agg, threshold, bound
 
         error_key = next((k for k in sla if "error_rate" in k), None)
         if error_key:
-            threshold = float(sla[error_key]["threshold"])
-            bound = str(sla[error_key]["bound"])
-            return "reliability", threshold, bound, "product_complement"
+            raw_threshold = float(sla[error_key]["threshold"])
+            raw_bound = str(sla[error_key].get("bound", "upper"))
+            # Eq. 3.32: error_rate ≤ ε_max (upper) ↔ reliability ≥ 1-ε_max (lower).
+            # product_complement ∈ [0,1] → confronto con soglia inferiore.
+            if raw_bound == "upper":
+                check_threshold = 1.0 - raw_threshold
+                check_bound = "lower"
+            else:
+                check_threshold = raw_threshold
+                check_bound = raw_bound
+            return (
+                "reliability", check_threshold, check_bound,
+                "product_complement", raw_threshold, raw_bound,
+            )
 
         throughput_key = next((k for k in sla if "throughput" in k), None)
         if throughput_key:
             threshold = float(sla[throughput_key]["threshold"])
             bound = str(sla[throughput_key]["bound"])
-            return "capacity", threshold, bound, "min"
+            return "capacity", threshold, bound, "min", threshold, bound
 
         raise ValueError(
             f"SLA di '{compliance_set_name}' non contiene metriche "

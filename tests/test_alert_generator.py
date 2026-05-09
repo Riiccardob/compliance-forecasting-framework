@@ -575,3 +575,80 @@ def test_generate_with_empty_forecasts_returns_none(
         "H_crit", {}, mock_causal_graph_empty, mock_monitor_nominal, _T0,
     )
     assert result is None
+
+
+#  Aggregazione estesa (2) 
+
+def test_aggregation_reliability_product_complement(
+    config: ConfigLoader,
+    topology_builder: TopologyBuilder,
+) -> None:
+    """Reliability = Π(1-ε_e): 0.01 error_rate → no violation; 0.02 → violation.
+
+    La SLA error_rate upper 0.05 equivale a reliability lower 0.95.
+    Con 4 archi:
+      (1-0.01)^4 ≈ 0.9606 > 0.95 → nessuna violazione → None
+      (1-0.02)^4 ≈ 0.9224 < 0.95 → violazione → dict
+    """
+    bad_topology = copy.deepcopy(config.load_topology())
+    bad_topology["compliance_sets"]["H_crit"]["sla"] = {
+        "error_rate": {"bound": "upper", "threshold": 0.05}
+    }
+    with patch.object(type(config), "load_topology", return_value=bad_topology):
+        ag = AlertGenerator(config, topology_builder)
+
+    _H_CRIT_ERR_KEYS = [
+        "edge:e1:error_rate",
+        "edge:e2:error_rate",
+        "edge:e4:error_rate",
+        "edge:e6:error_rate",
+    ]
+    causal_graph = _make_causal_graph_empty()
+    monitor = _make_monitor_nominal()
+
+    # 0.01 per arco: reliability ≈ 0.9606 > 0.95 → no violation
+    forecasts_ok = {k: _make_forecast_df([0.01] * _N_STEPS) for k in _H_CRIT_ERR_KEYS}
+    result = ag.generate("H_crit", forecasts_ok, causal_graph, monitor, _T0)
+    assert result is None, (
+        f"Atteso None (reliability ≈ 0.9606 > 0.95), ma ottenuto alert."
+    )
+
+    # 0.02 per arco: reliability ≈ 0.9224 < 0.95 → violation
+    forecasts_vio = {k: _make_forecast_df([0.02] * _N_STEPS) for k in _H_CRIT_ERR_KEYS}
+    result = ag.generate("H_crit", forecasts_vio, causal_graph, monitor, _T0)
+    assert isinstance(result, dict), (
+        "Atteso dict (reliability ≈ 0.9224 < 0.95 → violation), ottenuto None."
+    )
+
+
+def test_aggregation_capacity_min(
+    config: ConfigLoader,
+    topology_builder: TopologyBuilder,
+) -> None:
+    """Capacity = min(throughput per arco): min(50,30,80,20)=20 < SLA 25 → violation."""
+    bad_topology = copy.deepcopy(config.load_topology())
+    bad_topology["compliance_sets"]["H_crit"]["sla"] = {
+        "throughput_rps": {"bound": "lower", "threshold": 25.0}
+    }
+    with patch.object(type(config), "load_topology", return_value=bad_topology):
+        ag = AlertGenerator(config, topology_builder)
+
+    forecasts = {
+        "edge:e1:throughput_rps": _make_forecast_df([50.0] * _N_STEPS),
+        "edge:e2:throughput_rps": _make_forecast_df([30.0] * _N_STEPS),
+        "edge:e4:throughput_rps": _make_forecast_df([80.0] * _N_STEPS),
+        "edge:e6:throughput_rps": _make_forecast_df([20.0] * _N_STEPS),
+    }
+    causal_graph = _make_causal_graph_empty()
+    monitor = _make_monitor_nominal()
+
+    alert = ag.generate("H_crit", forecasts, causal_graph, monitor, _T0)
+    assert alert is not None
+    assert abs(alert["aggregated_forecast"][0] - 20.0) < 1e-9, (
+        f"Atteso aggregated_forecast[0]=20.0 (min dei 4 archi), "
+        f"ottenuto {alert['aggregated_forecast'][0]}"
+    )
+    assert alert["lead_time_steps"] == 1, (
+        f"Atteso lead_time_steps=1 (20 < 25 al step 1), "
+        f"ottenuto {alert['lead_time_steps']}"
+    )
