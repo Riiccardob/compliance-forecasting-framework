@@ -264,11 +264,11 @@ def test_infer_freq_us_guard_on_identical_timestamps(
         {"value": [1.0] * n},
         index=pd.Index(identical_ts, name="timestamp"),
     )
-    with patch.object(forecaster._logger, "warning") as mock_warn:
+    with patch("src.phase1.stat_forecaster.logger") as mock_logger:
         freq = forecaster._infer_freq_us(df)
 
     assert freq == 5_000_000, f"Atteso fallback 5_000_000 µs, ottenuto {freq}"
-    assert mock_warn.called, "_logger.warning non emesso per freq <= 0"
+    assert mock_logger.warning.called, "logger.warning non emesso per freq <= 0"
 
 
 def test_linear_predict_interval_monotone(
@@ -306,3 +306,25 @@ def test_routing_reflects_override(
     )
     routing = forecaster.get_model_routing()
     assert routing["node:nginx-web-server:cpu_percent"] == "arima"
+
+
+def test_fit_empty_train_after_nominal_filter_skips_gracefully(
+    config: ConfigLoader,
+) -> None:
+    """Se nominal_snapshots ha timestamp completamente diversi dai dati,
+    il training set diventa vuoto: la feature è esclusa silenziosamente
+    (con warning) e non compare nell'output di predict()."""
+    forecaster = StatForecaster(config)
+    timestamps = [_T0 + i * _STEP_US for i in range(_N)]
+    df = pd.DataFrame(
+        {"value": [5.0] * _N},
+        index=pd.Index(timestamps, name="timestamp"),
+    )
+    features = {"node:nginx-web-server:cpu_percent": df}
+    # Nominal snapshots con timestamp completamente diversi → intersezione vuota
+    nominal_snaps = [{"timestamp": 999_999} for _ in range(5)]
+    forecaster.fit(features, nominal_snapshots=nominal_snaps)
+    result = forecaster.predict()
+    assert "node:nginx-web-server:cpu_percent" not in result, (
+        "Feature con training set vuoto non deve comparire nell'output di predict()"
+    )

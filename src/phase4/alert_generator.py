@@ -60,6 +60,7 @@ class AlertGenerator:
         self._orange_min_days: float = float(ag["orange_min_days"])
 
         fc = pipeline["forecasting"]
+        self._horizon_steps: int = int(fc.get("horizon_steps", 12))
         if "step_duration_hours" in fc:
             self._step_duration_hours: float = float(fc["step_duration_hours"])
         else:
@@ -335,18 +336,27 @@ class AlertGenerator:
             return []
 
         n_steps = min(len(forecasts[k]) for k in relevant_keys)
+        if n_steps < self._horizon_steps:
+            self._logger.warning(
+                "[%s] Forecasts contengono %d step < horizon_steps=%d - "
+                "lead time stimato su orizzonte ridotto.",
+                compliance_set_name, n_steps, self._horizon_steps,
+            )
         result: list[float] = []
 
-        for i in range(n_steps):
+        for step in range(1, n_steps + 1):
             values: list[float] = []
             for key in relevant_keys:
                 df = forecasts[key]
-                yhat = float(df.iloc[i]["yhat"])
+                try:
+                    yhat = float(df.loc[step, "yhat"])
+                except KeyError:
+                    yhat = float(df.iloc[step - 1]["yhat"])
                 if np.isnan(yhat):
                     self._logger.warning(
                         "NaN in forecast '%s' step %d - "
                         "uso soglia SLA (%.4f) come fallback conservativo.",
-                        key, i + 1, sla_threshold,
+                        key, step, sla_threshold,
                     )
                     yhat = sla_threshold
                 values.append(yhat)

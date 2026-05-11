@@ -652,3 +652,88 @@ def test_aggregation_capacity_min(
         f"Atteso lead_time_steps=1 (20 < 25 al step 1), "
         f"ottenuto {alert['lead_time_steps']}"
     )
+
+
+#  Valori numerici (3) 
+
+def test_aggregated_forecast_reliability_value(
+    config: ConfigLoader,
+    topology_builder: TopologyBuilder,
+) -> None:
+    """Reliability aggregata: 4 archi × error_rate=0.02 → Π(1-0.02)^4 = 0.98^4 ≈ 0.9224."""
+    bad_topology = copy.deepcopy(config.load_topology())
+    bad_topology["compliance_sets"]["H_crit"]["sla"] = {
+        "error_rate": {"bound": "upper", "threshold": 0.05}
+    }
+    with patch.object(type(config), "load_topology", return_value=bad_topology):
+        ag = AlertGenerator(config, topology_builder)
+
+    _H_CRIT_ERR_KEYS = [
+        "edge:e1:error_rate",
+        "edge:e2:error_rate",
+        "edge:e4:error_rate",
+        "edge:e6:error_rate",
+    ]
+    forecasts = {k: _make_forecast_df([0.02] * _N_STEPS) for k in _H_CRIT_ERR_KEYS}
+    causal_graph = _make_causal_graph_empty()
+    monitor = _make_monitor_nominal()
+
+    alert = ag.generate("H_crit", forecasts, causal_graph, monitor, _T0)
+    assert alert is not None
+    expected = 0.98 ** 4  # ≈ 0.9224
+    assert abs(alert["aggregated_forecast"][0] - expected) < 1e-9, (
+        f"Atteso aggregated_forecast[0]≈{expected:.6f} (0.98^4), "
+        f"ottenuto {alert['aggregated_forecast'][0]:.9f}"
+    )
+
+
+def test_critical_arc_from_highest_intensity_edge(
+    alert_generator: AlertGenerator,
+    mock_monitor_nominal: dict[str, Any],
+) -> None:
+    """critical_arc = edge_id (es. 'e4') dell'arco con intensità massima nel CausalGraph."""
+    causal_graph = {
+        "compliance_set": "H_crit",
+        "edges": [
+            {
+                "source": "node:nginx-web-server:cpu_percent",
+                "target": "edge:e1:latency_ms",
+                "type": "linear", "intensity": 0.3,
+                "method": "granger", "lag": 1,
+            },
+            {
+                "source": "node:post-storage-service:cpu_percent",
+                "target": "edge:e4:latency_ms",
+                "type": "linear", "intensity": 0.7,
+                "method": "granger", "lag": 2,
+            },
+        ],
+        "cross_property_chains": [],
+    }
+    forecasts = _make_forecasts_h_crit(yhat_per_arc=30.0)
+    alert = alert_generator.generate(
+        "H_crit", forecasts, causal_graph, mock_monitor_nominal, _T0,
+    )
+    assert alert is not None
+    assert alert["critical_arc"] == "e4", (
+        f"Atteso critical_arc='e4' (edge_id dall'arco con intensità 0.7), "
+        f"ottenuto '{alert['critical_arc']}'"
+    )
+
+
+def test_lead_time_hours_value(
+    alert_generator: AlertGenerator,
+    mock_causal_graph_empty: dict[str, Any],
+    mock_monitor_nominal: dict[str, Any],
+) -> None:
+    """lead_time_hours = lead_time_steps × step_duration_hours: 1 step × 24h = 24.0h."""
+    forecasts = _make_forecasts_h_crit(yhat_per_arc=30.0)  # violazione al step 1
+    alert = alert_generator.generate(
+        "H_crit", forecasts, mock_causal_graph_empty, mock_monitor_nominal, _T0,
+    )
+    assert alert is not None
+    assert alert["lead_time_steps"] == 1
+    assert alert["lead_time_hours"] == 24.0, (
+        f"Atteso lead_time_hours=24.0 (1 step × 24h), "
+        f"ottenuto {alert['lead_time_hours']}"
+    )

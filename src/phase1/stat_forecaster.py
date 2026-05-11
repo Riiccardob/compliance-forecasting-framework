@@ -9,6 +9,8 @@ from sklearn.linear_model import LinearRegression, Ridge
 from src.utils.config_loader import ConfigLoader
 from src.utils.logging_setup import LoggingSetup
 
+logger = LoggingSetup.configure(__name__, "INFO")
+
 
 class StatForecaster:
     """Addestra e applica modelli di forecasting per ogni feature di FeatureSelector.
@@ -36,7 +38,6 @@ class StatForecaster:
             ConfigLoader già inizializzato.
         """
         self._params = config.load_pipeline_params()
-        self._logger = LoggingSetup.configure(__name__, "INFO")
 
         fc = self._params["forecasting"]
         self._horizon_steps: int = fc["horizon_steps"]
@@ -92,6 +93,13 @@ class StatForecaster:
             else:
                 train_df = df.dropna()
 
+            if len(train_df) == 0:
+                logger.warning(
+                    "Feature '%s': training set vuoto dopo filtraggio "
+                    "nominale - feature esclusa dal forecasting.", key
+                )
+                continue
+
             routing = self._route_model(key, metric_name, len(train_df), model_override)
             self._routing[key] = routing
             self._train_data[key] = train_df
@@ -106,7 +114,7 @@ class StatForecaster:
                 self._models[key] = self._fit_linear(key, train_df)
 
         self._is_fitted = True
-        self._logger.info(
+        logger.info(
             "StatForecaster addestrato: %d feature, routing=%s",
             len(features),
             self._routing,
@@ -193,7 +201,7 @@ class StatForecaster:
 
         if metric_name in self._nonlinear_metrics:
             if n_samples < self._input_window * 2:
-                self._logger.warning(
+                logger.warning(
                     "Serie '%s' ha %d campioni < input_window×2=%d. "
                     "Fallback da LSTM a Prophet.",
                     key, n_samples, self._input_window * 2,
@@ -261,9 +269,9 @@ class StatForecaster:
 
     def _fit_linear(self, key: str, df: pd.DataFrame) -> tuple[LinearRegression, float]:
         """Regressione lineare su indice temporale → valore. Baseline stazionario."""
-        X = df.index.values.reshape(-1, 1).astype(float)
-        y = df["value"].dropna().values.astype(float)
-        X = X[-len(y):]
+        mask = ~df["value"].isna()
+        X = df.index.values[mask].reshape(-1, 1).astype(float)
+        y = df["value"].values[mask].astype(float)
         model = LinearRegression().fit(X, y)
         residuals = y - model.predict(X)
         std = float(np.std(residuals)) if len(residuals) > 1 else 0.0
@@ -373,7 +381,7 @@ class StatForecaster:
         diffs = np.diff(df.index.values.astype(np.int64))
         freq = int(np.median(diffs))
         if freq <= 0:
-            self._logger.warning(
+            logger.warning(
                 "_infer_freq_us: frequenza stimata %d µs ≤ 0 "
                 "(timestamp identici o decrescenti) - fallback a 5 s.",
                 freq,

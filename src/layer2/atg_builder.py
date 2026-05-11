@@ -8,6 +8,9 @@ import pandas as pd
 from src.utils.config_loader import ConfigLoader
 from src.utils.logging_setup import LoggingSetup
 
+logger = LoggingSetup.configure(__name__, "INFO")
+
+
 class ATGBuilder:
     """Carica i tre CSV canonici e costruisce la sequenza di snapshot ATG.
 
@@ -48,7 +51,6 @@ class ATGBuilder:
         self._ground_truth_path = Path(ground_truth_path)
         self._node_metrics: list[str] = self._topology["node_metrics"]
         self._edge_metrics: list[str] = self._topology["edge_metrics"]
-        self._logger = LoggingSetup.configure(__name__, "INFO")
 
     def build(
         self,
@@ -80,7 +82,7 @@ class ATGBuilder:
 
         n_gt_dup = int(gt_df.duplicated(subset=["timestamp"]).sum())
         if n_gt_dup > 0:
-            self._logger.warning(
+            logger.warning(
                 "ground_truth contiene %d righe con timestamp duplicato "
                 "(esperimenti distinti con timestamp µs coincidenti). "
                 "Mantenuta la prima occorrenza per timestamp.",
@@ -92,7 +94,7 @@ class ATGBuilder:
             node_df.duplicated(subset=["timestamp", "node_id"]).sum()
         )
         if n_nm_dup > 0:
-            self._logger.warning(
+            logger.warning(
                 "node_metrics contiene %d righe duplicate su "
                 "(timestamp, node_id) - esperimenti distinti con "
                 "timestamp µs coincidenti. Mantenuta la prima "
@@ -107,7 +109,7 @@ class ATGBuilder:
             edge_df.duplicated(subset=["timestamp", "edge_id"]).sum()
         )
         if n_em_dup > 0:
-            self._logger.warning(
+            logger.warning(
                 "edge_metrics contiene %d righe duplicate su "
                 "(timestamp, edge_id) - esperimenti distinti con "
                 "timestamp µs coincidenti. Mantenuta la prima "
@@ -127,22 +129,22 @@ class ATGBuilder:
         extra_edges = csv_edge_ids - expected_edge_ids
         missing_edges = expected_edge_ids - csv_edge_ids
         if extra_nodes:
-            self._logger.warning(
+            logger.warning(
                 "node_metrics contiene %d node_id non presenti in topology: %s",
                 len(extra_nodes), sorted(extra_nodes),
             )
         if missing_nodes:
-            self._logger.warning(
+            logger.warning(
                 "node_metrics manca di %d node_id attesi da topology: %s",
                 len(missing_nodes), sorted(missing_nodes),
             )
         if extra_edges:
-            self._logger.warning(
+            logger.warning(
                 "edge_metrics contiene %d edge_id non presenti in topology: %s",
                 len(extra_edges), sorted(extra_edges),
             )
         if missing_edges:
-            self._logger.warning(
+            logger.warning(
                 "edge_metrics manca di %d edge_id attesi da topology: %s",
                 len(missing_edges), sorted(missing_edges),
             )
@@ -152,7 +154,7 @@ class ATGBuilder:
         gt_ts = set(gt_df["timestamp"].unique())
 
         if len(node_ts) != len(edge_ts) or len(node_ts) != len(gt_ts):
-            self._logger.warning(
+            logger.warning(
                 "Timestamp non allineati: node=%d, edge=%d, gt=%d - "
                 "verranno usati solo i %d timestamp comuni.",
                 len(node_ts),
@@ -161,12 +163,23 @@ class ATGBuilder:
                 len(node_ts & edge_ts & gt_ts),
             )
 
+        missing_metric_cols = [
+            c for c in self._node_metrics if c not in node_df.columns
+        ]
+        if missing_metric_cols:
+            logger.warning(
+                "Colonne node_metrics dichiarate in topology.yaml "
+                "ma assenti da node_metrics.csv: %s. "
+                "Gli snapshot conterranno NaN su queste dimensioni.",
+                missing_metric_cols,
+            )
+
         # NaN check su feature di nodo
         available_cols = [c for c in self._node_metrics if c in node_df.columns]
         nan_counts = node_df[available_cols].isna().sum()
         total_nan = int(nan_counts.sum())
         if total_nan > 0:
-            self._logger.warning(
+            logger.warning(
                 "NaN residui in node_metrics (%d celle): %s",
                 total_nan,
                 nan_counts[nan_counts > 0].to_dict(),
@@ -180,7 +193,7 @@ class ATGBuilder:
                 "Verificare la coerenza dei file di input."
             )
 
-        self._logger.info(
+        logger.info(
             "Build ATG: %d snapshot allineati (node_ts=%d, edge_ts=%d, gt_ts=%d)",
             len(common_ts), len(node_ts), len(edge_ts), len(gt_ts),
         )
@@ -200,7 +213,7 @@ class ATGBuilder:
 
             label = int(gt_row["label_trace"])
             if label not in (0, 1):
-                self._logger.warning(
+                logger.warning(
                     "Label non riconosciuta %r al timestamp %d - "
                     "lo snapshot sarà né nominale né anomalo.",
                     label, ts,
@@ -218,7 +231,7 @@ class ATGBuilder:
                         else []
                     )
                     if not isinstance(parsed, list):
-                        self._logger.warning(
+                        logger.warning(
                             "anomaly_node_ids al ts=%d non è una lista "
                             "(%s) - normalizzato a [].",
                             ts, type(parsed).__name__,
@@ -227,7 +240,7 @@ class ATGBuilder:
                     else:
                         anomaly_node_ids = parsed
                 except (json.JSONDecodeError, TypeError, ValueError):
-                    self._logger.warning(
+                    logger.warning(
                         "anomaly_node_ids malformato al ts=%d: %s",
                         ts, anomaly_node_ids_raw,
                     )
