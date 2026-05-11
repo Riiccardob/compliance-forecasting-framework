@@ -407,9 +407,7 @@ def test_missing_interf_metric_produces_warning_not_error(
     """Se throughput_rps è assente da edge_metrics, FeatureSelector emette
     warning durante __init__ (non ValueError) e M_interf è vuoto."""
     import copy
-    import logging
-    from unittest.mock import patch, MagicMock
-    from src.utils.logging_setup import LoggingSetup
+    from unittest.mock import patch
 
     topo = config.load_topology()
     bad_topo = copy.deepcopy(topo)
@@ -417,8 +415,7 @@ def test_missing_interf_metric_produces_warning_not_error(
         m for m in bad_topo["edge_metrics"] if m != "throughput_rps"
     ]
     with patch.object(type(config), "load_topology", return_value=bad_topo):
-        mock_logger = MagicMock(spec=logging.Logger)
-        with patch.object(LoggingSetup, "configure", return_value=mock_logger):
+        with patch("src.layer3.feature_selector.logger") as mock_logger:
             fs = FeatureSelector(config, topology_builder)
     assert mock_logger.warning.called
     warning_text = " ".join(
@@ -453,3 +450,32 @@ def test_node_nan_value_preserved_as_float_nan(
         "Manca il cast float() in _build_node_series."
     )
     assert abs(df["value"].iloc[0] - 5.0) < 1e-9
+
+
+def test_edge_metric_key_absent_produces_float_nan(
+    feature_selector: FeatureSelector,
+) -> None:
+    """Se uno snapshot ha l'arco ma manca la chiave della metrica,
+    _build_edge_series produce float('nan') con dtype=float64."""
+    import math
+
+    snap = {
+        "timestamp": _T0,
+        "nodes": {
+            n: {"cpu_percent": 5.0, "mem_mb": 512.0,
+                "net_rx_mb": 1.0, "net_tx_mb": 0.5}
+            for n in _NODES
+        },
+        "edges": {
+            "e1": {"source": "nginx-web-server", "target": "nginx-thrift",
+                   "latency_ms": 10.0, "error_rate": 0.0}
+            # throughput_rps assente intenzionalmente
+        },
+        "label": 0, "anomaly_type": None, "anomaly_node_ids": [],
+    }
+    result = feature_selector.select_features("H_crit", [snap])
+    key = "edge:e1:throughput_rps"
+    assert key in result
+    df = result[key]
+    assert df["value"].dtype == float
+    assert math.isnan(df.loc[_T0, "value"])

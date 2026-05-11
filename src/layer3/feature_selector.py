@@ -5,6 +5,8 @@ from src.layer1.topology_builder import TopologyBuilder
 from src.utils.config_loader import ConfigLoader
 from src.utils.logging_setup import LoggingSetup
 
+logger = LoggingSetup.configure(__name__, "INFO")
+
 
 class FeatureSelector:
     """Implementa il Mapping M della Fase I: estrae M_direct ∪ M_interf.
@@ -38,13 +40,12 @@ class FeatureSelector:
             TopologyBuilder già inizializzato e cachato.
         """
         self._tb = topology_builder
-        self._logger = LoggingSetup.configure(__name__, "INFO")
 
         topology = config.load_topology()
         self._node_metrics: list[str] = topology["node_metrics"]
         self._edge_metrics: list[str] = topology["edge_metrics"]
         if self._INTERF_METRIC not in self._edge_metrics:
-            self._logger.warning(
+            logger.warning(
                 "La metrica di interferenza '%s' non è in "
                 "edge_metrics di topology.yaml. "
                 "M_interf sarà sempre vuoto per tutti i compliance set.",
@@ -134,7 +135,7 @@ class FeatureSelector:
                 edge_id, self._INTERF_METRIC, snapshots
             )
 
-        self._logger.debug(
+        logger.debug(
             "[%s] select_features: %d serie estratte (%d node, %d edge, %d interf)",
             compliance_set_name,
             len(result),
@@ -222,7 +223,7 @@ class FeatureSelector:
             ts: int = snap["timestamp"]
             node_data = snap["nodes"].get(node_id)
             if node_data is None:
-                self._logger.warning(
+                logger.warning(
                     "Nodo '%s' assente nello snapshot ts=%d", node_id, ts
                 )
                 val = float("nan")
@@ -246,7 +247,7 @@ class FeatureSelector:
             ts: int = snap["timestamp"]
             edge_data = snap["edges"].get(edge_id)
             if edge_data is None:
-                self._logger.warning(
+                logger.warning(
                     "Arco '%s' assente nello snapshot ts=%d", edge_id, ts
                 )
                 val = float("nan")

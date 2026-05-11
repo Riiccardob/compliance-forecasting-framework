@@ -8,6 +8,9 @@ import pandas as pd
 from src.utils.config_loader import ConfigLoader
 from src.utils.logging_setup import LoggingSetup
 
+logger = LoggingSetup.configure(__name__, "INFO")
+
+
 class DSBConverter:
     """Converte i CSV raw GAMMA (graph_2) nei tre CSV interni del framework.
 
@@ -37,7 +40,6 @@ class DSBConverter:
             Istanza già inizializzata di ``ConfigLoader``.
         """
         self._config = config
-        self._logger = LoggingSetup.configure(__name__, "INFO")
 
         topology = config.load_topology()
         self._topology: dict = topology
@@ -95,7 +97,7 @@ class DSBConverter:
         """
         files = sorted(raw_dir.rglob(f"*{self._graph_suffix}"))
         if not files:
-            self._logger.warning("Nessun file *%s trovato in: %s", self._graph_suffix, raw_dir)
+            logger.warning("Nessun file *%s trovato in: %s", self._graph_suffix, raw_dir)
             return
 
         node_frames: list[pd.DataFrame] = []
@@ -103,7 +105,7 @@ class DSBConverter:
         gt_frames: list[pd.DataFrame] = []
 
         for fp in files:
-            self._logger.info("Elaborazione: %s", fp.name)
+            logger.info("Elaborazione: %s", fp.name)
             n_df, e_df, g_df = self.convert_file(fp)
             node_frames.append(n_df)
             edge_frames.append(e_df)
@@ -120,7 +122,7 @@ class DSBConverter:
         pd.concat(edge_frames, ignore_index=True).to_csv(edge_out, index=False)
         pd.concat(gt_frames, ignore_index=True).to_csv(gt_out, index=False)
 
-        self._logger.info(
+        logger.info(
             "Conversione completata: %d file → %s, %s, %s",
             len(files),
             node_out,
@@ -145,7 +147,7 @@ class DSBConverter:
         """
         metadata = self._parse_filename(filepath.name)
         df = pd.read_csv(filepath)
-        self._logger.debug(
+        logger.debug(
             "File %s: %d righe, %d colonne",
             filepath.name,
             len(df),
@@ -183,7 +185,7 @@ class DSBConverter:
         """
         m = self._filename_pattern.match(filename)
         if m is None:
-            self._logger.warning(
+            logger.warning(
                 "Filename '%s' non rispetta il pattern atteso — "
                 "le metriche verranno processate ma i metadati "
                 "(fault_type, date, rps, replica_idx) saranno None.",
@@ -300,7 +302,7 @@ class DSBConverter:
             tx_col = f"{n}_container_network_transmit_bytes_total"
 
             if cpu_col not in agg.columns:
-                self._logger.warning(
+                logger.warning(
                     "[%s] Colonna assente: %s - nodo %s saltato",
                     source_file,
                     cpu_col,
@@ -342,7 +344,7 @@ class DSBConverter:
                     }
                 )
 
-        self._logger.debug(
+        logger.debug(
             "[%s] node_metrics: %d record", source_file, len(records)
         )
         return pd.DataFrame(records)
@@ -388,7 +390,7 @@ class DSBConverter:
             lat_col = f"{dest_idx}_latency"
 
             if lat_col not in agg.columns:
-                self._logger.warning(
+                logger.warning(
                     "[%s] Colonna latenza assente: %s - arco %s saltato",
                     source_file,
                     lat_col,
@@ -399,7 +401,7 @@ class DSBConverter:
             latency_ms: pd.Series = agg[lat_col] / 1000.0  # µs → ms
 
             if latency_ms.isna().all():
-                self._logger.warning(
+                logger.warning(
                     "[%s] Tutti i valori di latency per arco '%s' sono NaN — "
                     "latency_ms sarà NaN per tutte le finestre.",
                     source_file, edge["id"],
@@ -424,7 +426,7 @@ class DSBConverter:
                     }
                 )
 
-        self._logger.debug(
+        logger.debug(
             "[%s] edge_metrics: %d record", source_file, len(records)
         )
         return pd.DataFrame(records)

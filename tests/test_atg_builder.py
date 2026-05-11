@@ -416,6 +416,7 @@ def test_snapshot_edge_value_exact(snapshots: list[dict]) -> None:
     edge = t0_snap["edges"]["e1"]
     assert abs(edge["latency_ms"] - 10.0) < 1e-9
     assert abs(edge["throughput_rps"] - 5.0) < 1e-9
+    assert abs(edge["error_rate"] - 0.0) < 1e-9
 
 
 def test_get_node_feature_matrix_unknown_node_returns_empty(
@@ -526,23 +527,24 @@ def test_anomaly_node_ids_dict_json_produces_empty_list(
 
 # ── Test: V/E consistency check ───────────────────────────────────────────────
 
-def test_build_warns_on_isolated_node(
+def test_build_warns_on_missing_csv_node(
     atg: ATGBuilder,
     node_df: pd.DataFrame,
     edge_df: pd.DataFrame,
     gt_df: pd.DataFrame,
 ) -> None:
-    """build() emette warning se un nodo di topology.yaml è assente
-    da node_metrics.csv (nodo non monitorato)."""
+    """build() emette warning quando topology.yaml dichiara un nodo assente
+    da node_metrics.csv (controllo V/E consistency). Il nodo non contribuisce
+    agli snapshot con valori numerici."""
     import copy
     from unittest.mock import patch
 
     bad_topology = copy.deepcopy(atg._topology)
     bad_topology["nodes"].append({"id": "orphan-service"})
     with patch.object(atg, "_topology", bad_topology):
-        with patch.object(atg._logger, "warning") as mock_warn:
+        with patch("src.layer2.atg_builder.logger") as mock_logger:
             atg.build(node_df, edge_df, gt_df)
-    warning_msgs = " ".join(str(c) for c in mock_warn.call_args_list)
+    warning_msgs = " ".join(str(c) for c in mock_logger.warning.call_args_list)
     assert "orphan-service" in warning_msgs
 
 
@@ -565,9 +567,9 @@ def test_extra_node_in_csv_warns(
         "source_file": "mock.csv",
     } for ts in [_T0, _T1, _T2]])
     node_extra = pd.concat([node_df, extra_rows], ignore_index=True)
-    with patch.object(atg._logger, "warning") as mock_warn:
+    with patch("src.layer2.atg_builder.logger") as mock_logger:
         atg.build(node_extra, edge_df, gt_df)
-    call_strings = " ".join(str(c) for c in mock_warn.call_args_list)
+    call_strings = " ".join(str(c) for c in mock_logger.warning.call_args_list)
     assert "unknown-service" in call_strings
 
 
@@ -580,9 +582,9 @@ def test_missing_node_in_csv_warns(
     """Un node_id atteso da topology assente in node_metrics emette warning."""
     from unittest.mock import patch
     node_missing = node_df[node_df["node_id"] != "nginx-web-server"].copy()
-    with patch.object(atg._logger, "warning") as mock_warn:
+    with patch("src.layer2.atg_builder.logger") as mock_logger:
         atg.build(node_missing, edge_df, gt_df)
-    call_strings = " ".join(str(c) for c in mock_warn.call_args_list)
+    call_strings = " ".join(str(c) for c in mock_logger.warning.call_args_list)
     assert "nginx-web-server" in call_strings
 
 
@@ -606,13 +608,13 @@ def test_label_out_of_range_included_but_not_classified(
         "anomaly_node_ids": "[]",
         "source_file": "mock.csv",
     }])
-    with patch.object(atg._logger, "warning") as mock_warn:
+    with patch("src.layer2.atg_builder.logger") as mock_logger:
         snaps = atg.build(nm, em, gt_invalid)
     assert len(snaps) == 1
     assert snaps[0]["label"] == 2
     assert snaps[0]["anomaly_type"] is None
     assert snaps[0]["anomaly_node_ids"] == []
-    mock_warn.assert_called()
+    mock_logger.warning.assert_called()
 
 
 def test_extra_edge_in_csv_warns(
@@ -630,9 +632,9 @@ def test_extra_edge_in_csv_warns(
     ].copy()
     phantom_rows["edge_id"] = "e99"
     edge_extra = pd.concat([edge_df, phantom_rows], ignore_index=True)
-    with patch.object(atg._logger, "warning") as mock_warn:
+    with patch("src.layer2.atg_builder.logger") as mock_logger:
         atg.build(node_df, edge_extra, gt_df)
-    warning_msgs = " ".join(str(c) for c in mock_warn.call_args_list)
+    warning_msgs = " ".join(str(c) for c in mock_logger.warning.call_args_list)
     assert "e99" in warning_msgs
 
 
@@ -647,9 +649,9 @@ def test_missing_edge_in_csv_warns(
     from unittest.mock import patch
     # Rimuovi tutti i record di e1 dal CSV degli archi
     edge_missing = edge_df[edge_df["edge_id"] != "e1"].copy()
-    with patch.object(atg._logger, "warning") as mock_warn:
+    with patch("src.layer2.atg_builder.logger") as mock_logger:
         atg.build(node_df, edge_missing, gt_df)
     warning_msgs = " ".join(
-        str(c) for c in mock_warn.call_args_list
+        str(c) for c in mock_logger.warning.call_args_list
     )
     assert "e1" in warning_msgs

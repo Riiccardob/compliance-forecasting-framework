@@ -12,6 +12,8 @@ from src.layer1.topology_builder import TopologyBuilder
 from src.utils.config_loader import ConfigLoader
 from src.utils.logging_setup import LoggingSetup
 
+logger = LoggingSetup.configure(__name__, "INFO")
+
 
 class CausalAnalyzer:
     """Esegue l'analisi causale su M_Φi tramite pipeline Pearson → Granger → TE.
@@ -47,7 +49,6 @@ class CausalAnalyzer:
             Se manca una chiave obbligatoria in
             ``pipeline_params["causal_analysis"]``.
         """
-        self._logger = LoggingSetup.configure(__name__, "INFO")
         self._tb = topology_builder
         self._topology: dict[str, Any] = config.load_topology()
 
@@ -84,7 +85,7 @@ class CausalAnalyzer:
             for e in self._topology["edges"]
         }
 
-        self._logger.info(
+        logger.info(
             "CausalAnalyzer inizializzato: pearson_threshold=%.2f, "
             "granger_max_lag=%d, granger_significance=%.3f, "
             "te_threshold=%.2f",
@@ -131,7 +132,7 @@ class CausalAnalyzer:
         candidates = self._build_candidate_pairs(
             compliance_set_name, list(features.keys())
         )
-        self._logger.info(
+        logger.info(
             "[%s] Coppie candidate: %d",
             compliance_set_name,
             len(candidates),
@@ -147,7 +148,7 @@ class CausalAnalyzer:
                     features[source_key], features[target_key]
                 )
                 if len(s1) < 3:
-                    self._logger.warning(
+                    logger.warning(
                         "Coppia (%s, %s) saltata: intersezione con meno "
                         "di 3 campioni validi.",
                         source_key,
@@ -168,7 +169,7 @@ class CausalAnalyzer:
                     edges.append(edge)
 
             except Exception as exc:
-                self._logger.warning(
+                logger.warning(
                     "Coppia (%s, %s) saltata per errore imprevisto: %s",
                     source_key,
                     target_key,
@@ -177,7 +178,7 @@ class CausalAnalyzer:
 
         cross_chains = self._check_cross_property(compliance_set_name, features)
 
-        self._logger.info(
+        logger.info(
             "[%s] Link causali trovati: %d (cross-property chains: %d)",
             compliance_set_name,
             len(edges),
@@ -211,9 +212,9 @@ class CausalAnalyzer:
             ``category ∈ {"intra", "inter", "node_arc"}``.
         """
         if compliance_set_name not in self._topology["compliance_sets"]:
-           raise KeyError(
-               f"Compliance set non trovato: '{compliance_set_name}'"
-           )
+            raise KeyError(
+                f"Compliance set non trovato: '{compliance_set_name}'"
+            )
         return self._build_candidate_pairs(
             compliance_set_name, list(features.keys())
         )
@@ -227,6 +228,7 @@ class CausalAnalyzer:
     ) -> tuple[pd.Series, pd.Series]:
         """Allinea due feature DataFrame sull'intersezione dei timestamp."""
         common = df1.index.intersection(df2.index)
+        common = common.sort_values()
         both = pd.DataFrame(
             {"s1": df1.loc[common, "value"], "s2": df2.loc[common, "value"]}
         ).dropna()
@@ -240,7 +242,7 @@ class CausalAnalyzer:
         Ritorna False con warning se l'intersezione ha meno di 3 punti.
         """
         if len(s1) < 3:
-            self._logger.warning(
+            logger.warning(
                 "Pearson screening: meno di 3 campioni comuni — coppia scartata."
             )
             return False
@@ -248,7 +250,7 @@ class CausalAnalyzer:
             r, _ = pearsonr(s1.values, s2.values)
             return bool(abs(r) > threshold)
         except Exception as exc:
-            self._logger.warning("Pearson screening fallito: %s", exc)
+            logger.warning("Pearson screening fallito: %s", exc)
             return False
 
     def _granger_test(
@@ -276,7 +278,7 @@ class CausalAnalyzer:
         insufficienti.
         """
         if len(cause) < max_lag + 2:
-            self._logger.warning(
+            logger.warning(
                 "Granger test: %d campioni < max_lag+2=%d — coppia saltata.",
                 len(cause),
                 max_lag + 2,
@@ -298,7 +300,7 @@ class CausalAnalyzer:
             with contextlib.redirect_stdout(buf):
                 results = grangercausalitytests(data, maxlag=max_lag)
         except Exception as exc:
-            self._logger.warning("grangercausalitytests fallito: %s", exc)
+            logger.warning("grangercausalitytests fallito: %s", exc)
             return None
 
         best_lag: int = 1
@@ -322,7 +324,7 @@ class CausalAnalyzer:
             delta_r2 = max(0.0, r2_full - r2_restr)
         except (IndexError, AttributeError, TypeError):
             delta_r2 = 0.0
-            self._logger.warning(
+            logger.warning(
                 "Impossibile estrarre ΔR² per lag=%d — intensità impostata a 0.0.",
                 best_lag,
             )
@@ -555,7 +557,7 @@ class CausalAnalyzer:
                                     "confirmed": (r1 is not None and r2 is not None),
                                 })
                             except Exception as exc:
-                                self._logger.warning(
+                                logger.warning(
                                     "Cross-property chain skipped: %s", exc
                                 )
 
@@ -639,17 +641,17 @@ class CausalAnalyzer:
             cause_vals = np.diff(cause_vals)
             n_diff += 1
         if n_diff == 2:
-           try:
-               _, p_final, *_ = adfuller(effect_vals, autolag="AIC")
-               if p_final > 0.05:
-                   self._logger.warning(
-                       "Serie ancora non stazionaria (p=%.3f) dopo "
-                       "2 differenziazioni — si procede comunque.",
-                       p_final,
-                   )
-           except Exception:
-               self._logger.warning(
-                   "Impossibile verificare stazionarietà dopo "
-                   "2 differenziazioni — si procede comunque."
-               )
+            try:
+                _, p_final, *_ = adfuller(effect_vals, autolag="AIC")
+                if p_final > 0.05:
+                    logger.warning(
+                        "Serie ancora non stazionaria (p=%.3f) dopo "
+                        "2 differenziazioni — si procede comunque.",
+                        p_final,
+                    )
+            except Exception:
+                logger.warning(
+                    "Impossibile verificare stazionarietà dopo "
+                    "2 differenziazioni — si procede comunque."
+                )
         return effect_vals, cause_vals, n_diff
