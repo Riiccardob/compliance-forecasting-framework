@@ -35,6 +35,7 @@ causal_analysis:
   granger_significance: 0.05
   granger_max_lag: 5
   transfer_entropy_threshold: 0.1
+  n_bins: 10   # bin per discretizzazione Transfer Entropy
 
 anomaly_detection:
   zscore_threshold: 3.0
