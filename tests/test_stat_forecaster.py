@@ -308,6 +308,20 @@ def test_routing_reflects_override(
     assert routing["node:nginx-web-server:cpu_percent"] == "arima"
 
 
+def test_model_override_invalid_model_name_raises(
+    forecaster: StatForecaster,
+) -> None:
+    """model_override con nome modello non valido solleva ValueError
+    con messaggio descrittivo invece di fallire silenziosamente con
+    il modello Linear."""
+    features = {"node:nginx-web-server:cpu_percent": _make_series(10)}
+    with pytest.raises(ValueError, match="non valido"):
+        forecaster.fit(
+            features,
+            model_override={"node:nginx-web-server:cpu_percent": "garch"},
+        )
+
+
 def test_fit_empty_train_after_nominal_filter_skips_gracefully(
     config: ConfigLoader,
 ) -> None:

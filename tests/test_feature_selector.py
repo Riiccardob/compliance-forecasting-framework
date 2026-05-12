@@ -452,6 +452,66 @@ def test_node_nan_value_preserved_as_float_nan(
     assert abs(df["value"].iloc[0] - 5.0) < 1e-9
 
 
+def test_interf_key_order_matches_get_feature_names(
+    feature_selector: FeatureSelector,
+    mock_snapshots: list[dict],
+) -> None:
+    """Le chiavi interf: di select_features coincidono in ordine con
+    get_feature_names(...)["interference"]. Estende
+    test_select_features_key_order_deterministic alle chiavi interf:."""
+    result = feature_selector.select_features("H_cache", mock_snapshots)
+    names = feature_selector.get_feature_names("H_cache")
+
+    interf_keys_from_result = [
+        k for k in result if k.startswith("interf:")
+    ]
+    interf_keys_from_names = names["interference"]
+
+    assert interf_keys_from_result == interf_keys_from_names, (
+        f"Ordine interf: divergente tra select_features e get_feature_names.\n"
+        f"select_features: {interf_keys_from_result}\n"
+        f"get_feature_names: {interf_keys_from_names}"
+    )
+
+
+def test_node_partial_presence_produces_float_nan(
+    feature_selector: FeatureSelector,
+    mock_snapshots: list[dict],
+) -> None:
+    """Nodo presente in alcuni snapshot e assente in altri: la serie
+    prodotta ha dtype=float64 con valori validi e float('nan') misti."""
+    import math
+    # Costruisci snapshot in cui nginx-web-server è assente solo al primo ts
+    snap_missing = {
+        "timestamp": mock_snapshots[0]["timestamp"],
+        "nodes": {
+            n: mock_snapshots[0]["nodes"][n]
+            for n in mock_snapshots[0]["nodes"]
+            if n != "nginx-web-server"
+        },
+        "edges": mock_snapshots[0]["edges"],
+        "label": 0,
+        "anomaly_type": None,
+        "anomaly_node_ids": [],
+    }
+    mixed_snapshots = [snap_missing] + mock_snapshots[1:]
+    result = feature_selector.select_features("H_crit", mixed_snapshots)
+    key = "node:nginx-web-server:cpu_percent"
+    assert key in result
+    df = result[key]
+    assert df["value"].dtype == float, (
+        f"dtype atteso float64, ottenuto {df['value'].dtype}"
+    )
+    # Prima riga: NaN (nodo assente)
+    assert math.isnan(df["value"].iloc[0]), (
+        "Primo valore atteso NaN (nodo assente nel primo snapshot)"
+    )
+    # Righe successive: valore numerico valido
+    assert not math.isnan(df["value"].iloc[1]), (
+        "Secondo valore atteso non-NaN (nodo presente dal secondo snapshot)"
+    )
+
+
 def test_edge_metric_key_absent_produces_float_nan(
     feature_selector: FeatureSelector,
 ) -> None:

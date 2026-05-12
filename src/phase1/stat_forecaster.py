@@ -29,6 +29,8 @@ class StatForecaster:
     a Prophet con un warning.
     """
 
+    _VALID_MODELS: frozenset[str] = frozenset({"prophet", "lstm", "arima", "linear"})
+
     def __init__(self, config: ConfigLoader) -> None:
         """Legge i parametri di forecasting da pipeline_params.yaml.
 
@@ -101,6 +103,11 @@ class StatForecaster:
                 continue
 
             routing = self._route_model(key, metric_name, len(train_df), model_override)
+            if routing not in StatForecaster._VALID_MODELS:
+                raise ValueError(
+                    f"model_override per '{key}': modello '{routing}' "
+                    f"non valido. Valori ammessi: {sorted(StatForecaster._VALID_MODELS)}."
+                )
             self._routing[key] = routing
             self._train_data[key] = train_df
 

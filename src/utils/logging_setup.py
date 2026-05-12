@@ -23,7 +23,9 @@ class LoggingSetup:
             Nome del logger (tipicamente __name__ del modulo chiamante).
         level:
             Livello di log come stringa (es. "INFO", "DEBUG", "WARNING").
-            Ignorato se il logger è già configurato.
+            Applicato solo alla prima chiamata; ignorato se il logger è già
+            configurato (il livello non viene aggiornato alle chiamate
+            successive).
 
         Returns
         -------

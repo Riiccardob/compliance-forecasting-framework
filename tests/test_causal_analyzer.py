@@ -182,7 +182,6 @@ def test_granger_returns_none_on_independent_series(
     analyzer: CausalAnalyzer,
 ) -> None:
     """Due serie di rumore bianco indipendente: Granger restituisce None."""
-    rng = np.random.default_rng(0)
     n = 100
     cause_s = _make_series(np.random.default_rng(0).normal(0, 1, n))
     effect_s = _make_series(np.random.default_rng(1).normal(0, 1, n))
@@ -379,3 +378,56 @@ def test_granger_intensity_positive_on_causal_series(
         f"ΔR² atteso > 0.0, ottenuto {result['intensity']:.6f}. "
         "Possibile accesso sbagliato alla struttura OLS di statsmodels."
     )
+
+
+#  Test: cross-property e deduplicazione (3) 
+
+def test_h_crit_has_no_cross_property_chains(
+    analyzer: CausalAnalyzer,
+    mock_features_h_crit: dict[str, pd.DataFrame],
+) -> None:
+    """H_crit ha M_interf = ∅: cross_property_chains deve essere vuoto.
+    Senza feature interf: nell'input, _check_cross_property non produce
+    catene indipendentemente dalla topologia."""
+    result = analyzer.analyze("H_crit", mock_features_h_crit)
+    assert result["cross_property_chains"] == [], (
+        f"Atteso [] per H_crit (M_interf=∅), "
+        f"ottenuto {result['cross_property_chains']}"
+    )
+
+
+def test_frozenset_deduplication_no_reverse_pair(
+    analyzer: CausalAnalyzer,
+    mock_features_h_crit: dict[str, pd.DataFrame],
+) -> None:
+    """get_causal_pairs non produce sia (A,B) che (B,A): la deduplica via
+    frozenset garantisce che ogni coppia non ordinata compaia una sola volta."""
+    pairs = analyzer.get_causal_pairs("H_crit", mock_features_h_crit)
+    seen: set[frozenset] = set()
+    for source, target, _ in pairs:
+        pair_set = frozenset({source, target})
+        assert pair_set not in seen, (
+            f"Coppia duplicata: ({source!r}, {target!r}) e il suo inverso "
+            f"sono entrambi presenti nelle coppie candidate."
+        )
+        seen.add(pair_set)
+
+
+def test_cross_property_chain_confirmed_false_on_independent_series(
+    analyzer: CausalAnalyzer,
+    mock_features_h_cache: dict[str, pd.DataFrame],
+) -> None:
+    """Su serie indipendenti (seed fisso), le catene cross-property di H_cache
+    sono prodotte (la topologia le supporta via interf:e2 e nodi condivisi)
+    ma confirmed=False perché Granger non rileva causalità su dati non correlati."""
+    result = analyzer.analyze("H_cache", mock_features_h_cache)
+    chains = result["cross_property_chains"]
+    assert len(chains) >= 1, (
+        "H_cache con interf:e2 e nodi condivisi deve produrre "
+        "almeno una catena cross-property"
+    )
+    for chain in chains:
+        assert chain["confirmed"] is False, (
+            f"Catena {chain['chain']} è confirmed=True su serie indipendenti - "
+            "possibile falso positivo Granger (seed=10 dovrebbe prevenirlo)."
+        )

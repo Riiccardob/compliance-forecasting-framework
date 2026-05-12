@@ -373,3 +373,23 @@ def test_critical_path_unknown_topology_type_warns(
     mock_logger.warning.assert_called()
     warning_msg = str(mock_logger.warning.call_args_list)
     assert "hierarchical" in warning_msg or "non riconosciuto" in warning_msg
+
+
+def test_get_shared_nodes_invalid_second_arg_raises(
+    builder: TopologyBuilder,
+) -> None:
+    """get_shared_nodes("H_crit", "H_invalid") solleva KeyError
+    con messaggio descrittivo anche quando solo il secondo argomento
+    è invalido."""
+    with pytest.raises(KeyError, match="Compliance set non trovato"):
+        builder.get_shared_nodes("H_crit", "H_invalid")
+
+
+def test_get_interference_edges_invalid_second_arg_raises(
+    builder: TopologyBuilder,
+) -> None:
+    """get_interference_edges("H_crit", "H_invalid") solleva KeyError
+    con messaggio descrittivo anche quando solo il secondo argomento
+    è invalido."""
+    with pytest.raises(KeyError, match="Compliance set non trovato"):
+        builder.get_interference_edges("H_crit", "H_invalid")

@@ -98,6 +98,22 @@ class TopologyBuilder:
             g.add_edge(u, v, id=edge["id"], hyperedges=hyperedges)
             logger.debug("Arco %s → %s annotato con: %s", u, v, hyperedges)
 
+            if not hyperedges:
+                # Entrambi gli endpoint esistono ma appartengono a CS distinti
+                # e non condivisi: l'arco ha hyperedges=[] ed è invisibile
+                # a A(H_Φi) e M_interf. Nessun modulo del framework lo monitorerà.
+                u_in_any_cs = any(u in ns for ns in self._cs_node_sets.values())
+                v_in_any_cs = any(v in ns for ns in self._cs_node_sets.values())
+                if u_in_any_cs and v_in_any_cs:
+                    logger.warning(
+                        "Arco '%s' (%s → %s): entrambi gli endpoint "
+                        "appartengono a compliance set distinti non condivisi. "
+                        "hyperedges=[] - questo arco è strutturalmente "
+                        "invisibile al framework (non in A(H_Φi) né in "
+                        "M_interf per nessun compliance set).",
+                        edge["id"], u, v,
+                    )
+
         all_node_ids: set[str] = {n["id"] for n in self._topology["nodes"]}
         covered: set[str] = set()
         for cs in self._topology["compliance_sets"].values():

@@ -423,19 +423,27 @@ def test_get_node_feature_matrix_unknown_node_returns_empty(
     builder: ATGBuilder, snapshots: list[dict]
 ) -> None:
     """get_node_feature_matrix su node_id inesistente restituisce
-    DataFrame vuoto (nessun KeyError)."""
-    df = builder.get_node_feature_matrix(snapshots, "nonexistent-service")
+    DataFrame vuoto ed emette logger.warning."""
+    from unittest.mock import patch
+    with patch("src.layer2.atg_builder.logger") as mock_logger:
+        df = builder.get_node_feature_matrix(snapshots, "nonexistent-service")
     assert df.empty
+    mock_logger.warning.assert_called_once()
+    assert "nonexistent-service" in str(mock_logger.warning.call_args)
 
 
 def test_get_edge_feature_matrix_unknown_edge_returns_empty(
     builder: ATGBuilder, snapshots: list[dict]
 ) -> None:
     """get_edge_feature_matrix su edge_id inesistente restituisce
-    DataFrame vuoto senza sollevare eccezioni."""
-    df = builder.get_edge_feature_matrix(snapshots, "e_nonexistent")
+    DataFrame vuoto ed emette logger.warning."""
+    from unittest.mock import patch
+    with patch("src.layer2.atg_builder.logger") as mock_logger:
+        df = builder.get_edge_feature_matrix(snapshots, "e_nonexistent")
     assert isinstance(df, pd.DataFrame)
     assert df.empty
+    mock_logger.warning.assert_called_once()
+    assert "e_nonexistent" in str(mock_logger.warning.call_args)
 
 
 def test_fault_type_nan_produces_none_anomaly_type(
@@ -527,24 +535,46 @@ def test_anomaly_node_ids_dict_json_produces_empty_list(
 
 #  Test: V/E consistency check 
 
-def test_build_warns_on_missing_csv_node(
+def test_build_warns_on_isolated_node(
     atg: ATGBuilder,
     node_df: pd.DataFrame,
     edge_df: pd.DataFrame,
     gt_df: pd.DataFrame,
 ) -> None:
-    """build() emette warning quando topology.yaml dichiara un nodo assente
-    da node_metrics.csv (controllo V/E consistency). Il nodo non contribuisce
-    agli snapshot con valori numerici."""
+    """build() emette warning per nodi in V non appartenenti ad alcun
+    compliance set (blind spot di monitoraggio). Il nodo è presente
+    nel CSV ma non monitorato da alcun compliance set."""
     import copy
     from unittest.mock import patch
 
+    # Aggiungi "orphan-service" sia alla topology che al CSV
     bad_topology = copy.deepcopy(atg._topology)
     bad_topology["nodes"].append({"id": "orphan-service"})
+
+    # Crea righe CSV per orphan-service (stesso pattern degli altri nodi)
+    orphan_rows = pd.DataFrame([{
+        "timestamp": ts,
+        "window_id": f"w_{ts}",
+        "node_id": "orphan-service",
+        "cpu_percent": 5.0,
+        "mem_mb": 100.0,
+        "net_rx_mb": 1.0,
+        "net_tx_mb": 0.5,
+        "source_file": "mock.csv",
+    } for ts in node_df["timestamp"].unique()])
+    node_df_extended = pd.concat(
+        [node_df, orphan_rows], ignore_index=True
+    )
+
     with patch.object(atg, "_topology", bad_topology):
         with patch("src.layer2.atg_builder.logger") as mock_logger:
-            atg.build(node_df, edge_df, gt_df)
-    warning_msgs = " ".join(str(c) for c in mock_logger.warning.call_args_list)
+            atg.build(node_df_extended, edge_df, gt_df)
+
+    # Verifica che il warning di "blind spot" sia emesso
+    # (nodo non in alcun compliance set)
+    warning_msgs = " ".join(
+        str(c) for c in mock_logger.warning.call_args_list
+    )
     assert "orphan-service" in warning_msgs
 
 
