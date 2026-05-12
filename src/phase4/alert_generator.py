@@ -141,10 +141,10 @@ class AlertGenerator:
             )
 
         # 2. Aggregazione previsioni
-        # NaN fallback = display_threshold (soglia metrica grezza, es. error_rate=0.05)
         aggregated = self._aggregate_forecasts(
             forecasts, compliance_set_name, agg_func,
-            property_at_risk, display_threshold,
+            property_at_risk, display_threshold, check_bound,
+            display_bound,
         )
 
         # 3. Lead time (confronto con soglia interna convertita)
@@ -307,6 +307,8 @@ class AlertGenerator:
         aggregation_function: str,
         property_at_risk: str,
         sla_threshold: float,
+        sla_bound: str,
+        display_bound: str,
     ) -> list[float]:
         """Aggrega le previsioni per la metrica rilevante.
 
@@ -353,12 +355,23 @@ class AlertGenerator:
                 except KeyError:
                     yhat = float(df.iloc[step - 1]["yhat"])
                 if np.isnan(yhat):
-                    self._logger.warning(
-                        "NaN in forecast '%s' step %d - "
-                        "uso soglia SLA (%.4f) come fallback conservativo.",
-                        key, step, sla_threshold,
+                    # Il fallback dipende dal DISPLAY bound (direzione della
+                    # SLA originale), non dal check bound (direzione dopo
+                    # conversione Eq. 3.32 per reliability).
+                    # - display_bound="upper" (latency, error_rate):
+                    #   fallback=sla_threshold (es. error_rate=0.05 → contributo
+                    #   conservativo 1-0.05=0.95)
+                    # - display_bound="lower" (capacity/throughput):
+                    #   fallback=0.0 (peggior caso)
+                    conservative_fallback = (
+                        0.0 if display_bound == "lower" else sla_threshold
                     )
-                    yhat = sla_threshold
+                    self._logger.warning(
+                        "yhat=NaN per feature '%s' step %d - "
+                        "uso fallback conservativo %.4f (display_bound=%s).",
+                        key, step, conservative_fallback, display_bound,
+                    )
+                    yhat = conservative_fallback
                 values.append(yhat)
 
             if not values:
@@ -475,18 +488,29 @@ class AlertGenerator:
             e for e in edges
             if str(e.get("target", "")).endswith(f":{metric_suffix}")
         ]
-        candidate_edges = relevant_edges if relevant_edges else edges
+        # Se non ci sono edge specifici della metrica, restringere comunque
+        # ai soli edge con target "edge:..." per evitare di estrarre node_id
+        # da target del tipo "node:v:metric".
+        candidate_edges = relevant_edges if relevant_edges else [
+            e for e in edges
+            if str(e.get("target", "")).startswith("edge:")
+        ]
 
         if candidate_edges:
             best = max(candidate_edges, key=lambda e: float(e.get("intensity", 0.0)))
             # Estrai solo l'edge_id dalla feature key (es. "edge:e4:latency_ms" → "e4")
             target_str = str(best.get("target", ""))
             target_parts = target_str.split(":")
-            critical_arc: str | None = (
-                target_parts[1]
-                if len(target_parts) >= 2 and target_parts[0] == "edge"
-                else (target_str or None)
-            )
+            if len(target_parts) >= 2 and target_parts[0] == "edge":
+                critical_arc: str | None = target_parts[1]
+            else:
+                # target non è un edge: il grafo causale non contiene
+                # coppie node→edge rilevanti per questa proprietà.
+                # Ricorrere al fallback basato sul forecast.
+                critical_arc = self._find_critical_arc_from_forecast(
+                    forecasts, compliance_set_name,
+                    property_at_risk, lead_time_steps,
+                )
             root_cause: str | None = str(best.get("source"))
         else:
             # Fallback: arco con massimo yhat al lead_time_steps da forecast

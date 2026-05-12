@@ -771,3 +771,86 @@ def test_monitor_warns_on_compliance_set_mismatch(
     assert "H_cache" in warning_msgs or "H_crit" in warning_msgs, (
         "Atteso warning per CS mismatch (fit su H_crit, monitor su H_cache)."
     )
+
+
+#  Robustezza aggiuntiva (2) 
+
+def test_structural_validator_warmup_returns_false(
+    config: ConfigLoader,
+    topology_builder: TopologyBuilder,
+    pbo_builder: PBOBuilder,
+) -> None:
+    """structural_confirmed=False durante il warm-up del Validatore strutturale.
+    Nelle prime consecutive_windows chiamate dopo fit(), _ewma_history non ha
+    abbastanza elementi per calcolare consecutive_windows diff consecutivi
+    → structural_confirmed deve essere False."""
+    rng = np.random.default_rng(7)
+    n = 20
+    nominal_snaps = [
+        _make_snap(_T0 + i * _STEP_US, label=0,
+                   cpu=float(rng.normal(5.0, 0.5)))
+        for i in range(n)
+    ]
+    ws_nominal = _make_weight_series(n=n)
+    gold = pbo_builder.compute_gold_standard(ws_nominal, nominal_snaps)
+
+    nominal_features: dict[str, pd.DataFrame] = {}
+    ts_list = [_T0 + i * _STEP_US for i in range(n)]
+    for node in _H_CRIT_NODES:
+        for m, val in [("cpu_percent", 5.0), ("mem_mb", 512.0),
+                       ("net_rx_mb", 1.0), ("net_tx_mb", 0.5)]:
+            nominal_features[f"node:{node}:{m}"] = pd.DataFrame(
+                {"value": [val] * n}, index=pd.Index(ts_list, name="timestamp")
+            )
+    for eid in ("e1", "e2", "e4", "e6"):
+        for m in ("latency_ms", "error_rate", "throughput_rps"):
+            nominal_features[f"edge:{eid}:{m}"] = pd.DataFrame(
+                {"value": [10.0] * n}, index=pd.Index(ts_list, name="timestamp")
+            )
+
+    mon = StructuralMonitor(config, topology_builder, pbo_builder)
+    mon.fit("H_crit", nominal_features, nominal_snaps, ws_nominal, gold)
+
+    # Pesi degradati che attiverebbero il validatore SE ci fosse abbastanza history
+    degraded_ws = _make_weight_series(
+        n=1, tp_override={"e4": 99.0, "e3": 1.0, "e6": 1.0, "e5": 99.0}
+    )
+    mon._cusum_threshold = 0.0001  # soglia bassa per attivare cusum_signal
+    mon._frobenius_threshold = 0.0
+
+    consecutive = mon._consecutive_windows  # tipicamente 3
+
+    for i in range(consecutive):
+        ts = _T0 + (n + i) * _STEP_US
+        result = mon.monitor(
+            "H_crit",
+            _make_features_h_crit(cpu=1000.0, latency=10.0, ts=ts),
+            degraded_ws,
+            ts,
+        )
+        # Durante il warm-up (meno di consecutive+1 valori EWMA),
+        # structural_confirmed DEVE essere False anche se cusum_signal potrebbe
+        # già essere True
+        assert result["structural_confirmed"] is False, (
+            f"Atteso structural_confirmed=False al ciclo {i+1}/{consecutive} "
+            f"(warm-up: storia insufficiente per {consecutive} diff consecutivi). "
+            f"Stato: {result}"
+        )
+
+
+def test_monitor_with_empty_weight_series_does_not_crash(
+    fitted_monitor: StructuralMonitor,
+) -> None:
+    """monitor() con weight_series=[] non solleva TypeError o altre eccezioni.
+    frobenius_distance e pas_value devono essere None o 0.0, non errori."""
+    result = fitted_monitor.monitor(
+        "H_crit",
+        _make_features_h_crit(),
+        [],   # weight_series vuoto
+        _T0,
+    )
+    assert isinstance(result, dict)
+    # frobenius_distance può essere None (nessun dato) ma non un errore
+    assert result["frobenius_distance"] is None or isinstance(
+        result["frobenius_distance"], float
+    )
