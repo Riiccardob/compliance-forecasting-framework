@@ -138,6 +138,16 @@ class ATGBuilder:
                 "node_metrics manca di %d node_id attesi da topology: %s",
                 len(missing_nodes), sorted(missing_nodes),
             )
+        all_cs_node_ids: set[str] = set()
+        for cs_def in self._topology["compliance_sets"].values():
+            all_cs_node_ids.update(cs_def.get("nodes", []))
+        isolated_nodes = expected_node_ids - all_cs_node_ids
+        if isolated_nodes:
+            logger.warning(
+                "Nodi in V non appartenenti ad alcun compliance set "
+                "(blind spot di monitoraggio): %s",
+                sorted(isolated_nodes),
+            )
         if extra_edges:
             logger.warning(
                 "edge_metrics contiene %d edge_id non presenti in topology: %s",
@@ -284,6 +294,11 @@ class ATGBuilder:
         ]
         df = pd.DataFrame(records)
         if df.empty:
+            logger.warning(
+                "get_node_feature_matrix: node_id '%s' non trovato "
+                "in nessuno snapshot — DataFrame vuoto restituito.",
+                node_id,
+            )
             return df
         return df.set_index("timestamp")
 
@@ -315,6 +330,11 @@ class ATGBuilder:
         ]
         df = pd.DataFrame(records)
         if df.empty:
+            logger.warning(
+                "get_edge_feature_matrix: edge_id '%s' non trovato "
+                "in nessuno snapshot — DataFrame vuoto restituito.",
+                edge_id,
+            )
             return df
         return df.set_index("timestamp")
 
