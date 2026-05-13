@@ -1,0 +1,2693 @@
+[
+  {
+    "timestamp": "1692055920445000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692055925454000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692055930458000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692055935471000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692055940474000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692055945478000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692055950483000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692055955487000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692055960495000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692055965496000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692055970508000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692055975519000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692055980536000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692055985545000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692055990584000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692055995586000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056000609000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056005628000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056010631000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056015638000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692056020639000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056025673000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056030683000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056035694000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056040707000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056045748000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056050749000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056055760000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056060768000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056065825000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056070832000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056075836000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692056080841000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056085851000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056090873000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056095874000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056100879000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056105884000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056110892000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056115903000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056120933000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056125943000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056130960000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056135971000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056140995000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056146001000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056151031000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056156040000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056161041000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056166045000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056171059000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056176062000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056181064000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056186071000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056191075000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056196083000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056201086000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056206090000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056211103000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056216110000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056221131000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056226135000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056231146000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056236151000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056241162000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056246168000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056251208000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056256210000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056261225000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056266230000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056271247000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056276264000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056281273000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056286280000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056291299000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056296300000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056301322000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056306324000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056311347000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056316351000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056321370000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056326373000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056331429000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056336463000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056341478000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056346481000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056351533000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056356548000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056361559000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056366605000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056371607000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056376625000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056381631000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056386632000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056391636000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056396637000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056401670000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056406714000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056411720000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056416737000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056421743000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692056426752000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056431772000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056436777000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056441788000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056446793000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056451795000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056456804000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056461805000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056466856000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056471859000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056476893000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056481897000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056486900000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056491902000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056496905000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056501906000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056506938000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056511964000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056516980000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056521982000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056526987000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056531991000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056536993000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056541996000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056547004000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056552009000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056557013000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056562030000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056567036000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056572055000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056577068000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056582116000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056587125000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056592133000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056597146000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056602154000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056607175000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056612187000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056617188000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056622194000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692056627203000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056632208000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056637248000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056642307000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056647326000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056652344000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056657345000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056662348000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056667356000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056672376000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056677394000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056682410000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056687423000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056692428000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056697429000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056702495000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056707498000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056712502000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056717506000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056722510000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056727513000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056732517000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056737522000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056742539000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056747546000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056752562000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056757564000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056762571000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056767581000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056772610000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056777613000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056782639000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056787647000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056792660000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056797664000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056802669000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056807688000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056812705000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056847050000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692056852054000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056857068000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056862077000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056867080000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056872104000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056877111000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056882141000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056888133000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056893146000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056898153000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056903166000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056908167000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056913189000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056918201000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056923207000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056928210000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056933216000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056938221000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056943237000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056948256000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056953260000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056958263000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056963267000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056968282000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056973307000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056978309000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056983335000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056988350000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056993352000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692056998353000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057003374000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692057008377000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057013379000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057018382000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057023392000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692057028393000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057033396000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057038406000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057043426000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057048429000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057053435000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057058437000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057063456000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057068457000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057073461000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057078465000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057083479000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057088487000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057093497000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057098519000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057103527000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057108541000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057113549000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057118553000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057123563000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057128576000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057133607000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057138615000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057143637000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057148646000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057153651000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057158653000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057163655000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057168658000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057173677000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057178698000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057183708000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057188723000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057193724000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057198728000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057203795000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057208820000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057213837000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057218841000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057223854000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057228862000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057233867000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057238876000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057243893000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057248899000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057253904000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057258906000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057263907000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057268956000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057273965000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057278981000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692057284003000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057289007000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692057294016000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057299021000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057304025000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057309042000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692057314054000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692057319060000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057324101000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057329109000",
+    "true_label": 1,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692057334115000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057339118000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057344141000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057349143000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057354146000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057359171000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057364185000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692057369196000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692057374197000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057379202000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057384205000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057389206000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057394211000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057399226000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057404246000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057409262000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057414266000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057419360000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057424368000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057429378000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": false,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057434385000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": false
+  },
+  {
+    "timestamp": "1692057439401000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  },
+  {
+    "timestamp": "1692057444409000",
+    "true_label": 0,
+    "alert": true,
+    "lead_time": 1,
+    "criticality": "red",
+    "base_signal": true,
+    "if_signal": true
+  }
+]
