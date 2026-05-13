@@ -187,4 +187,8 @@ docs/modules
 framework.zip
 data/raw
 docs/TODO.md
-dashboard/
+eval_framework.py
+eval_run_rolling_single_experiment.py
+last_run.txt
+runner.py
+test.txt
