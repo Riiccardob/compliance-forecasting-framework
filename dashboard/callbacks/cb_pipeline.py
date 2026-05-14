@@ -41,21 +41,27 @@ def run_pipeline_callback(set_progress, n_clicks, mode, n_snapshots):
     mode = mode or "DEMO"
     n_snapshots = n_snapshots or 50
 
+    all_snaps = dm.get_snapshots()
+    # Indice O(1): timestamp µs → posizione nella lista
+    _ts_idx = {s["timestamp"]: i for i, s in enumerate(all_snaps)}
+
     if mode == "DEMO":
         anomalous = dm.get_anomalous_snapshots()
-        all_snaps = dm.get_snapshots()
         if anomalous:
-            idx = all_snaps.index(anomalous[0])
-            snapshot_indices = [idx]
+            ts = anomalous[0]["timestamp"]
+            snapshot_indices = [_ts_idx[ts]] if ts in _ts_idx else [0]
         else:
             snapshot_indices = [0]
+
     elif mode == "BATCH":
         anomalous = dm.get_anomalous_snapshots()
-        all_snaps = dm.get_snapshots()
-        indices = [all_snaps.index(s) for s in anomalous[:n_snapshots]
-                   if s in all_snaps]
-        snapshot_indices = indices[:n_snapshots]
-    else:  # FULL / "sample" / "full"
+        snapshot_indices = []
+        for s in anomalous:
+            ts = s["timestamp"]
+            if ts in _ts_idx and len(snapshot_indices) < n_snapshots:
+                snapshot_indices.append(_ts_idx[ts])
+
+    else:  # FULL
         snapshot_indices = []
 
     def _progress(value: int, label: str) -> None:

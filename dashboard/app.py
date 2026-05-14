@@ -6,6 +6,8 @@ import dash
 import diskcache
 from dash import html, dcc
 import dash_mantine_components as dmc
+import dash_cytoscape as cyto
+cyto.load_extra_layouts()
 
 CACHE_DIR = Path(__file__).parent / "cache"
 CACHE_DIR.mkdir(exist_ok=True)
@@ -68,9 +70,28 @@ app.layout = dmc.MantineProvider(
     ],
 )
 
-from dashboard.callbacks import cb_navigation  # noqa: F401, E402
-from dashboard.callbacks import cb_s0           # noqa: F401, E402
-from dashboard.callbacks import cb_pipeline     # noqa: F401, E402
+_missing = []
+for _cb_module in [
+        "cb_navigation",
+        "cb_pipeline",
+        "cb_s0",
+        "cb_s1",
+        "cb_s2",
+        "cb_s3",
+        "cb_s4",
+        "cb_s5",
+    ]:
+    try:
+        import importlib
+        importlib.import_module(f"dashboard.callbacks.{_cb_module}")
+    except ImportError:
+        _missing.append(_cb_module)
+if _missing:
+    import warnings
+    warnings.warn(
+        f"Callback non trovati (sviluppo in corso): {_missing}",
+        stacklevel=2,
+    )
 
 if __name__ == "__main__":
     app.run(debug=True, port=8050)

@@ -101,7 +101,9 @@ def build_atg(set_progress, n_clicks):
     try:
         dm.build_snapshots()
     except Exception as e:
-        return f"Errore: {e}", True, html.Div(str(e), style={"color": "var(--danger)"})
+        return f"Errore: {e}", True, html.Div(
+            str(e), style={"color": "var(--danger)", "fontSize": "12px"}
+        )
     set_progress(100, "Completato")
     snaps     = dm.get_snapshots()
     nominal   = dm.get_nominal_snapshots()

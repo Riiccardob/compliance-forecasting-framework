@@ -29,9 +29,10 @@ def run_pipeline(
 
         progress_cb(5, "Inizializzazione...")
         dm = DataManager()
-        snapshots = dm.get_snapshots()
-        if not snapshots:
+        all_snapshots = dm.get_snapshots()
+        if not all_snapshots:
             return {"error": "Nessuno snapshot disponibile. Eseguire prima il build ATG."}
+        _ts_to_idx = {s["timestamp"]: i for i, s in enumerate(all_snapshots)}  # noqa: F841
 
         nominal = dm.get_nominal_snapshots()
         gold    = dm.get_gold_standard()
@@ -45,12 +46,15 @@ def run_pipeline(
         pbo = PBOBuilder(config, topology)
         weight_nominal = pbo.compute_transition_weights(nominal)
 
-        targets = (
-            [snapshots[i] for i in snapshot_indices if i < len(snapshots)]
-            if snapshot_indices
-            else [s for s in snapshots if s.get("label") == 1]
-        )
-        progress_cb(15, f"Target: {len(targets)} snapshot")
+        if mode == "FULL" or not snapshot_indices:
+            target_snapshots = all_snapshots
+        else:
+            target_snapshots = [
+                all_snapshots[i]
+                for i in snapshot_indices
+                if i < len(all_snapshots)
+            ]
+        progress_cb(15, f"Target: {len(target_snapshots)} snapshot")
 
         cs_names = list(config.load_topology()["compliance_sets"].keys())
         span = max(1, (80 - 20) // len(cs_names))
@@ -71,7 +75,7 @@ def run_pipeline(
             mon.fit(cs, feats_nom, nominal, weight_nominal, gold)
 
             alerts = []
-            for snap in targets:
+            for snap in target_snapshots:
                 feats  = fs.select_features(cs, [snap])
                 fcast  = fc.predict()
                 w_curr = pbo.compute_transition_weights([snap])
@@ -80,11 +84,12 @@ def run_pipeline(
                 if alert is not None:
                     alerts.append(alert)
 
+            mon.reset_cusum()
             results_cs[cs] = {"alerts": alerts, "causal_graph": causal_graph}
             progress_cb(20 + (i + 1) * span, f"{cs}: {len(alerts)} alert")
 
         progress_cb(100, "Completato")
-        results = {"n_snapshots": len(targets), "compliance_sets": results_cs}
+        results = {"n_snapshots": len(target_snapshots), "compliance_sets": results_cs}
         dm.save_pipeline_results(results)
         return results
 
