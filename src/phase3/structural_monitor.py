@@ -493,9 +493,9 @@ class StructuralMonitor:
             except Exception:
                 pass
 
-            # CUSUM: accumulare decrementi sotto reference
+            # CUSUM: accumulare decrementi sotto reference (lineare)
             ewma_new = self._apply_ewma(signal_raw)
-            increment = max(0.0, self._reference - ewma_new - self._cusum_k)
+            increment = self._reference - ewma_new - self._cusum_k
 
         else:
             # Topologia parallela o PAS non disponibile: Frobenius
@@ -511,9 +511,9 @@ class StructuralMonitor:
             except Exception:
                 signal_raw = 0.0
 
-            # CUSUM: accumulare incrementi sopra reference (= 0)
+            # CUSUM: accumulare incrementi sopra reference (parallelo)
             ewma_new = self._apply_ewma(signal_raw)
-            increment = max(0.0, ewma_new - self._reference - self._cusum_k)
+            increment = ewma_new - self._reference - self._cusum_k
 
         self._cusum_stat = max(0.0, self._cusum_stat + increment)
         cusum_signal = self._cusum_stat > self._cusum_threshold
@@ -556,10 +556,14 @@ class StructuralMonitor:
     ) -> bool:
         """Verifica derivata EWMA persistente e soglia distanza."""
         # Soglia distanza
-        if frobenius_distance is not None:
+        if self._topology_type == "linear" and \
+                pas_value is not None and self._pas_gold is not None:
+            # Per topologie lineari: PAS-gap come da methodology.tex §3.2.3
+            distance_ok = abs(pas_value - self._pas_gold) > \
+                          self._frobenius_threshold
+        elif frobenius_distance is not None:
+            # Per topologie parallele: norma di Frobenius
             distance_ok = frobenius_distance > self._frobenius_threshold
-        elif pas_value is not None and self._pas_gold is not None:
-            distance_ok = pas_value < (self._pas_gold - self._frobenius_threshold)
         else:
             distance_ok = False
 
