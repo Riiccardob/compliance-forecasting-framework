@@ -1,0 +1,1670 @@
+% =========================================================
+% CAPITOLO 4 -- IMPLEMENTAZIONE
+% =========================================================
+
+\chapter{Implementazione}
+\label{chap:implementazione}
+
+Il Capitolo~\ref{chap:metodologia} ha formalizzato il \textit{framework} ibrido come un sistema di
+costrutti matematici distinti per responsabilità e temporalità: un ipergrafo statico per la
+semantica certificativa, un \gls{ATG} dinamico per la modellazione delle metriche a
+\textit{runtime}, una funzione di \textit{mapping} bidirezionale e una \textit{pipeline} a quattro
+fasi che trasforma la telemetria grezza in giudizi di \textit{compliance} predittivi. Il presente
+capitolo descrive come questa architettura concettuale è tradotta in un sistema \textit{software}
+operativo, illustrando le scelte ingegneristiche che governano l'organizzazione del codice, la
+separazione delle responsabilità, la gestione della configurazione e l'implementazione dei singoli
+moduli. L'attenzione è posta non solo sul \textit{cosa} il sistema fa, ma sul \textit{come} e
+\textit{perché} determinate scelte di \textit{design} siano state adottate in luogo di alternative
+disponibili.
+
+% =========================================================
+\section{Stack Tecnologico e Metodologia di Sviluppo}
+\label{sec:stack_metodologia}
+% =========================================================
+
+Il sistema è interamente scritto in Python 3.11. La scelta di Python è motivata da due ragioni
+convergenti. La prima è la disponibilità di un ecosistema maturo e consolidato per tutte le
+aree funzionali richieste: analisi di serie temporali, \textit{graph processing}, apprendimento
+automatico e test statistici. La seconda è la capacità del linguaggio di far coesistere nello
+stesso progetto logiche algoritmiche di natura eterogenea, senza richiedere il porting tra
+ambienti distinti o la gestione di interfacce tra componenti scritti in linguaggi diversi.
+
+Le dipendenze esterne si organizzano su quattro aree funzionali. Per la manipolazione vettorializzata
+dei dati e delle serie temporali si impiegano pandas e NumPy: tutta la pipeline di trasformazione
+delle metriche -- calcoli differenziali su contatori cumulativi, gestione dei NaN, \textit{join}
+sugli indici di \textit{timestamp} -- è implementata tramite operazioni vettoriali che evitano
+l'iterazione esplicita sulle righe, garantendo le prestazioni necessarie per elaborare finestre
+temporali di diverse decine di migliaia di record. Per la modellazione topologica si utilizza
+NetworkX, che fornisce un'implementazione nativa di grafi diretti (\textit{nx.DiGraph}) pienamente
+compatibile con le operazioni di intersezione e interrogazione semantica richieste dal Layer~1.
+La scelta di NetworkX rispetto ad alternative come graph-tool o igraph è motivata dalla sua
+capacità di trattare i dizionari Python come attributi nativi di nodi e archi: questo rende il
+campo \textit{hyperedges} di ogni arco un attributo di prima classe, interrogabile con la stessa
+sintassi del grafo e modificabile senza operazioni di serializzazione, caratteristica essenziale
+per l'implementazione della Strategia di Annotazione Semantica. Per il \textit{forecasting} si
+integrano Prophet (Meta Research) per le serie con stagionalità, statsmodels con l'interfaccia
+SARIMAX per i modelli \gls{ARIMA}, scikit-learn per la regressione lineare e per l'Isolation
+Forest. Per l'analisi causale si utilizzano il modulo \textit{statsmodels.tsa.stattools} per i
+test di Augmented Dickey-Fuller e di causalità di Granger, e scipy per il coefficiente di
+Pearson.
+
+Tutte le dipendenze sono dichiarate con versione fissata nel file \textit{pyproject.toml} e
+riproducibili tramite \textit{uv}, garantendo che l'ambiente di esecuzione sia identico tra
+sviluppo, integrazione continua e produzione.
+Lo sviluppo ha seguito una metodologia \gls{TDD} in modo rigoroso: ogni modulo è stato costruito
+a partire da una suite di test unitari che formalizzano il contratto dell'interfaccia pubblica
+prima ancora che l'implementazione esista. Questa sequenza ha avuto conseguenze architetturali
+dirette: alcune interfacce sono state ridisegnate più volte durante lo sviluppo per rendere i
+test più semplici da costruire in isolamento, e ogni ridisegno ha prodotto un'interfaccia più
+minimale e più facilmente componibile.
+
+\subsection{Architettura della Repository}
+\label{sec:architettura_repo}
+
+La \textit{repository} adotta una struttura a pacchetti nidificati sotto la radice \textit{src/},
+che riflette direttamente la stratificazione concettuale del \textit{framework}: le primitive
+trasversali al livello più basso, i layer del modello al livello intermedio, le fasi della
+\textit{pipeline} al livello superiore.
+
+\begin{table}[htbp]
+\centering
+\caption{Organizzazione modulare del pacchetto \textit{src} con corrispondenza ai layer
+metodologici.}
+\label{tab:repo_structure}
+\begin{tabular}{llll}
+\toprule
+\textbf{Pacchetto} & \textbf{Modulo} & \textbf{Layer / Fase} & \textbf{Responsabilità} \\
+\midrule
+\textit{src/utils/}   & \textit{logging\_setup.py}      & Infrastruttura & Primitiva di \textit{logging} uniforme \\
+                      & \textit{config\_loader.py}      & Infrastruttura & Lettura e validazione YAML \\
+\textit{src/ingestion/}     & \textit{converter.py}           & ETL            & Conversione dataset nel formato canonico \\
+\textit{src/layer1/}  & \textit{topology\_builder.py}   & Layer~1        & Costruzione di $H_{\text{cert}}$ \\
+\textit{src/layer2/}  & \textit{atg\_builder.py}        & Layer~2        & Sequenza di snapshot $G_t$ \\
+                      & \textit{pbo\_builder.py}        & Layer~2        & PBO, PAS, norma di Frobenius \\
+\textit{src/phase1/}  & \textit{feature\_selector.py}   & Fase~I         & Selezione di $M_{\Phi_i}$ dalla topologia \\
+                      & \textit{stat\_forecaster.py}    & Fase~I         & Previsione locale delle metriche \\
+\textit{src/phase2/}  & \textit{causal\_analyzer.py}    & Fase~II        & Analisi causale guidata dalla topologia \\
+\textit{src/phase3/}  & \textit{structural\_monitor.py} & Fase~III       & Monitoraggio gerarchico a quattro livelli \\
+\textit{src/phase4/}  & \textit{alert\_generator.py}    & Fase~IV        & Sintesi e classificazione dell'\textit{alert} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Le dipendenze tra pacchetti scorrono esclusivamente verso il basso nella gerarchia: i moduli di
+una fase non importano mai da una fase superiore, e i layer non dipendono dalle fasi. Ogni
+cartella è responsabile di un solo costrutto del formalismo, e tutte le eccezioni, i messaggi di
+\textit{log} e i parametri di configurazione di un modulo fanno riferimento esclusivamente agli
+oggetti di quel costrutto. Questa organizzazione consente di verificare la logica del
+TopologyBuilder in completo isolamento, senza istanziare alcun componente di previsione o di
+\textit{anomaly detection}.
+
+% =========================================================
+\section{Sistema di Configurazione}
+\label{sec:config_system}
+% =========================================================
+
+Il sistema di configurazione governa due aspetti fondamentali del \textit{framework}: la
+separazione tra la struttura statica del sistema da monitorare e i parametri algoritmici dinamici
+della \textit{pipeline}, e il meccanismo attraverso cui i moduli accedono a queste informazioni
+in modo sicuro, coerente e verificabile. Le scelte adottate in questa area hanno implicazioni
+dirette sulla testabilità di tutti i moduli e sulla manutenibilità a lungo termine del sistema.
+
+\subsection{Separazione delle Responsabilità tra i due File YAML}
+\label{subsec:sep_yaml}
+
+Un requisito architetturale fondamentale del \textit{framework} è la separazione completa tra
+la struttura del sistema da monitorare e i parametri algoritmici della \textit{pipeline}. Queste
+due categorie hanno cicli di vita radicalmente diversi: la topologia del sistema distribuito, le
+definizioni dei \textit{compliance set} e gli \gls{SLA} variano su scala di mesi o di cicli di
+certificazione; i parametri algoritmici, come le soglie Pearson, il fattore di smorzamento
+\gls{EWMA} o i criteri di classificazione dell'\textit{alert}, variano a ogni sessione di
+ottimizzazione. Mescolarli in una struttura monolitica renderebbe ogni sessione di \textit{tuning}
+un rischio di corruzione accidentale della topologia.
+
+Il sistema adotta pertanto due file di configurazione distinti. Il file \textit{config/topology.yaml}
+formalizza la struttura statica del sistema da monitorare. Contiene le definizioni dei nodi e
+degli archi del grafo di dipendenza tra i servizi, la specifica dei \textit{compliance set} con
+il relativo tipo di topologia, le soglie \gls{SLA} e, per i set lineari, la sequenza del
+percorso critico certificato. Vi sono inoltre le liste dei nomi canonici delle metriche di nodo e
+di arco, i percorsi dei CSV canonici e i metadati del dataset, tra cui il parametro
+\textit{window\_duration\_seconds} utilizzato come \textit{fallback} nel calcolo del
+\textit{throughput}.
+
+Il file \textit{config/pipeline\_params.yaml} raccoglie esclusivamente parametri algoritmici,
+organizzati in cinque sezioni funzionali: i parametri del Probabilistic Behavioral Overlay,
+comprendenti la metrica dei pesi della matrice stocastica e l'etichetta del \textit{gold
+standard}; le impostazioni del \textit{forecasting}, con l'orizzonte temporale, il \textit{routing}
+dei modelli, la configurazione ARIMA e la soglia di divergenza dalla \textit{baseline}; le soglie
+per l'analisi causale (Pearson, Granger, Transfer Entropy); i parametri dell'\textit{anomaly
+detection}, che includono z-score, Isolation Forest, \gls{CUSUM} e validatore strutturale; e
+infine i criteri di classificazione degli \textit{alert}, con le soglie di \textit{lead time}
+per i tre livelli di criticità.
+
+\begin{table}[htbp]
+\centering
+\caption{Criterio di assegnazione delle informazioni ai due file di configurazione e motivazione
+della separazione.}
+\label{tab:config_sep}
+\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Categoria di informazione} & \textbf{File} & \textbf{Cambia quando} \\
+\midrule
+Identità dei nodi e ordine                 & \textit{topology.yaml}         & Cambia l'architettura \\
+Definizione degli archi                     & \textit{topology.yaml}         & Cambia l'architettura \\
+Membership dei \textit{compliance set}      & \textit{topology.yaml}         & Cambiano le proprietà certificate \\
+Soglie \gls{SLA} per metrica                & \textit{topology.yaml}         & Cambiano i requisiti certificativi \\
+Percorso critico e \textit{topology\_type}  & \textit{topology.yaml}         & Cambia l'architettura \\
+\midrule
+Soglie Pearson, Granger, Transfer Entropy   & \textit{pipeline\_params.yaml} & Si ricalibra l'analisi causale \\
+Iperparametri Isolation Forest              & \textit{pipeline\_params.yaml} & Si ottimizza l'\textit{anomaly detection} \\
+Fattori \gls{EWMA} e soglie \gls{CUSUM}    & \textit{pipeline\_params.yaml} & Si ricalibra il monitoraggio \\
+Soglie \textit{lead time} (livelli colore)  & \textit{pipeline\_params.yaml} & Si aggiorna la \textit{policy} di allerta \\
+Orizzonte di previsione $\tau$              & \textit{pipeline\_params.yaml} & Si adatta l'orizzonte operativo \\
+Metriche non-lineari per \gls{LSTM}         & \textit{pipeline\_params.yaml} & Si aggiorna il \textit{routing} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Questa separazione ha implicazioni operative concrete. Il file \textit{topology.yaml} è
+versionato insieme alla documentazione di certificazione del sistema distribuito: ogni modifica
+alla membership di un \textit{compliance set} o a una soglia \gls{SLA} è una modifica al modello
+certificativo e richiede una nuova sessione di validazione formale. Il file
+\textit{pipeline\_params.yaml} può essere aggiornato a ogni sessione di ottimizzazione senza
+coinvolgere il processo di certificazione, riducendo drasticamente il rischio che una sessione
+di \textit{tuning} degli algoritmi introduca accidentalmente una variazione nella definizione
+dei \textit{compliance set}. Un ulteriore beneficio è la testabilità per livelli: i test del
+TopologyBuilder usano una versione di \textit{topology.yaml} ridotta con una topologia semplificata,
+mentre i test delle fasi superiori usano un \textit{pipeline\_params.yaml} con soglie che
+favoriscono la copertura dei casi limite (ad esempio \textit{alert\_threshold=0.0001} per il
+\gls{CUSUM} o \textit{contamination=0.5} per l'Isolation Forest), senza mai alterare i parametri
+di produzione.
+
+\subsection{Il ConfigLoader: Lettura Lazy e Validazione Eager}
+\label{subsec:config_loader}
+
+Il modulo ConfigLoader astrae l'accesso ai due file YAML con tre garanzie architetturali
+distinte, che insieme garantiscono che il sistema non possa avviarsi in uno stato incompleto,
+che le letture successive al disco siano evitate e che la mutazione esterna del dizionario
+restituito non possa corrompere lo stato interno.
+
+La prima garanzia è il \textbf{caricamento \textit{lazy}}: il file viene letto dal disco solo
+alla prima chiamata del metodo corrispondente (\textit{load\_topology()} o
+\textit{load\_pipeline\_params()}), e il risultato è mantenuto in \textit{cache} per le chiamate
+successive. Questa scelta consente di istanziare ConfigLoader nel costruttore di qualsiasi modulo
+senza accedere al \textit{filesystem} fino a quando i dati non sono effettivamente necessari,
+migliorando la testabilità tramite \textit{mock} parziali.
+
+La seconda garanzia è la \textbf{validazione \textit{eager}}: all'atto del primo accesso, il
+metodo privato \textit{\_load\_and\_validate} verifica la presenza di tutte le chiavi obbligatorie
+al livello radice, interrompendo con \textit{ValueError} alla prima chiave mancante e includendo
+il nome esatto della chiave nel messaggio d'errore. Questo anticipa i fallimenti alla fase di
+inizializzazione del sistema, non all'esecuzione, evitando la classe di errori in cui un componente
+si avvia silenziosamente con una configurazione incompleta e fallisce molto più tardi con un errore
+opaco.
+
+\begin{lstlisting}[
+  language=Python,
+  caption={Metodo privato \textit{\_load\_and\_validate} in
+  \textit{src/utils/config\_loader.py}. La normalizzazione di
+  \textit{yaml.YAMLError} in \textit{ValueError} garantisce un'interfaccia
+  di eccezione uniforme verso tutti i chiamanti, eliminando la necessità
+  di importare PyYAML nei moduli superiori.}
+]
+@staticmethod
+def _load_and_validate(
+    path: Path, required_keys: tuple[str, ...]
+) -> dict:
+    if not path.exists():
+        raise FileNotFoundError(
+            f"File di configurazione non trovato: {path.resolve()}"
+        )
+    try:
+        with path.open(encoding="utf-8") as fh:
+            data: dict = yaml.safe_load(fh)
+    except yaml.YAMLError as exc:
+        raise ValueError(
+            f"{path.name} contiene YAML sintaticamente "
+            f"non valido: {exc}"
+        ) from exc
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"{path.name} non contiene un mapping YAML valido "
+            f"(ottenuto: {type(data).__name__})"
+        )
+    for key in required_keys:
+        if key not in data:
+            raise ValueError(
+                f"Chiave obbligatoria mancante in "
+                f"{path.name}: '{key}'"
+            )
+    return data
+\end{lstlisting}
+
+La terza garanzia è l'\textbf{isolamento della \textit{cache}}: ogni chiamata restituisce una
+copia profonda del dizionario tramite \textit{copy.deepcopy}. Senza questo meccanismo, qualsiasi
+modulo che ricevesse il dizionario e lo modificasse corromperebbe la struttura condivisa,
+producendo comportamenti non deterministici nelle chiamate successive. La suite di test verifica
+questo isolamento esplicitamente anche per strutture annidate, come mostra il seguente test:
+
+\begin{lstlisting}[
+  language=Python,
+  caption={Test di isolamento profondo della cache in
+  \textit{tests/test\_config\_loader.py}. Il test verifica che la mutazione
+  di un campo annidato nel dizionario restituito non alteri la cache interna,
+  garantendo che \textit{copy.deepcopy} protegga anche i livelli di
+  annidamento inferiori.}
+]
+def test_load_topology_cache_deep_isolation(tmp_path):
+    mock_loader = ConfigLoader(topo, pipe)
+    t1 = mock_loader.load_topology()
+    original_len = len(
+        t1["compliance_sets"]["CS_test"]["nodes"]
+    )
+    t1["compliance_sets"]["CS_test"]["nodes"].append(
+        "injected-sentinel"
+    )
+    t2 = mock_loader.load_topology()
+    assert len(
+        t2["compliance_sets"]["CS_test"]["nodes"]
+    ) == original_len
+\end{lstlisting}
+
+Il file \textit{topology.yaml} richiede una validazione aggiuntiva rispetto alla semplice
+presenza delle chiavi radice: il campo \textit{metadata.window\_duration\_seconds} è obbligatorio
+e deve essere un numero positivo, perché viene usato dal convertitore come \textit{fallback}
+per il calcolo del \textit{throughput} nelle finestre con $\Delta t$ non calcolabile. La
+sua assenza o un valore non positivo produce un \textit{ValueError} esplicito al momento del
+caricamento, prevenendo fallimenti silenziosi nella fase di conversione.
+
+\subsection{La Primitiva di Logging}
+\label{subsec:logging_setup}
+
+La classe LoggingSetup fornisce una primitiva trasversale che garantisce un formato di
+\textit{logging} uniforme in tutti i moduli del \textit{framework}. Ogni modulo ottiene un
+\textit{logger} nominato con il proprio percorso Python completo, rendendo possibile il
+filtraggio per componente durante l'esecuzione in produzione e durante le sessioni di
+\textit{debugging}. La primitiva è idempotente per costruzione: se un \textit{logger} con
+lo stesso nome è già stato configurato, la chiamata successiva restituisce lo stesso
+\textit{logger} senza aggiungere \textit{handler} duplicati. Senza questa garanzia, in ambienti
+dove i moduli vengono importati più volte, ad esempio nei test con ricaricamento dinamico,
+ogni messaggio verrebbe emesso più volte, producendo \textit{output} difficile da interpretare.
+
+% =========================================================
+\section{Il Formato Canonico di Input}
+\label{sec:etl_converter}
+% =========================================================
+
+La \textit{pipeline} del \textit{framework} non opera mai direttamente sui dati grezzi
+prodotti dagli strumenti di osservabilità. Tra i dati grezzi e i moduli di analisi si
+interpone uno strato di conversione il cui scopo è produrre un \textbf{formato canonico
+intermedio} indipendente dal dataset specifico. Questa separazione consente di sostituire
+la sorgente dati senza modificare una riga di codice al di fuori del pacchetto
+\textit{etl/}.
+
+Il formato canonico si compone di tre file CSV con schemi fissi, che rispecchiano direttamente
+la distinzione strutturale del Layer~2 tra \textit{feature} persistenti di nodo, \textit{feature}
+effimere di arco e informazione di \textit{ground truth}. Il file \textit{node\_metrics.csv} è
+organizzato in formato \textit{long}: ogni riga rappresenta il vettore di stato di un singolo
+microservizio in una singola finestra temporale, con \textit{timestamp} in microsecondi, il
+nome del servizio e le metriche di stato interno dichiarate in
+\textit{topology["node\_metrics"]}. La chiave composita di unicità è la coppia
+\textit{(timestamp, node\_id)}. Il file \textit{edge\_metrics.csv} veicola le
+\textit{feature} effimere degli archi, con colonne \textit{timestamp}, \textit{edge\_id},
+sorgente, destinazione e le metriche di qualità dichiarate in
+\textit{topology["edge\_metrics"]}, con chiave \textit{(timestamp, edge\_id)}. Il file
+\textit{ground\_truth.csv} associa a ogni finestra temporale la \textit{label} binaria di
+anomalia, la lista JSON dei nodi anomali e i metadati dell'esperimento, con
+\textit{timestamp} come chiave.
+
+Qualunque componente di conversione che produca questi tre file con gli schemi descritti è
+compatibile con il \textit{framework} senza modificare una riga di codice al di fuori del
+pacchetto \textit{etl/}. Tale componente è l'unico modulo \textit{dataset-specific}
+dell'intera architettura: si occupa di estrarre i metadati, aggregare le tracce per finestra
+temporale, calcolare le metriche con le opportune correzioni sui contatori cumulativi e
+produrre il \textit{ground truth}. L'implementazione specifica adottata nella valutazione
+sperimentale è descritta nel Capitolo~\ref{chap:sperimentazione}.
+
+% =========================================================
+\section{Implementazione del Layer 1: L'Ipergrafo di Certificazione}
+\label{sec:impl_layer1}
+% =========================================================
+
+Il Layer~1 del \textit{framework} è responsabile della rappresentazione statica della struttura
+certificativa del sistema: quali componenti appartengono a quale proprietà certificata, quali
+risorse sono condivise tra proprietà diverse, e quale sequenza costituisce il percorso critico
+certificato per ogni proprietà lineare. Questa informazione è codificata nel file
+\textit{topology.yaml} e tradotta in strutture dati interrogabili dal modulo TopologyBuilder,
+che fornisce a tutti i moduli superiori un'interfaccia uniforme e tipizzata per accedere alla
+topologia del sistema.
+
+\subsection{La Strategia di Annotazione Semantica e la Scelta di NetworkX}
+\label{subsec:annotazione_semantica}
+
+Il TopologyBuilder traduce il file \textit{topology.yaml} nella struttura dati che implementa
+il formalismo $H_{\text{cert}} = (V, \{H_{\Phi_1}, \ldots, H_{\Phi_m}\})$. La sfida
+ingegneristica principale è che NetworkX non dispone di un tipo di dato ipergrafale nativo:
+non esiste una classe \textit{Hypergraph} che modelli direttamente la semantica di un iperarco
+come insieme di nodi con logica AND atomica. Si presentano pertanto due strategie di
+implementazione, analizzate anche nel Capitolo~\ref{chap:metodologia}: l'Espansione Topologica
+e l'Annotazione Semantica.
+
+L'Espansione Topologica introduce nodi virtuali di sincronizzazione, uno per ogni
+\textit{compliance set}, collegati tramite archi fittizi a tutti i nodi del set. Questa strategia
+rende la semantica AND esplicita nella topologia, ma introduce $m$ nodi aggiuntivi (uno per
+proprietà) le cui \textit{feature} devono essere ricalcolate a ogni passo temporale, producendo
+un \textit{overhead} computazionale crescente con il numero di proprietà monitorate. Produce
+inoltre strutture eterogenee (nodi reali e nodi fittizi nello stesso grafo) che complicano le
+operazioni di interrogazione e la compatibilità con le \textit{pipeline} di osservabilità
+industriali, le quali producono metriche associate agli archi e ai nodi reali del sistema.
+
+La Strategia di Annotazione Semantica, adottata nell'implementazione, mantiene invariata la
+topologia reale del sistema da monitorare e codifica la semantica dei \textit{compliance set}
+come attributo \textit{hyperedges} su ogni arco del grafo: una lista dei nomi dei
+\textit{compliance set} a cui l'arco appartiene secondo la definizione formale
+$A(H_{\Phi_i}) = \{e = (u,v) \mid u \in H_{\Phi_i} \wedge v \in H_{\Phi_i}\}$. Questo
+approccio è compatibile con qualsiasi libreria di analisi su grafi che supporti attributi sugli
+archi, non introduce nodi fittizi, non richiede ricalcolo a \textit{runtime} e consente di
+aggiungere una nuova proprietà certificata aggiornando solo le annotazioni degli archi già
+esistenti. La semantica AND del \textit{Compliance Set} è rispettata integralmente dalla
+logica applicativa dei moduli superiori (FeatureSelector, StructuralMonitor, CausalAnalyzer)
+che interrogano questo attributo: l'assenza di un tipo \textit{Hypergraph} nativo non implica
+una simulazione approssimata, ma una codifica equivalente della stessa semantica in una
+struttura dati differente.
+
+La scelta specifica di NetworkX è motivata dal suo modello a dizionari Python nativi per
+gli attributi: \textit{g.add\_edge(u, v, hyperedges=[...])} rende il campo \textit{hyperedges}
+interrogabile con la stessa sintassi del grafo e modificabile senza operazioni di
+serializzazione o cast di tipo. Questa flessibilità, assente in librerie come igraph (che usa
+schemi fissi per gli attributi), è fondamentale per mantenere l'annotazione semantica
+aggiornabile in risposta a cambiamenti della configurazione.
+
+\subsection{Il Metodo build() e la Costruzione del Grafo Annotato}
+\label{subsec:build_method}
+
+La costruzione del grafo avviene tramite il metodo \textit{build()}, che implementa un pattern
+di \textit{caching} idempotente: alla prima chiamata il grafo viene costruito e memorizzato
+internamente; alle chiamate successive viene restituita una copia profonda del grafo già
+costruito, senza ricalcolare. L'algoritmo di annotazione sfrutta la precalcolazione nel
+costruttore: i set di nodi di ogni \textit{compliance set} vengono convertiti in strutture
+\textit{set[str]} e memorizzati in \textit{\_cs\_node\_sets}, in modo che il \textit{lookup}
+dell'appartenenza di un nodo a un \textit{compliance set} abbia costo $O(1)$ anziché $O(|V|)$
+per ogni arco.
+
+\begin{lstlisting}[
+  language=Python,
+  caption={Metodo \textit{build()} in \textit{src/layer1/topology\_builder.py}.
+  La comprensione di lista che costruisce \textit{hyperedges} opera in tempo
+  $O(|CS|)$ per arco grazie alla precalcolazione di \textit{\_cs\_node\_sets}.
+  Il \textit{copy.deepcopy} finale garantisce l'isolamento della cache da
+  modifiche esterne.}
+]
+def build(self) -> nx.DiGraph:
+    if self._graph is not None:
+        return copy.deepcopy(self._graph)
+
+    g = nx.DiGraph()
+    for node in self._topology["nodes"]:
+        g.add_node(node["id"])
+
+    declared_nodes = {n["id"] for n in self._topology["nodes"]}
+    for edge in self._topology["edges"]:
+        for endpoint_key in ("source", "target"):
+            ep = edge[endpoint_key]
+            if ep not in declared_nodes:
+                raise ValueError(
+                    f"Arco '{edge['id']}': endpoint '{ep}' "
+                    "non presente in topology['nodes']. "
+                    "Verifica topology.yaml."
+                )
+
+    for edge in self._topology["edges"]:
+        u, v = edge["source"], edge["target"]
+        hyperedges = [
+            name
+            for name, node_set in self._cs_node_sets.items()
+            if u in node_set and v in node_set
+        ]
+        g.add_edge(u, v, id=edge["id"], hyperedges=hyperedges)
+
+    covered: set[str] = set()
+    for cs in self._topology["compliance_sets"].values():
+        covered.update(cs.get("nodes", []))
+    isolated = {n["id"] for n in self._topology["nodes"]} - covered
+    if isolated:
+        logger.warning(
+            "Nodi in V non appartenenti ad alcun compliance set "
+            "(blind spot di monitoraggio): %s",
+            sorted(isolated),
+        )
+
+    self._graph = g
+    return copy.deepcopy(self._graph)
+\end{lstlisting}
+
+La validazione degli \textit{endpoint} è separata dalla costruzione degli archi: il primo
+ciclo controlla tutti gli archi prima che qualsiasi arco sia aggiunto al grafo, in modo da
+garantire che un errore di configurazione produca un'eccezione con il nome dell'arco
+problematico, senza lasciare il grafo in uno stato parzialmente costruito.
+
+Il ciclo di annotazione semantica include una seconda verifica, attivata dopo l'assegnazione
+di \textit{hyperedges}: se l'attributo risulta una lista vuota e tuttavia entrambi gli
+\textit{endpoint} appartengono ad almeno un \textit{compliance set}, il metodo emette
+\textit{logger.warning}. Questo scenario si verifica quando i due estremi di un arco
+appartengono a \textit{compliance set} distinti e non condivisi: l'arco non rientra in
+$A(H_{\Phi_i})$ per nessuna proprietà e non è raggiungibile nemmeno da
+$M^{\text{interf}}$, risultando strutturalmente invisibile all'intero \textit{framework}.
+Il warning segnala una potenziale lacuna di copertura del monitoraggio prima che qualsiasi
+analisi sia eseguita, evitando che la situazione rimanga silente fino all'esecuzione.
+
+La chiamata finale \textit{copy.deepcopy(self.\_graph)} implementa il Pattern Prototype: il
+grafo originale è conservato come \textit{template} immutabile internamente; ogni consumatore
+riceve una copia indipendente e può modificarla liberamente senza corrompere la struttura
+centralizzata. Questa garanzia è verificata da un test dedicato:
+
+\begin{lstlisting}[
+  language=Python,
+  caption={Test di isolamento della cache in
+  \textit{tests/test\_topology\_builder.py}. Modificare il grafo restituito
+  da \textit{build()} non deve corrompere la cache interna. Il test verifica
+  che il nodo iniettato nella prima copia non sia presente nella seconda.}
+]
+def test_build_returns_independent_copy(builder):
+    g1 = builder.build()
+    g1.add_node("injected-sentinel")
+    g2 = builder.build()
+    assert "injected-sentinel" not in g2.nodes()
+\end{lstlisting}
+
+\subsection{L'Interfaccia Pubblica e le Query Semantiche}
+\label{subsec:topology_queries}
+
+L'interfaccia pubblica del TopologyBuilder espone sette metodi che traducono direttamente le
+operazioni formali del Capitolo~\ref{chap:metodologia} in API Python tipizzate. Tutti i moduli
+superiori (FeatureSelector, StructuralMonitor, CausalAnalyzer) accedono alla topologia
+esclusivamente attraverso questi metodi, senza mai interrogare il grafo NetworkX direttamente.
+Questa scelta segue il principio di Law of Demeter e consente di sostituire internamente la
+rappresentazione del grafo senza modificare alcun modulo dipendente.
+
+Il metodo \textit{get\_edges\_for\_compliance\_set} implementa $A(H_{\Phi_i})$, calcolando
+dinamicamente la condizione $u \in H_{\Phi_i} \wedge v \in H_{\Phi_i}$ su ogni arco del grafo.
+Il risultato non è memorizzato in \textit{cache} perché la chiamata è $O(|E|)$ e il numero
+di archi in un sistema distribuito tipico è sufficientemente ridotto da rendere il ricalcolo
+trascurabile.
+
+Il metodo \textit{get\_interference\_edges} implementa $M^{\text{interf}}$, restituendo gli
+archi $e = (u, v)$ tali che $v \in \text{Shared}(H_{\Phi_i}, H_{\Phi_j})$ e
+$u \notin H_{\Phi_i}$. La funzione solleva \textit{ValueError} se \textit{target\_cs} e
+\textit{other\_cs} coincidono, perché l'auto-interferenza non è definita semanticamente. Il
+risultato può essere l'insieme vuoto: questo non è un caso degenere ma una proprietà strutturale
+legittima di topologie in cui tutti gli archi entranti verso i nodi condivisi provengono da nodi
+già interni al \textit{compliance set} di destinazione.
+
+Il metodo \textit{get\_critical\_path} include una doppia validazione strutturale: verifica
+che ogni nodo della sequenza appartenga al \textit{compliance set} e che ogni coppia
+consecutiva corrisponda a un arco reale nella topologia, sollevando \textit{ValueError} in
+entrambi i casi. Questa validazione \textit{eager}, eseguita alla prima chiamata, anticipa i
+fallimenti alla fase di configurazione e non all'esecuzione, dove un percorso mal formato
+produrrebbe un Path Adherence Score semanticamente privo di significato. Per i
+\textit{compliance set} di tipo \textit{parallel}, il metodo restituisce una lista vuota,
+evitando la necessità di una condizione speciale nei chiamanti. Qualora il
+\textit{topology\_type} non sia né \textit{linear} né \textit{parallel}, il metodo emette un
+\textit{warning} con il valore non riconosciuto e restituisce una lista vuota, senza sollevare
+eccezioni: questa scelta di \textit{fail-soft} consente al sistema di continuare a operare
+anche in presenza di configurazioni parzialmente valide.
+
+La suite di test del TopologyBuilder comprende 38 casi che verificano sistematicamente tutte
+le proprietà dell'interfaccia pubblica: struttura del grafo (numero di nodi, di archi,
+orientamento), annotazione semantica per ogni arco, calcolo dei nodi condivisi e sua
+simmetricità, calcolo di $A(H_{\Phi_i})$ e $M^{\text{interf}}$, validazione della sequenza
+del percorso critico, idempotenza di \textit{build()}, isolamento della \textit{cache} e
+tutti i comportamenti d'errore (\textit{KeyError} per \textit{compliance set} inesistenti,
+inclusa la verifica che l'eccezione sia sollevata anche quando è il secondo argomento a essere
+invalido in \textit{get\_shared\_nodes} e \textit{get\_interference\_edges}; \textit{ValueError}
+per endpoint non dichiarati, per auto-interferenza e per percorsi mal formati).
+
+% =========================================================
+\section{Implementazione del Layer 2: ATG e Probabilistic Behavioral Overlay}
+\label{sec:impl_layer2}
+% =========================================================
+
+Il Layer~2 si occupa di due compiti concettualmente distinti ma strettamente complementari. Il
+primo è costruire la sequenza temporale di snapshot $G_t$ a partire dai tre CSV canonici,
+allineando e deduplicando i dati provenienti da sorgenti con \textit{timestamp} potenzialmente
+non coincidenti. Il secondo è trasformare quella sequenza in una rappresentazione comportamentale
+stocastica che cattura non i valori puntuali delle metriche, ma la distribuzione del traffico tra
+i percorsi del sistema. Questi due compiti sono assegnati a due classi distinte con responsabilità
+non sovrapposte: ATGBuilder e PBOBuilder. La separazione è una scelta di \textit{design}
+deliberata motivata da ragioni di testabilità e di coesione: i 32 test dell'ATGBuilder non
+istanziano mai un PBOBuilder, e i 27 test del PBOBuilder non leggono mai un CSV reale.
+
+\subsection{L'ATGBuilder: Costruzione degli Snapshot e Gestione dell'Allineamento}
+\label{subsec:impl_atg}
+
+L'ATGBuilder implementa il Layer~2 del \textit{framework} costruendo la sequenza temporale di
+snapshot $G_t = (V, E_t, \mathbf{X}_{V,t}, \mathbf{X}_{E,t})$ a partire dai tre CSV canonici.
+Ogni snapshot è rappresentato come un dizionario Python con sei campi che corrispondono
+esattamente agli elementi della quadrupla formale. Il campo \textit{timestamp} è un intero in
+microsecondi, non convertito in \textit{datetime64}: la conversione è delegata ai soli moduli
+di \textit{forecasting} che la richiedono (Prophet), evitando una trasformazione globale non
+necessaria per gli altri modelli. Il campo \textit{nodes} è una mappa da \textit{node\_id} al
+dizionario delle metriche di nodo; il campo \textit{edges} una mappa da \textit{edge\_id} al
+dizionario delle metriche di arco più i campi \textit{source} e \textit{target}. I campi
+\textit{label}, \textit{anomaly\_type} e \textit{anomaly\_node\_ids} rispecchiano il
+\textit{ground truth} della finestra.
+
+Il metodo \textit{build()} accetta DataFrame opzionali in memoria (usati nei test) e, se assenti,
+li legge dai percorsi CSV passati al costruttore. Questo schema a iniezione di dipendenza consente
+ai test di fornire dati sintetici precisi senza richiedere alcun file su disco. Ogni chiamata a
+\textit{build()} esegue l'intera pipeline di costruzione: non è idempotente rispetto alla lettura
+da disco, perché i dati sul disco potrebbero cambiare tra chiamate.
+
+La pipeline interna si articola in tre fasi sequenziali. La prima fase è la deduplicazione dei
+tre CSV. Prima di qualsiasi allineamento, il metodo applica tre deduplicazioni con chiavi distinte:
+per \textit{timestamp} sul \textit{ground truth}, per coppia \textit{(timestamp, node\_id)} sui
+nodi e per coppia \textit{(timestamp, edge\_id)} sugli archi. La strategia \textit{keep="first"}
+è deliberata: si mantiene la prima occorrenza e si scarta la seconda senza tentare un \textit{merge}.
+Un \textit{merge} produrrebbe valori metrici sintetici non presenti nel dataset originale,
+violando il principio che ogni valore nell'output deve essere direttamente tracciabile a un record
+del dataset grezzo. Le deduplicazioni possono eliminare una percentuale non trascurabile di
+osservazioni: per questo il comportamento è documentato come limitazione strutturale del dataset
+di addestramento, non come difetto del modulo.
+
+La seconda fase è l'allineamento per \textit{inner join}. Il metodo calcola l'intersezione dei
+\textit{timestamp} unici dei tre DataFrame deduplicati e include nel risultato finale solo le
+finestre presenti simultaneamente in tutti e tre. Pre-indicizza i DataFrame per \textit{timestamp}
+con \textit{groupby} prima del ciclo principale, riducendo il costo di \textit{lookup} da $O(n)$
+a $O(1)$ per snapshot. Se l'intersezione è vuota, viene sollevato \textit{ValueError}: questa è
+l'unica condizione che blocca la costruzione, perché un insieme vuoto di snapshot è
+strutturalmente inutilizzabile per qualsiasi analisi successiva. Una piccola differenza nel numero
+di \textit{timestamp} tra \textit{node\_metrics} e \textit{edge\_metrics} è il comportamento
+atteso quando il convertitore scarta la prima finestra per nodo (per impossibilità di calcolare
+il delta del contatore) ma non per gli archi: il join \textit{inner} la esclude automaticamente.
+
+La terza fase è la verifica consultiva della consistenza tra i nodi e gli archi presenti nei CSV
+e quelli dichiarati in \textit{topology.yaml}. Le discrepanze non bloccano la costruzione: nodi o
+archi extra emettono \textit{logger.warning} con il nome dell'identificatore sconosciuto, e nodi
+o archi mancanti emettono anch'essi \textit{warning}. Una verifica analoga viene eseguita sulle
+colonne di \textit{node\_metrics.csv}: se una metrica dichiarata in
+\textit{topology["node\_metrics"]} è strutturalmente assente dal file CSV (non solo
+sporadicamente NaN, ma completamente mancante come colonna), viene emesso un avviso esplicito che
+elenca le dimensioni interessate. Gli snapshot verranno costruiti con NaN su quelle dimensioni, e
+i moduli di \textit{forecasting} a valle li gestiranno tramite \textit{dropna()} prima del
+\textit{fitting}. Questa politica di \textit{fail-soft} è motivata dal fatto che le discrepanze
+possono essere transitorie, ad esempio per un nodo temporaneamente assente durante un
+\textit{rolling restart}, e non devono interrompere il monitoraggio.
+
+La gestione del campo \textit{anomaly\_type} richiede attenzione particolare. Il
+\textit{fault\_type} estratto dal nome file vale per l'intera sessione sperimentale, incluse le
+finestre nominali all'inizio dell'esperimento. Per preservare la semantica corretta, il campo
+\textit{anomaly\_type} è impostato a \textit{None} quando \textit{label == 0},
+indipendentemente dal valore di \textit{fault\_type}: una finestra nominale è nominale per
+definizione, anche se appartiene a una sessione di guasto. I valori \textit{fault\_type} pari a
+NaN (ad esempio da esperimenti con metadati incompleti) sono convertiti a \textit{None} e non
+alla stringa \textit{"nan"}: un test dedicato (\textit{test\_fault\_type\_nan\_produces\_none\_anomaly\_type})
+verifica questo comportamento. Il campo \textit{anomaly\_node\_ids} con JSON malformato produce
+una lista vuota con \textit{logger.warning}, senza propagare eccezioni ai moduli superiori.
+
+I metodi ausiliari \textit{get\_node\_feature\_matrix} e \textit{get\_edge\_feature\_matrix}
+materializzano le matrici $\mathbf{X}_{V,t}$ e $\mathbf{X}_{E,t}$ come DataFrame pandas
+indicizzati per \textit{timestamp}, con le metriche come colonne. Questi DataFrame sono
+direttamente consumabili dal FeatureSelector senza ulteriori trasformazioni. Qualora
+l'identificatore richiesto non sia presente in nessuno snapshot della lista, entrambi i
+metodi restituiscono un DataFrame vuoto ed emettono \textit{logger.warning} con il nome
+dell'identificatore. Questo comportamento è coerente con quello di \textit{build()}, che
+logga attivamente gli identificatori non riconosciuti durante la fase di costruzione:
+la visibilità dell'assenza è garantita in entrambe le direzioni. I metodi statici
+\textit{get\_nominal\_snapshots} e \textit{get\_anomalous\_snapshots} filtrano la lista per
+etichetta e, il secondo, opzionalmente per tipo di anomalia con corrispondenza esatta sulla
+stringa: \textit{"cpu"} non è una \textit{substring} di \textit{"cpu\_mem"}.
+
+\subsection{Il PBOBuilder: la Matrice Stocastica e il Monitoraggio Comportamentale}
+\label{subsec:impl_pbo}
+
+Il PBOBuilder implementa il livello \gls{PBO} $G_{\text{Behavior}}(t) = (V, E_{\text{all}}, W_t)$,
+trasformando gli snapshot dell'ATG in una rappresentazione che cattura non quanto il sistema sia
+lento o saturato, ma come si distribuisce il traffico tra i percorsi disponibili. Questa
+distinzione è il motivo per cui le due classi sono separate: l'ATGBuilder risponde alla domanda
+\textit{quanto} (quanta latenza, quanta memoria, quanto carico), il PBOBuilder risponde alla
+domanda \textit{come} (il traffico segue i percorsi certificati, o si sta redistribuendo verso
+percorsi di \textit{fallback}?). Un sistema può apparire metricamente conforme mentre abbandona
+progressivamente il percorso certificato: questa deviazione è visibile nel PBO prima ancora che
+le soglie di latenza vengano superate.
+
+Il costruttore del PBOBuilder valida subito che la metrica configurata in
+\textit{pipeline\_params["pbo"]["weight\_metric"]} (di default \textit{throughput\_rps}) sia
+presente nella lista \textit{edge\_metrics} di \textit{topology.yaml}. In caso contrario,
+viene sollevato \textit{ValueError} al momento dell'istanziazione: questa scelta anticipa il
+fallimento rispetto a una scoperta tardiva durante il calcolo dei pesi.
+
+Il metodo \textit{compute\_transition\_weights} calcola la matrice stocastica $W_t$ per ogni
+snapshot. Per ogni nodo con archi uscenti, normalizza il valore della metrica scelta su ciascun
+arco rispetto alla somma totale degli archi uscenti dallo stesso nodo. Il meccanismo di
+\textit{fallback} uniforme è uno degli aspetti più critici dell'implementazione:
+
+\begin{lstlisting}[
+  language=Python,
+  caption={Logica del \textit{fallback} uniforme nel calcolo dei pesi di transizione
+  in \textit{src/layer2/pbo\_builder.py}. La proprietà stocastica della riga
+  (somma pesi uscenti = 1) deve essere garantita anche in condizioni degeneri:
+  throughput zero, valori negativi o NaN.}
+]
+for source_node, out_edges in node_out_edges.items():
+    vals = [
+        snapshot["edges"][eid].get(weight_metric, 0.0)
+        for eid in out_edges
+        if eid in snapshot["edges"]
+    ]
+    total = sum(v for v in vals if isinstance(v, (int, float))
+                and not math.isnan(v) and v >= 0)
+    if total <= 0 or any(
+        not isinstance(v, (int, float)) or math.isnan(v) or v < 0
+        for v in vals
+    ):
+        # Fallback uniforme: 1/n per tutti gli archi uscenti
+        n = len(out_edges)
+        logger.warning(
+            "Throughput non valido per nodo '%s' (ts=%d): "
+            "fallback uniforme 1/%d.",
+            source_node, ts, n,
+        )
+        for eid in out_edges:
+            weights[eid] = 1.0 / n
+    else:
+        for eid, v in zip(out_edges, vals):
+            weights[eid] = max(0.0, v) / total
+\end{lstlisting}
+
+Il ciclo esterno itera sui nodi con archi uscenti; per ciascuno, raccoglie i valori della metrica
+di peso per gli archi uscenti presenti nello snapshot corrente. La condizione di \textit{fallback}
+scatta se la somma è zero o non positiva, oppure se almeno un valore è NaN o negativo. In quel
+caso, tutti i pesi del nodo vengono impostati a $1/n$ dove $n$ è il numero di archi uscenti,
+preservando la proprietà stocastica. Il \textit{logger.warning} documenta il \textit{timestamp}
+e il nome del nodo coinvolto, rendendo l'evento tracciabile in produzione.
+
+Il metodo \textit{compute\_gold\_standard} calcola $W^{\text{gold}}$ come media dei pesi sulle
+sole finestre con etichetta corrispondente al parametro \textit{gold\_standard\_label} (di default
+0, ossia le finestre nominali). La \textit{label} di riferimento è letta dal YAML e non è mai
+fissa nel codice. Il \textit{gold standard} copre tutti gli archi della topologia
+(\textit{E\_all}): se un arco è assente in uno snapshot nominale (ad esempio perché il suo
+\textit{throughput} è zero e il suo peso non è stato registrato), contribuisce con peso 0 alla
+media. Un test dedicato verifica questa proprietà: costruire il \textit{gold standard} su due
+snapshot nominali dove il primo non ha \textit{e6} produce
+$W^{\text{gold}}[\text{e6}] = (0.0 + 0.6) / 2 = 0.3$, non il solo valore del secondo snapshot.
+
+Il metodo \textit{compute\_path\_adherence} è applicabile solo ai \textit{compliance set} con
+\textit{topology\_type == "linear"} e solleva \textit{ValueError} per i tipi paralleli. Il
+\gls{PAS} è implementato come prodotto cumulato dei pesi degli archi lungo il percorso critico.
+L'accesso al peso di un arco usa \textit{weights.get(eid, 0.0)}: se un arco del percorso
+certificato non è presente nel dizionario dei pesi correnti, il suo contributo è zero. Questa
+scelta implementa la semantica operativa che un arco certificato senza traffico corrisponde a
+un percorso parzialmente abbandonato: il \gls{PAS} crolla a zero, segnalando una deviazione
+strutturale.
+
+\begin{lstlisting}[
+  language=Python,
+  caption={Calcolo del \gls{PAS} e della norma di Frobenius in
+  \textit{src/layer2/pbo\_builder.py}. Il prodotto cumulato itera sugli
+  \textit{edge\_id} del percorso critico; \textit{.get(eid, 0.0)} garantisce
+  che archi assenti non generino \textit{KeyError}. La norma di Frobenius
+  usa \textit{math.sqrt} della libreria standard, senza dipendenze da NumPy.}
+]
+# Path Adherence Score
+for entry in weight_series:
+    weights = entry["weights"]
+    pas = 1.0
+    for eid in path_edge_ids:
+        pas *= weights.get(eid, 0.0)
+    result.append({"timestamp": entry["timestamp"], "pas": pas})
+
+# Norma di Frobenius
+all_eids = [e["id"] for e in self._edges]
+for entry in weight_series:
+    weights = entry["weights"]
+    sq_sum = sum(
+        (weights.get(eid, 0.0) - gold_standard.get(eid, 0.0)) ** 2
+        for eid in all_eids
+    )
+    result.append({
+        "timestamp": entry["timestamp"],
+        "frobenius": math.sqrt(sq_sum),
+    })
+\end{lstlisting}
+
+Il primo blocco implementa il \gls{PAS}: \textit{pas} inizializzato a 1.0 viene moltiplicato
+per il peso di ogni arco del percorso critico. Il secondo blocco implementa la norma di
+Frobenius: per ogni arco della topologia completa $E_{\text{all}}$, calcola il quadrato della
+differenza tra il peso corrente e il peso del \textit{gold standard}, usando 0.0 come valore di
+\textit{default} per entrambi i dizionari. Questo garantisce che un arco con peso 0.0 esplicito
+e un arco assente dal dizionario producano identico contributo alla norma, proprietà verificata
+da \textit{test\_frobenius\_explicit\_zero\_weight\_contributes}.
+
+Il PBOBuilder è utilizzato dallo StructuralMonitor in due modalità distinte a seconda del tipo di
+topologia del \textit{compliance set}: per le topologie lineari il monitoraggio opera sul \gls{PAS},
+accumulando i suoi decrementi nel \gls{CUSUM}; per le topologie parallele, dove il \gls{PAS} non
+è definito, il monitoraggio opera sulla norma di Frobenius, accumulando i suoi incrementi. La
+scelta della metrica appropriata avviene a \textit{runtime} leggendo il campo
+\textit{topology\_type} dalla configurazione.
+
+% =========================================================
+\section{Implementazione del Layer 3: Feature Selector}
+\label{sec:impl_feature_selector}
+% =========================================================
+
+Il FeatureSelector implementa il Layer~3 del \textit{framework}, ossia la funzione di
+\textit{mapping} $\mathcal{M}$ che traduce la specifica di un \textit{compliance set}
+nell'insieme di serie temporali $M_{\Phi_i} = M^{\text{direct}} \cup M^{\text{interf}}$
+pronte per il \textit{forecasting}. Il modulo non interroga mai direttamente il grafo NetworkX
+e non accede mai ai CSV: delega tutte le operazioni topologiche al TopologyBuilder e riceve
+i valori delle metriche dagli snapshot prodotti dall'ATGBuilder. Questa architettura segue il
+principio \textit{Don't Repeat Yourself}: la logica di calcolo di $A(H_{\Phi_i})$ e di
+$M^{\text{interf}}$ è implementata una sola volta nel TopologyBuilder; il FeatureSelector ne
+consuma i risultati. Se il criterio di appartenenza di un arco a un \textit{compliance set}
+cambiasse, la modifica dovrebbe essere applicata in un solo posto.
+
+\subsection{La Convenzione di Denominazione e la Struttura di \textit{select\_features}}
+\label{subsec:feature_naming}
+
+Il metodo principale \textit{select\_features} restituisce un dizionario che mappa stringhe
+chiave a DataFrame pandas. La convenzione di denominazione delle chiavi è tripartita e
+deterministica: le \textit{feature} di nodo seguono il formato
+\textit{node:<node\_id>:<metrica>}, quelle di arco \textit{edge:<edge\_id>:<metrica>} e quelle
+di interferenza \textit{interf:<edge\_id>:throughput\_rps}. Questa convenzione rende le chiavi
+interpretabili sia per la logica del \textit{framework} (il CausalAnalyzer può ricostruire
+l'appartenenza di una metrica a un nodo o a un arco analizzando il prefisso) sia per l'operatore
+che legge i \textit{log}.
+
+L'ordine di costruzione delle chiavi è determinato da regole precise. Le chiavi \textit{node:}
+seguono \textit{sorted(cs\_nodes)}: l'ordine lessicografico sui nodi è fondamentale per la
+riproducibilità del vettore di stato aggregato dello StructuralMonitor, che deve avere la stessa
+struttura tra il \textit{fit()} e ogni successiva chiamata a \textit{monitor()}. Le chiavi
+\textit{edge:} seguono l'ordine di dichiarazione degli archi in \textit{topology.yaml}. Le
+chiavi \textit{interf:} seguono l'ordine di visita degli altri \textit{compliance set}, che è
+determinato dall'ordine di inserimento in Python 3.7+.
+
+\begin{lstlisting}[
+  language=Python,
+  caption={Metodo \textit{select\_features} in \textit{src/layer3/feature\_selector.py}.
+  La struttura tripartita (nodi, archi interni, archi di interferenza) rispecchia
+  direttamente la definizione formale $M_{\Phi_i} = M^{\text{direct}} \cup
+  M^{\text{interf}}$. Nessuna operazione topologica avviene qui: tutto è delegato
+  alle API del TopologyBuilder.}
+]
+def select_features(self, compliance_set_name, snapshots):
+    cs_nodes = self._tb.get_compliance_set_nodes(compliance_set_name)
+    internal_edges = self._tb.get_edges_for_compliance_set(
+        compliance_set_name
+    )
+    interf_edges = self._collect_interference_edges(compliance_set_name)
+    result = {}
+
+    # M_direct -- feature di nodo (ordine lessicografico deterministico)
+    for node_id in sorted(cs_nodes):
+        for metric in self._node_metrics:
+            key = f"node:{node_id}:{metric}"
+            result[key] = self._build_node_series(
+                node_id, metric, snapshots
+            )
+
+    # M_direct -- feature di arco (ordine topology.yaml)
+    for src, tgt in internal_edges:
+        edge_id = self._edge_id_lookup.get((src, tgt))
+        if edge_id is None:
+            continue
+        for metric in self._edge_metrics:
+            key = f"edge:{edge_id}:{metric}"
+            result[key] = self._build_edge_series(
+                edge_id, metric, snapshots
+            )
+
+    # M_interf -- solo throughput_rps, con deduplicazione tramite seen-set
+    for src, tgt in interf_edges:
+        edge_id = self._edge_id_lookup.get((src, tgt))
+        if edge_id is None:
+            continue
+        key = f"interf:{edge_id}:{self._INTERF_METRIC}"
+        result[key] = self._build_edge_series(
+            edge_id, self._INTERF_METRIC, snapshots
+        )
+    return result
+\end{lstlisting}
+
+Il metodo delega tre operazioni al TopologyBuilder: \textit{get\_compliance\_set\_nodes}
+restituisce l'insieme dei nodi di $H_{\Phi_i}$; \textit{get\_edges\_for\_compliance\_set}
+restituisce le tuple \textit{(source, target)} degli archi interni;
+\textit{\_collect\_interference\_edges} itera su tutti gli altri \textit{compliance set} e
+raccoglie gli archi di $M^{\text{interf}}$ chiamando \textit{get\_interference\_edges} per ogni
+coppia, deduplicando tramite un \textit{set} di tuple già viste. La traduzione da tupla
+\textit{(source, target)} a \textit{edge\_id} avviene tramite \textit{\_edge\_id\_lookup}, un
+dizionario precalcolato nel costruttore dal file \textit{topology.yaml}. I metodi privati
+\textit{\_build\_node\_series} e \textit{\_build\_edge\_series} inseriscono
+\textit{float("nan")} per gli snapshot in cui il nodo o l'arco è assente, emettendo un avviso:
+il NaN passa ai moduli di \textit{forecasting} che lo gestiscono con \textit{dropna()} prima del
+\textit{fitting}.
+
+\subsection{La Metrica di Interferenza come Unica Costante di Dominio}
+\label{subsec:interf_metric}
+
+La costante di classe \textit{\_INTERF\_METRIC = "throughput\_rps"} è l'unica costante di
+dominio non configurabile tramite YAML nell'intero \textit{framework}. La scelta è giustificata
+dalla semantica: il \textit{throughput} è l'unico indicatore che quantifica il carico esercitato
+da un \textit{compliance set} esterno su una risorsa condivisa. La latenza, al contrario, è una
+metrica di effetto, in quanto misura la degradazione ma non quantifica il carico imposto.
+Includerla in $M^{\text{interf}}$ introdurrebbe rumore e dipendenze causali spurie.
+
+Il costruttore verifica che questa metrica sia presente in \textit{edge\_metrics} di
+\textit{topology.yaml} e, se assente, emette \textit{logger.warning} e imposta il \textit{flag}
+\textit{\_interf\_available = False}, rendendo $M^{\text{interf}} = \emptyset$ per tutti i
+\textit{compliance set} senza sollevare eccezioni. Questa scelta consente di usare il
+\textit{framework} anche con dataset che non dispongono di metriche di \textit{throughput}, a
+costo di perdere la capacità di rilevare le interferenze \textit{cross-property}.
+
+% =========================================================
+\section{Implementazione della Fase I: Forecasting Locale con Routing Dinamico}
+\label{sec:impl_fase1}
+% =========================================================
+
+La Fase~I della \textit{pipeline} trasforma le serie temporali in $M_{\Phi_i}$ in previsioni
+quantitative sull'orizzonte $\tau$ configurato. L'implementazione di questa fase nel modulo
+StatForecaster affronta tre problemi ingegneristici distinti: come selezionare il modello più
+adeguato per ogni serie senza intervento manuale, come gestire i \textit{timestamp} irregolari
+del dataset, e come garantire che l'addestramento non sia inquinato da dati anomali. Il nucleo
+della soluzione ai tre problemi è il metodo \textit{fit()}, che incapsula la cascata di decisioni
+e le trasformazioni necessarie.
+
+\subsection{Il Routing Dinamico dei Modelli con il Pattern Strategy}
+\label{subsec:routing_strategy}
+
+Il StatForecaster implementa il \textit{Pattern Strategy} per l'assegnazione dei modelli
+predittivi: il comportamento di \textit{fitting} e predizione varia a seconda del modello
+selezionato per ogni serie, ma l'interfaccia pubblica (\textit{fit} e \textit{predict}) rimane
+invariata indipendentemente dai modelli scelti. La selezione avviene tramite il metodo privato
+\textit{\_route\_model}, che implementa una cascata di tre regole valutate nell'ordine:
+
+\begin{lstlisting}[
+  language=Python,
+  caption={Metodo \textit{\_route\_model} in \textit{src/phase1/stat\_forecaster.py}.
+  La cascata di tre regole è valutata nell'ordine: \textit{override} esplicito
+  per chiave, metriche non-lineari da YAML (con \textit{fallback} se dati
+  insufficienti), Prophet come \textit{default} incondizionato.}
+]
+def _route_model(self, key, metric_name, n_samples, model_override):
+    if model_override and key in model_override:
+        return model_override[key]
+
+    if metric_name in self._nonlinear_metrics:
+        if n_samples < self._input_window * 2:
+            logger.warning(
+                "Serie '%s' ha %d campioni < input_window*2=%d. "
+                "Fallback da LSTM a Prophet.",
+                key, n_samples, self._input_window * 2,
+            )
+            return "prophet"
+        return "lstm"
+
+    return "prophet"
+\end{lstlisting}
+
+La prima regola controlla se la chiave della serie è presente nel dizionario
+\textit{model\_override} passato opzionalmente a \textit{fit()}: in caso affermativo, il modello
+specificato viene usato incondizionatamente, bypassando ogni altra logica. Questo meccanismo è il
+punto di accesso per ARIMA e la regressione lineare, che non entrano mai nel \textit{routing}
+automatico: richiedono un \textit{override} esplicito da parte dell'operatore.
+
+La seconda regola verifica se il nome finale della metrica (il segmento dopo l'ultimo carattere
+\textit{:} nella chiave) appartiene alla lista \textit{nonlinear\_metrics} letta da
+\textit{pipeline\_params["forecasting"]["lstm"]["nonlinear\_metrics"]}. Se sì, il modello di
+destinazione è LSTM; ma se il numero di campioni nominali disponibili è inferiore a due volte la
+finestra di \textit{input} (\textit{input\_window}), si applica un \textit{fallback} automatico
+a Prophet con emissione di avviso. Questo \textit{fallback} è fondamentale per garantire che il
+sistema non tenti di addestrare un modello con memoria lagghata su serie troppo corte, producendo
+un \textit{Ridge} con finestre di dimensione zero o negativa.
+
+La terza regola è il \textit{default} incondizionato: Prophet. Questa scelta è motivata dalla
+robustezza di Prophet rispetto alle serie temporali di sistemi distribuiti: gestisce nativamente
+le irregolarità nei \textit{timestamp}, apprende automaticamente i \textit{changepoint}, non
+richiede pre-processing per la stazionarietà e produce intervalli di credibilità bayesiani
+calibrati. ARIMA non è nel \textit{routing} automatico perché richiede che l'operatore verifichi
+esplicitamente la stazionarietà della serie e selezioni consapevolmente gli ordini; la regressione
+lineare non lo è perché la sua utilità è limitata al ruolo di \textit{baseline} di validazione.
+
+Indipendentemente dal percorso seguito dalla cascata, il nome del modello prodotto da
+\textit{\_route\_model} viene validato rispetto all'insieme chiuso di modelli ammessi prima
+di procedere al \textit{fitting}. Un nome non riconosciuto, come potrebbe essere specificato
+per errore in un dizionario \textit{model\_override}, solleva \textit{ValueError} con
+messaggio descrittivo che include il nome invalido e l'elenco dei valori ammessi. Senza questa
+validazione, un \textit{override} mal formato cadrebbe silenziosamente nel ramo \textit{else}
+della catena di \textit{if/elif} e verrebbe addestrato come regressione lineare, senza alcun
+segnale dell'errore di configurazione.
+
+\subsection{Il Metodo fit(): Filtraggio Nominale e Gestione dei Timestamp Irregolari}
+\label{subsec:fit_method}
+
+Il metodo \textit{fit()} addestra i modelli esclusivamente sulle finestre nominali
+(\textit{label == 0}), identificate dall'insieme di \textit{timestamp} estratto da
+\textit{nominal\_snapshots}. Includere le finestre anomale nell'addestramento produrrebbe modelli
+che apprendono la distribuzione delle anomalie come comportamento atteso, invalidando le
+previsioni future. Il filtraggio usa \textit{df.index.isin(nominal\_ts)}: un'operazione
+vettorizzata con costo $O(n)$ sull'indice del DataFrame.
+
+\begin{lstlisting}[
+  language=Python,
+  caption={Corpo del metodo \textit{fit()} in \textit{src/phase1/stat\_forecaster.py}.
+  Il filtraggio nominale, la rimozione dei NaN tramite \textit{dropna()} e il
+  \textit{routing} al modello appropriato sono eseguiti per ogni feature. Una seconda
+  chiamata a \textit{fit()} sovrascrive completamente lo stato interno.}
+]
+nominal_ts: set[int] | None = None
+if nominal_snapshots is not None:
+    nominal_ts = {int(s["timestamp"]) for s in nominal_snapshots}
+
+for key, df in features.items():
+    metric_name = key.split(":")[-1]
+
+    if nominal_ts is not None:
+        train_df = df[df.index.isin(nominal_ts)].dropna()
+    else:
+        train_df = df.dropna()
+
+    routing = self._route_model(
+        key, metric_name, len(train_df), model_override
+    )
+    self._routing[key] = routing
+    self._train_data[key] = train_df
+
+    if routing == "prophet":
+        self._models[key] = self._fit_prophet(train_df)
+    elif routing == "lstm":
+        self._models[key] = self._fit_lstm_placeholder(train_df)
+    elif routing == "arima":
+        self._models[key] = self._fit_arima(key, train_df)
+    else:
+        self._models[key] = self._fit_linear(key, train_df)
+
+self._is_fitted = True
+\end{lstlisting}
+
+Il \textit{dropna()} applicato al \textit{training set} rimuove i NaN senza interpolazione.
+Questa scelta è deliberata: un'interpolazione introdurrebbe valori sintetici che non si trovano
+nel dataset originale e che potrebbero influenzare i parametri del modello in modo non
+tracciabile. Immediatamente dopo il filtraggio, un controllo esplicito verifica che il
+\textit{training set} risultante non sia vuoto: se tutti i \textit{timestamp} nominali non hanno
+corrispondenza nella serie temporale della \textit{feature} considerata, il modulo emette un
+\textit{logger.warning} e salta la \textit{feature} con un'istruzione \textit{continue}. La
+\textit{feature} non sarà presente nel dizionario restituito da \textit{predict()}, e i moduli
+superiori che la richiedessero riceverebbero \textit{None} al posto del DataFrame di previsione.
+Questo guard è verificato dal test
+\textit{test\_fit\_empty\_train\_after\_nominal\_filter\_skips\_gracefully}: il test fornisce
+\textit{nominal\_snapshots} con \textit{timestamp} completamente diversi da quelli della
+\textit{feature} e verifica che \textit{predict()} non contenga la chiave corrispondente.
+
+La stima della frequenza di campionamento \textit{freq\_us}, necessaria per costruire i
+\textit{timestamp} futuri nella predizione, usa la mediana dei diff sull'indice del training set.
+La scelta della mediana rispetto alla media è motivata dalla possibile presenza di gap
+inter-esperimento molto estesi, che sarebbero \textit{outlier} fortemente destabilizzanti per
+una media aritmetica, mentre la mediana li ignora. Il valore \textit{freq\_us} stimato viene
+usato per costruire i \textit{timestamp} futuri come
+$t_{\text{last}} + (i+1) \times \textit{freq\_us}$, garantendo esattamente
+\textit{horizon\_steps} righe coerenti con la finestra di raccolta nominale.
+
+\subsection{I Quattro Modelli Predittivi}
+\label{subsec:modelli_predittivi_impl}
+
+Prophet è il modello \textit{default} del \textit{routing} automatico. Il suo addestramento
+richiede la conversione dei \textit{timestamp} in µs in \textit{datetime64} tramite
+\textit{pd.to\_datetime(index, unit="us")}: questa conversione avviene solo nel metodo privato
+\textit{\_fit\_prophet}, non nell'interfaccia pubblica, evitando una trasformazione globale non
+necessaria agli altri modelli. Prophet viene addestrato con \textit{changepoint\_prior\_scale=0.05}
+per limitare la flessibilità del \textit{trend} e ridurre l'\textit{overfitting} su serie con
+pochi dati nominali. L'intervallo di credibilità bayesiano è impostato a
+\textit{interval\_width=0.80}, producendo il 10° e il 90° percentile come \textit{yhat\_lower}
+e \textit{yhat\_upper}.
+
+ARIMA è attivato solo tramite \textit{model\_override} e seleziona automaticamente l'ordine
+$(p, d, q)$ minimizzando il criterio AIC (\textit{Akaike Information Criterion}) con ricerca
+esaustiva sullo spazio di ordini definito dai parametri \textit{arima.max\_p},
+\textit{arima.max\_d}, \textit{arima.max\_q} letti da \textit{pipeline\_params.yaml}. Le
+eccezioni durante il \textit{fitting} di una combinazione $(p, d, q)$ specifica vengono catturate
+e ignorate silenziosamente; se nessuna combinazione produce un modello valido, viene sollevato
+\textit{RuntimeError} con il nome della \textit{feature}. L'interfaccia SARIMAX di statsmodels è
+usata con \textit{enforce\_stationarity=False} e \textit{enforce\_invertibility=False} per
+consentire al selettore AIC di esplorare l'intero spazio di ordini senza vincoli preventivi. I
+residui del modello ottimale vengono sottoposti al test di Ljung-Box
+(\textit{acorr\_ljungbox}) su un numero di ritardi pari a
+$\min(10,\lfloor n/5 \rfloor)$: se la \textit{p-value} è inferiore a $0{,}05$, viene
+emesso un \textit{logger.warning} con l'ordine $(p^*,d^*,q^*)$ ottimale e la
+\textit{p-value} minima. Il test è puramente diagnostico — non altera il modello
+selezionato — e segnala i casi in cui la struttura di autocorrelazione residua
+non è stata catturata dal modello AIC-ottimale, suggerendo all'operatore di
+considerare un ordine superiore o un modello alternativo.
+
+Il modello LSTM è attualmente un \textit{placeholder} computazionale documentato con un
+\textit{TODO} nel codice. La classe interna \textit{\_fit\_lstm\_placeholder} addestra un Ridge
+Regressor di scikit-learn su \textit{feature} laggiate di larghezza
+\textit{min(input\_window, n-1)}, producendo previsioni quasi lineari con incertezza stimata come
+margine simmetrico pari al 5\% del valore previsto. Questa soluzione è deliberata: il
+\textit{placeholder} consente di verificare l'intera \textit{pipeline} di \textit{routing} e di
+integrazione con i moduli superiori senza dipendere da un ciclo di addestramento profondo su GPU.
+La sostituzione con un'architettura LSTM PyTorch con stima dell'incertezza tramite \textit{Monte
+Carlo Dropout}~\cite{gal2016} è il primo punto di estensione previsto.
+
+La regressione lineare, attivata tramite \textit{model\_override}, stima i coefficienti $a$ e $b$
+del modello $\hat{y} = a + b \cdot t$ usando l'indice temporale come regressore. L'incertezza è
+calcolata come la deviazione standard dei residui sul \textit{training set}, proiettata come
+intervallo $\pm 1{,}96\sigma$ sul futuro.
+
+Il metodo \textit{predict()} costruisce i \textit{timestamp} futuri e delega la generazione
+delle previsioni al metodo privato corrispondente al modello addestrato. L'output è un dizionario
+che mappa ogni chiave di \textit{feature} a un DataFrame con colonne \textit{yhat},
+\textit{yhat\_lower} e \textit{yhat\_upper} e indice \textit{timestamp}. La proprietà
+$\textit{yhat\_lower} \leq \textit{yhat} \leq \textit{yhat\_upper}$ è garantita per tutti i
+modelli e verificata da \textit{test\_yhat\_lower\_leq\_yhat\_leq\_upper} con tolleranza
+$10^{-9}$.
+
+% =========================================================
+\section{Implementazione della Fase II: Analisi Causale Guidata dalla Topologia}
+\label{sec:impl_fase2}
+% =========================================================
+
+Il CausalAnalyzer implementa la Fase~II della \textit{pipeline}, costruendo il grafo causale
+orientato che formalizza le dipendenze statisticamente verificate tra le metriche di $M_{\Phi_i}$.
+La scelta progettuale fondamentale di questo modulo è applicare lo \textit{screening} topologico
+prima di qualsiasi calcolo statistico: anziché testare tutte le coppie possibili di metriche (un
+numero quadratico nel totale delle \textit{feature}), il CausalAnalyzer categorizza le coppie in
+base alla loro rilevanza semantica rispetto al \textit{compliance set} e applica i test statistici
+solo alle coppie che hanno motivazione topologica per essere causalmente correlate.
+
+\subsection{Le Tre Categorie di Coppie Candidate}
+\label{subsec:causal_pairs}
+
+Il metodo \textit{\_build\_candidate\_pairs} produce triple \textit{(source\_key, target\_key,
+category)} organizzate in tre categorie. Le coppie di categoria \textit{node\_arc} collegano una
+\textit{feature} di nodo a una \textit{feature} di arco per cui il nodo è sorgente o
+destinazione: la metrica di stato interno di un componente come causa e la latenza di un arco
+uscente dallo stesso componente come effetto. Queste coppie sono le candidate naturali per
+relazioni causali dirette tra lo stato interno di un componente e la qualità dell'interazione che
+esso serve, e costituiscono il sottoinsieme più rilevante ai fini della \textit{root cause
+analysis}. Le coppie di categoria \textit{intra} comprendono tutte le altre coppie tra
+\textit{feature} di $M^{\text{direct}}$ non già classificate come \textit{node\_arc}. Le coppie
+di categoria \textit{inter} collegano le \textit{feature} di interferenza (\textit{interf:}) alle
+metriche dei nodi condivisi: sono le candidate per la verifica della catena causale
+\textit{cross-property}.
+
+La deduplica si basa su \textit{frozenset} della coppia di chiavi: nessuna coppia $(A, B)$ e
+$(B, A)$ vengono entrambe incluse. Questa scelta ha una conseguenza rilevante: per le coppie
+\textit{intra}, la direzione di causalità testata è determinata dall'ordine di enumerazione.
+Le chiavi \textit{node:} vengono enumerate prima delle chiavi \textit{edge:}, quindi per una
+coppia che coinvolge una metrica di nodo e una di arco viene sistematicamente testata la
+direzione nodo $\to$ arco, che è semanticamente corretta (lo stato interno di un componente
+come causa della qualità dell'interazione). La direzione inversa, arco $\to$ nodo, non viene
+mai testata per coppie \textit{intra}. Per le coppie \textit{node\_arc} questa asimmetria
+è intenzionale e corretta; per le coppie \textit{intra} generiche è una semplificazione che
+potrebbe produrre falsi negativi in scenari dove la propagazione è inversa.
+La regola più importante della categorizzazione riguarda il filtro di Pearson: le coppie
+\textit{inter} lo bypassano completamente. Questo \textit{bypass}
+è giustificato dal fatto che le interferenze \textit{cross-property} si manifestano tipicamente
+come effetti soglia non-lineari: la correlazione di Pearson è prossima a zero finché il
+\textit{throughput} del flusso interferente rimane sotto la soglia di saturazione, e diventa
+significativa solo dopo. Applicare il filtro di Pearson alle coppie \textit{inter} eliminerebbe
+sistematicamente le interferenze più pericolose, ossia quelle che si manifestano bruscamente.
+
+Una quarta categoria, \texttt{inter2}, identifica le coppie
+$(\texttt{node:}v\texttt{:metric},\ \texttt{edge:}e_{\text{int}}\texttt{:metric})$
+con $v \in \text{Shared}(H_{\Phi_i}, H_{\Phi_j})$: la seconda
+freccia della catena \textit{cross-property}
+$\theta_{e_j} \to \texttt{node:}v \to \texttt{edge:}e_{\text{int}}$.
+Come le coppie \texttt{inter}, bypassa il filtro di Pearson.
+
+\subsection{La Pipeline a Tre Stadi per Coppia}
+\label{subsec:causal_pipeline}
+
+Il primo stadio (\textit{\_align\_series}) interseca gli indici temporali dei due DataFrame,
+applica \textit{sort\_values()} sull'insieme comune per garantire l'ordine temporale crescente,
+e poi \textit{dropna()} sull'intersezione ordinata. Il riordinamento è necessario perché le
+operazioni di join e filtraggio sui DataFrame pandas non garantiscono la conservazione dell'ordine
+temporale dell'indice; i test di Granger e di Transfer Entropy assumono implicitamente che le
+osservazioni siano ordinate nel tempo, e serie disordinate producono stime dei \textit{lag}
+semanticamente errate. Se il numero di campioni risultante è inferiore a tre, la coppia viene
+scartata con \textit{logger.warning}: tre campioni sono il minimo assoluto per calcolare una
+statistica significativa.
+
+Il secondo stadio è il test di Granger, preceduto dal pre-processing \gls{ADF}. Il metodo
+\textit{\_make\_stationary\_pair} applica il test \gls{ADF} su entrambe le serie effetto e
+causa indipendentemente; il numero di differenziazioni applicato è il massimo tra quelli
+necessari alle due serie (al massimo due), garantendo la stazionarietà di entrambe prima del
+test di Granger. Differenziare entrambe le serie in modo sincrono è essenziale per preservare
+la relazione temporale tra causa ed effetto. Se dopo 2 differenziazioni la stazionarietà non
+è raggiunta, viene emesso un avviso e l'analisi prosegue. Il numero massimo di
+differenziazioni (2) e la soglia ADF (0,05) non sono configurabili da
+\textit{pipeline\_params.yaml}: corrispondono per coerenza ai parametri \textit{max\_d} e alla
+soglia standard adottati nel modello ARIMA della Fase~I.
+
+\begin{lstlisting}[
+  language=Python,
+  caption={Metodo \textit{\_run\_granger\_then\_te} in
+  \textit{src/phase2/causal\_analyzer.py}. Il test di Granger è eseguito
+  per primo; se restituisce \textit{None} (ipotesi nulla non rigettata),
+  si tenta la Transfer Entropy come \textit{fallback} per relazioni
+  non-lineari.}
+]
+def _run_granger_then_te(self, source_key, target_key, cause, effect):
+    granger_res = self._granger_test(
+        cause, effect,
+        self._granger_max_lag, self._granger_significance
+    )
+    if granger_res is not None:
+        return {
+            "source": source_key, "target": target_key,
+            "type": "linear",
+            "intensity": granger_res["intensity"],
+            "method": "granger",
+            "lag": granger_res["lag"],
+        }
+
+    te_val = self._transfer_entropy(cause, effect, self._n_bins)
+    if te_val > self._te_threshold:
+        return {
+            "source": source_key, "target": target_key,
+            "type": "nonlinear",
+            "intensity": float(te_val),
+            "method": "transfer_entropy",
+            "lag": None,
+        }
+
+    return None
+\end{lstlisting}
+
+La funzione \textit{\_granger\_test} usa \textit{grangercausalitytests} di statsmodels con
+l'output a console soppresso tramite \textit{contextlib.redirect\_stdout}. Il \textit{lag}
+ottimale è quello con il $p$-value minimo sul test $F$ (\textit{ssr\_ftest}). L'intensità è
+calcolata come $\Delta R^2 = \max(0{,}0,\, R^2_{\text{completo}} - R^2_{\text{ristretto}})$:
+il \textit{clipping} a zero previene valori negativi da arrotondamento numerico nella
+sottrazione in virgola mobile. La funzione restituisce \textit{None} se il $p$-value migliore
+supera la soglia di significatività o se i dati sono insufficienti ($n < \textit{max\_lag} + 2$).
+
+Il terzo stadio, la Transfer Entropy, è riservato alle coppie che non superano Granger. 
+La stima usa un approccio discreto: entrambe le serie vengono discretizzate uniformemente in
+\textit{n\_bins} classi e il valore della TE è normalizzato sull'entropia di Shannon $H(Y)$
+della serie effetto, producendo un valore in $[0, 1]$ confrontabile tra coppie diverse.
+Il parametro \textit{n\_bins} (valore di default 10) è dichiarato esplicitamente in
+\textit{pipeline\_params.yaml} nella sezione \textit{causal\_analysis} ed è quindi
+configurabile senza modificare il codice. Valori più alti riducono il bias campionario
+della stima discreta ma richiedono un numero di campioni crescente con $n_{\text{bins}}^2$
+per produrre stime affidabili. Il valore 0.0 è restituito quando $H(Y) \leq 0$ (serie costante, entropia nulla) 
+o quando i dati sono insufficienti.
+
+\subsection{Le Catene Causali Cross-Property}
+\label{subsec:cross_property_impl}
+
+Il metodo \textit{\_check\_cross\_property} cerca strutture causali della forma
+$\textit{interf:e\_j} \to \textit{node:v} \to \textit{edge:e\_internal}$ dove
+$v \in \text{Shared}(H_i, H_j)$ e $\textit{e\_internal} \in A(H_{\Phi_i})$. Per ogni catena
+candidata vengono eseguiti due test di Granger consecutivi: il campo \textit{confirmed} è
+\textit{True} solo se entrambi superano la soglia di significatività. Le coppie auto-referenziali,
+dove l'\textit{edge\_id} della \textit{feature} di interferenza coincide con quello dell'arco
+interno, vengono saltate per evitare test triviali. Le eccezioni per singola coppia o singola
+catena sono catturate e loggate come avvisi senza interrompere la \textit{pipeline}: il modulo
+restituisce sempre un grafo causale valido, anche parziale.
+
+% =========================================================
+\section{Implementazione della Fase III: Monitoraggio Strutturale Gerarchico}
+\label{sec:impl_fase3}
+% =========================================================
+
+Lo StructuralMonitor è l'unico modulo con stato (\textit{stateful}) dell'intero \textit{framework}.
+Mantiene l'accumulatore \gls{CUSUM} e lo stato \gls{EWMA} tra chiamate successive a
+\textit{monitor()}, consentendo il rilevamento di derive persistenti che attraversano multiple
+finestre temporali consecutive. Tutti gli altri moduli della \textit{pipeline} sono privi di
+stato (\textit{stateless}) e producono lo stesso output a parità di \textit{input}.
+L'implicazione pratica è che \textit{reset\_cusum()} deve essere chiamato esplicitamente tra
+esperimenti distinti: il \textit{carry-over} dello stato di un esperimento nel successivo
+produrrebbe accumulatori già carichi all'inizio del nuovo esperimento, generando falsi positivi
+immediati.
+
+\subsection{Il Metodo fit(): Calibrazione del Monitor sui Dati Nominali}
+\label{subsec:monitor_fit}
+
+Il metodo \textit{fit()} addestra il monitor in cinque passi sequenziali che devono essere
+eseguiti nell'ordine specificato, perché ciascuno dipende dai risultati del precedente. Il primo
+passo costruisce il vettore di stato aggregato $\mathbf{X}_{H_{\Phi_i}}(t)$ concatenando le
+\textit{feature} di nodo di tutti i componenti del \textit{compliance set}, nell'ordine
+deterministico \textit{sorted(cs\_nodes) $\times$ sorted(node\_metrics)}. I valori NaN nel
+vettore aggregato sono imputati con la media di colonna calcolata sui soli snapshot nominali.
+Le \textit{feature} di arco sono escluse perché effimere: nelle finestre con traffico assente
+i loro valori sarebbero strutturalmente nulli indipendentemente dallo stato di salute del sistema,
+rendendo instabile l'addestramento dell'Isolation Forest.
+
+Il secondo passo addestra l'Isolation Forest sul vettore aggregato con i parametri letti da
+\textit{pipeline\_params["anomaly\_detection"]["isolation\_forest"]}. Il terzo passo calcola
+la media $\mu_m$ e la deviazione standard $\sigma_m$ nominali per ogni \textit{feature} di
+$M_{\Phi_i}$, necessarie per il calcolo adattivo dello z-score. Il quarto passo determina il
+valore di riferimento per il \gls{CUSUM}: per le topologie lineari calcola
+$\text{PAS}_{\text{gold}}$ invocando \textit{compute\_path\_adherence} del PBOBuilder con una
+\textit{weight series} sintetica di un solo elemento costruita da $W^{\text{gold}}$; per le
+topologie parallele imposta il riferimento a zero, perché $\text{Frobenius}_{\text{gold}} = 0$
+per costruzione (il \textit{gold standard} è il comportamento nominale). Il quinto passo chiama
+\textit{reset\_cusum()}, azzerando l'accumulatore, lo stato \gls{EWMA} e la cronologia della
+\textit{deque}.
+
+\subsection{Il Metodo monitor(): la Gerarchia di Attivazione a Quattro Livelli}
+\label{subsec:monitor_levels}
+
+Il metodo \textit{monitor()} esegue i quattro livelli della gerarchia in una sequenza che
+rispecchia direttamente la logica descritta nel Capitolo~\ref{chap:metodologia}:
+
+\begin{lstlisting}[
+  language=Python,
+  caption={Gerarchia di attivazione nel metodo \textit{monitor()} di
+  \textit{src/phase3/structural\_monitor.py}. Il Livello~3 opera in parallelo,
+  indipendentemente dal segnale di base; il Livello~4 si attiva solo se
+  entrambi \textit{if\_signal} e \textit{cusum\_signal} sono \textit{True}.}
+]
+# Livello 1a -- threshold SLA
+threshold_violations = self._check_threshold(
+    compliance_set_name, features, timestamp
+)
+# Livello 1b -- z-score adattivo
+zscore_violations = self._check_zscore(features, timestamp)
+base_signal = (
+    len(threshold_violations) > 0 or len(zscore_violations) > 0
+)
+# Livello 2 -- Isolation Forest (condizionale a base_signal)
+if base_signal:
+    if_signal = self._check_isolation_forest(features, timestamp)
+else:
+    if_signal = False
+# Livello 3 -- EWMA + CUSUM (sempre, in parallelo)
+(cusum_signal, cusum_stat, ewma_value,
+ frobenius_distance, pas_value) = self._update_ewma_cusum(
+     weight_series, compliance_set_name
+)
+# Livello 4 -- Validatore strutturale (solo se IF e CUSUM entrambi attivi)
+structural_confirmed = False
+if if_signal and cusum_signal:
+    structural_confirmed = self._check_structural_validator(
+        frobenius_distance, pas_value
+    )
+\end{lstlisting}
+
+I Livelli~1a e~1b sono sempre attivi e costituiscono il filtro deterministico di base. Il
+Livello~1a confronta il valore corrente di ogni \textit{feature} con la soglia \gls{SLA}
+corrispondente letta da \textit{topology.yaml}: il campo \textit{bound} determina la direzione
+(\textit{upper} per latenza ed error rate, \textit{lower} per \textit{throughput}). I valori NaN
+non sono mai considerati violazioni. Il Livello~1b calcola lo z-score adattivo
+$z_m(t) = (m(t) - \mu_m) / \sigma_m$ per ogni \textit{feature}: la soglia
+\textit{zscore\_threshold} (di default 3.0, corrispondente allo 0,3\% delle osservazioni sotto
+una gaussiana) è letta da \textit{pipeline\_params}. Il segnale \textit{base\_signal} è vero se
+almeno una \textit{feature} viola una delle due condizioni.
+
+Il Livello~2 applica l'Isolation Forest sul vettore di stato aggregato costruito per lo snapshot
+corrente, con la stessa struttura e lo stesso ordine usati durante il \textit{fit()}. I valori
+NaN vengono imputati con la media di colonna del \textit{training} prima della classificazione.
+Il Livello~2 è attivato solo se \textit{base\_signal} è vero: questa condizione riduce il carico
+computazionale evitando la classificazione IF nelle finestre in cui non vi è alcun segnale metrico
+di base. Il gating introduce tuttavia una limitazione: anomalie puramente multivariate, in cui
+ciascuna metrica rimane individualmente entro le soglie \gls{SLA} e lo z-score, ma la loro
+combinazione è anomala rispetto al profilo storico, non vengono mai sottoposte all'Isolation
+Forest perché \textit{base\_signal} è falso. Questo scenario è distinto da quello in cui una
+singola metrica è fuori soglia e IF conferma l'anomalia aggregata; richiederebbbe un'architettura
+alternativa in cui IF opera su tutte le finestre indipendentemente dai segnali puntuali, con costi
+computazionali maggiori.
+
+Il Livello~3 opera in parallelo rispetto ai Livelli~1 e~2: non dipende dal valore di
+\textit{base\_signal} e non ne è condizionato. Il \textit{Path Adherence Score} o la norma di
+Frobenius corrente vengono calcolati tramite il PBOBuilder, filtrati dal filtro \gls{EWMA} e
+accumulati nel \gls{CUSUM}. La scelta della metrica dipende dal \textit{topology\_type} del
+\textit{compliance set}: per le topologie lineari si accumula il decremento del \gls{PAS}
+rispetto a $\text{PAS}_{\text{gold}}$; per le parallele si accumula l'incremento della norma di
+Frobenius.
+
+\begin{lstlisting}[
+  language=Python,
+  caption={Filtro \gls{EWMA} con \textit{cold start} e aggiornamento \gls{CUSUM}
+  in \textit{src/phase3/structural\_monitor.py}. Il \textit{cold start}
+  inizializza lo stato con la prima osservazione, evitando distorsioni
+  nei primissimi passi. La \textit{deque} a capacità fissa gestisce
+  automaticamente la rimozione dei valori più vecchi.}
+]
+def _apply_ewma(self, signal_raw: float) -> float:
+    if self._ewma_state is None:
+        self._ewma_state = signal_raw   # cold start
+    else:
+        self._ewma_state = (
+            self._ewma_alpha * signal_raw
+            + (1 - self._ewma_alpha) * self._ewma_state
+        )
+    self._ewma_history.append(self._ewma_state)
+    return self._ewma_state
+
+# Aggiornamento CUSUM (topologia lineare):
+ewma_new = self._apply_ewma(pas_value)
+increment = self._reference - ewma_new - self._cusum_k
+self._cusum_stat = max(0.0, self._cusum_stat + increment)
+cusum_signal = self._cusum_stat > self._cusum_threshold
+\end{lstlisting}
+
+Il metodo \textit{\_apply\_ewma} implementa il \textit{cold start}: il primo valore osservato
+inizializza direttamente lo stato senza artifici di inizializzazione che distorcerebbero il
+segnale nelle prime finestre. La \textit{deque} con \textit{maxlen=consecutive\_windows + 1}
+mantiene automaticamente solo i valori necessari per calcolare le differenze consecutive nel
+Validatore strutturale. L'aggiornamento del \gls{CUSUM} per la topologia lineare accumula il
+termine $\text{PAS}_{\text{gold}} - \tilde{s}_t - k$: quando questo valore è positivo
+l'accumulatore cresce (degrado), quando è negativo l'accumulatore decresce (recovery).
+Il \textit{clipping} a zero dell'accumulatore stesso (\textit{max(0.0, ...)}) garantisce la
+non-negatività di \textit{cusum\_stat}. L'accumulatore decresce naturalmente verso zero
+durante il recovery, quando il segnale $\tilde{s}_t$ ritorna verso il valore di riferimento.
+Il metodo \texttt{reset\_cusum()} rimane necessario tra esperimenti distinti per azzerare
+eventuali residui accumulati.
+
+Il Livello~4, il Validatore strutturale, è attivato solo quando sia \textit{if\_signal} sia
+\textit{cusum\_signal} sono veri. Verifica due condizioni congiunte: la distanza strutturale
+attuale supera \textit{distance\_threshold} (default 0,15):
+per le topologie lineari questo corrisponde al
+PAS-gap $|\text{PA}(t) - \text{PAS}_{\text{gold}}| > \delta$
+come descritto in~\cite[§3.2.3]{methodology};
+per le topologie parallele alla norma di Frobenius
+$\|W(t) - W^{\text{gold}}\|_F > \delta$.
+La seconda condizione richiede che gli ultimi \textit{consecutive\_windows} diff consecutivi
+della \textit{deque} \gls{EWMA} abbiano il segno di degrado corretto (negativo per il \gls{PAS},
+positivo per la Frobenius). La persistenza della deriva per almeno
+\textit{consecutive\_windows} finestre consecutive è il discriminante tra una fluttuazione
+momentanea e un allontanamento strutturale autentico.
+
+% =========================================================
+\section{Implementazione della Fase IV: Generazione dell'Alert}
+\label{sec:impl_fase4}
+% =========================================================
+
+L'AlertGenerator implementa la Fase~IV come un'operazione di sintesi pura: non esegue calcoli
+statistici propri, ma aggrega i risultati delle tre fasi precedenti (previsioni, grafo causale,
+risultato del monitoraggio) per produrre un giudizio di \textit{compliance} predittivo
+strutturato. Il metodo principale \textit{generate()} produce un dizionario con quindici campi
+che costituisce l'\textit{alert} strutturato, oppure restituisce \textit{None} se nessuna
+violazione è prevista nell'orizzonte considerato. La restituzione di \textit{None} non è un
+errore: è la rappresentazione esplicita della conformità predittiva del sistema nell'orizzonte
+corrente.
+
+\subsection{Rilevamento della Proprietà e Funzione di Aggregazione}
+\label{subsec:property_detection}
+
+La prima operazione del metodo \textit{generate()} è identificare quale proprietà sia monitorata
+per il \textit{compliance set} specificato, in modo da selezionare la funzione di aggregazione
+appropriata. Il metodo \textit{\_detect\_property} ispeziona la sezione \textit{sla} del
+\textit{compliance set} in \textit{topology.yaml} con priorità decrescente: latenza, affidabilità,
+capacità. Per ognuna, determina la soglia di controllo interna e la soglia di visualizzazione
+nell'\textit{alert}, che possono differire. Per la proprietà di affidabilità, la \gls{SLA} è
+espressa come \textit{error\_rate upper 0.05}, ma il controllo interno opera sulla
+\textit{reliability} $\hat{R} = \prod_e (1 - \hat{\varepsilon}_e)$: il modulo converte
+automaticamente la soglia da \textit{error\_rate upper 0.05} a \textit{reliability lower 0.95}
+per il \textit{violation check}, riportando nell'\textit{alert} i valori originali del certificato
+per leggibilità dell'operatore.
+
+La funzione di aggregazione è determinata congiuntamente dalla proprietà e dal
+\textit{topology\_type}: per la latenza su topologia lineare si usa la somma; su topologia
+parallela il massimo, ossia il collo di bottiglia. Per l'affidabilità si usa il prodotto dei
+complementi. Per la capacità il minimo. Se la previsione \textit{yhat} di una \textit{feature}
+è NaN, il modulo applica un \textit{fallback} conservativo differenziato. La decisione si basa
+sul \textit{display bound}, ossia la direzione della soglia così come è espressa nel certificato
+originale in \textit{topology.yaml}, non sul \textit{check bound} interno risultante dalla
+conversione. Per le proprietà il cui \textit{display bound} è superiore (latenza con upper;
+affidabilità con error\_rate upper) il valore di \textit{fallback} è la soglia
+\gls{SLA} di visualizzazione, che pone la previsione esattamente al margine del vincolo.
+Per la capacità, il cui \textit{display bound} è inferiore (throughput lower), il \textit{fallback}
+è 0,0, il valore minimo assoluto. La distinzione è critica per la reliability: dopo la conversione
+interna, il \textit{check bound} della reliability è \textit{lower} (reliability lower 0.95);
+se si usasse questo per scegliere il \textit{fallback}, si otterrebbe 0.0 come error\_rate,
+producendo una reliability di 1.0 e nessuna violazione rilevata, un comportamento anti-conservativo.
+Usando invece il \textit{display bound upper} del certificato originale, il \textit{fallback}
+è la soglia dell'error\_rate (ad esempio 0.05), il che produce una stima della reliability
+pari a $(1-0{,}05)^n$, sempre inferiore alla soglia per $n$ archi sufficienti.
+
+L'implementazione di \textit{\_aggregate\_forecasts} legge i valori di previsione usando
+\textit{df.loc[step, "yhat"]} dove \textit{step} è un intero da 1 a \textit{horizon\_steps},
+in accordo con l'indicizzazione prodotta da \textit{StatForecaster.predict()}. Un \textit{fallback}
+posizionale tramite \textit{iloc[step-1]} è mantenuto per compatibilità con i \textit{mock}
+usati nei test, che in alcuni casi usano il \textit{timestamp} come indice anziché l'indice step.
+Il metodo emette \textit{logger.warning} se il numero di step effettivamente disponibili nel
+\textit{forecast} è inferiore all'\textit{horizon\_steps} configurato, segnalando che il
+\textit{lead time} è calcolato su un orizzonte ridotto rispetto a quello atteso.
+
+\subsection{Stima del Lead Time e Classificazione della Criticità}
+\label{subsec:lead_time_criticality}
+
+Il \textit{lead time} $\tau^*$ è il minimo indice $\tau' \in \{1, \ldots, \tau\}$ per cui
+l'aggregato previsto viola la condizione \gls{SLA}. Il metodo \textit{\_estimate\_lead\_time}
+itera sull'array delle previsioni aggregate e confronta ogni valore con la soglia: per
+\textit{bound} superiore controlla $\hat{\Phi}_i(t+\tau') > T_m$, per \textit{bound} inferiore
+$\hat{\Phi}_i(t+\tau') < T_m$. I valori NaN nell'aggregato non generano violazione. Se
+l'insieme delle violazioni è vuoto, \textit{generate()} restituisce \textit{None}.
+
+La classificazione della criticità implementa la cascata descritta nel
+Capitolo~\ref{chap:metodologia}:
+
+\begin{lstlisting}[
+  language=Python,
+  caption={Metodo \textit{\_classify\_criticality} in
+  \textit{src/phase4/alert\_generator.py}. La cascata è valutata dall'alto
+  verso il basso; la prima condizione soddisfatta determina il livello. I
+  tre parametri soglia sono letti da \textit{pipeline\_params.yaml}.}
+]
+def _classify_criticality(self, lead_time_steps, monitor_result):
+    lead_time_days = lead_time_steps * self._step_duration_hours / 24.0
+
+    cusum  = bool(monitor_result.get("cusum_signal", False))
+    if_sig = bool(monitor_result.get("if_signal", False))
+    confirmed = bool(monitor_result.get("structural_confirmed", False))
+
+    if (
+        lead_time_days < self._orange_min_days
+        or (cusum and confirmed)
+        or (if_sig and confirmed)
+    ):
+        return "red"
+
+    if (
+        self._orange_min_days <= lead_time_days < self._yellow_min_days
+        or cusum
+        or if_sig
+    ):
+        return "orange"
+
+    return "yellow"
+\end{lstlisting}
+
+Il livello Rosso si attiva quando il \textit{lead time} è inferiore a \textit{orange\_min\_days}
+(di default 2 giorni), oppure quando il \gls{CUSUM} e il Validatore strutturale sono entrambi
+attivi, oppure quando l'Isolation Forest e il Validatore strutturale sono entrambi attivi. Le
+ultime due condizioni segnalano che la deviazione è confermata sia sul piano metrico aggregato
+sia su quello comportamentale strutturale. Il livello Arancione copre i casi intermedi: un
+\textit{lead time} tra 2 e 7 giorni, oppure uno dei due segnali (\gls{CUSUM} o Isolation Forest)
+attivo senza conferma strutturale. Il livello Giallo è il residuale.
+
+Un vincolo implicito di configurazione riguarda la relazione tra le due soglie: il parametro
+\textit{orange\_min\_days} deve essere strettamente inferiore a \textit{yellow\_min\_days}.
+Se i valori fossero invertiti, la cascata di regole produrrebbe classificazioni semanticamente
+errate senza sollevare eccezioni, poiché il costruttore non valida questa relazione. La
+correttezza della configurazione è demandata al file \textit{pipeline\_params.yaml}.
+Dopo la classificazione primaria, il metodo applica il meccanismo di \textit{declassamento per
+incertezza modellistica}: se il \textit{flag} \textit{model\_uncertainty\_flag} è attivo (la
+divergenza tra previsione principale e \textit{baseline} lineare supera
+\textit{divergence\_threshold}) e il livello corrente non è già Giallo, il livello viene abbassato
+di un gradino (da Rosso ad Arancione, da Arancione a Giallo). Il Giallo non viene ulteriormente
+declassato. Questo meccanismo garantisce che un \textit{alert} Rosso basato su una previsione
+fortemente non-lineare venga automaticamente declassato ad Arancione, riducendo il rischio di
+interventi tecnici urgenti motivati da previsioni a bassa affidabilità.
+
+\subsection{Struttura dell'Alert e Estrazione della Causa Radice}
+\label{subsec:alert_structure}
+
+Il dizionario \textit{alert} prodotto da \textit{generate()} contiene quindici campi. I campi
+principali sono \textit{timestamp}, \textit{compliance\_set}, \textit{property\_at\_risk} e
+\textit{criticality}. Il \textit{lead\_time\_steps} indica il numero di passi temporali al
+primo passo di violazione, mentre \textit{lead\_time\_hours} è il suo equivalente in ore,
+ottenuto moltiplicando per \textit{step\_duration\_hours} letto da \textit{pipeline\_params}.
+Il campo \textit{aggregated\_forecast} contiene il vettore delle previsioni aggregate su
+tutti gli step dell'orizzonte; \textit{sla\_threshold} e \textit{sla\_bound} riportano i valori
+originali del certificato, distinti dai valori interni di controllo che possono differire per la
+proprietà di affidabilità. Il campo \textit{structural\_signals} è un sotto-dizionario che riporta
+tutti i segnali prodotti dallo StructuralMonitor: \textit{base\_signal}, \textit{if\_signal},
+\textit{cusum\_signal}, \textit{structural\_confirmed}, \textit{frobenius\_distance} e
+\textit{pas\_value}.
+
+L'estrazione della causa radice analizza il grafo causale di Fase~II in quattro passi. Il primo
+passo filtra gli archi causali il cui \textit{target} termina con il suffisso della metrica a
+rischio (\textit{:latency\_ms}, \textit{:error\_rate} o \textit{:throughput\_rps}). 
+Il secondo seleziona l'arco con intensità massima nell'insieme filtrato: la \textit{source} di
+quell'arco è la causa radice. La costruzione di \textit{critical\_arc} incorpora due livelli
+di protezione. Il primo livello è applicato alla costruzione di \textit{candidate\_edges}:
+quando l'insieme \textit{relevant\_edges} (archi filtrati per il suffisso della metrica a
+rischio) è vuoto, il \textit{fallback} sull'insieme completo degli archi causali è ulteriormente
+filtrato per mantenere solo quelli il cui campo \textit{target} inizia con \textit{"edge:"}.
+Questo impedisce che archi causali di tipo nodo $\to$ nodo, la cui presenza è legittima nel
+grafo causale (ad esempio correlazioni tra metriche di nodi distinti), vengano selezionati come
+base per \textit{critical\_arc}. Il secondo livello è applicato all'arco di intensità massima
+selezionato: prima di estrarne l'identificatore, si verifica che \textit{target\_parts[0] == "edge"};
+se la verifica fallisce, si attiva il \textit{fallback} \textit{\_find\_critical\_arc\_from\_forecast},
+che identifica l'arco critico sulla base del valore previsto più estremo al passo del
+\textit{lead time}, senza dipendere dal grafo causale. Il terzo passo,
+attivato se il grafo causale è vuoto, cade nel \textit{fallback}: identifica l'arco critico come
+quello con il valore previsto più estremo al passo corrispondente al \textit{lead time}. Il quarto
+passo cerca tra le catene \textit{cross-property} la prima con \textit{confirmed == True} e ne
+riporta il \textit{source\_cs} come \textit{cross\_property\_interference} e la catena come
+\textit{causal\_chain}.
+
+% =========================================================
+\section{Sviluppo Guidato dai Test}
+\label{sec:tdd}
+% =========================================================
+
+Lo sviluppo del \textit{framework} ha adottato la metodologia \gls{TDD} in modo sistematico e
+rigoroso. Ogni modulo è stato costruito a partire dalla sua suite di test, che ha forzato la
+definizione del contratto dell'interfaccia pubblica prima ancora che l'implementazione esistesse.
+Questa inversione dell'ordine di sviluppo ha avuto conseguenze architetturali concrete e
+misurabili: alcune interfacce sono state ridisegnate più volte durante lo sviluppo per rendere i
+test più semplici da costruire in isolamento, e ogni ridisegno ha prodotto un'interfaccia più
+minimale, più coesa e più facilmente componibile con gli altri moduli.
+
+Tutti i test operano esclusivamente con strutture dati costruite in memoria. Nessun test legge un
+file dal disco, salvo i test del ConfigLoader che usano file temporanei costruiti su
+\textit{tmp\_path}. Questo rende la suite eseguibile in pochi secondi anche su macchine senza
+accesso ai dataset di produzione. Il modello a dipendenze unidirezionali tra i pacchetti è
+verificato implicitamente dalla struttura dei test: un test del TopologyBuilder che importasse
+classi del StatForecaster violerebbe la gerarchia e produrrebbe un'importazione ciclica immediata.
+
+Un principio fondamentale dell'intera suite è la verifica dell'assenza di \textit{hardcoding}: i
+test calcolano i valori attesi direttamente dalla configurazione caricata, non da costanti fisse
+nel codice. Tre ulteriori test sono stati aggiunti alla suite dell'AlertGenerator a seguito
+dell'introduzione della funzione di aggregazione per la proprietà di affidabilità:
+\textit{test\_aggregated\_forecast\_reliability\_value} verifica il valore numerico $0{,}98^4$
+per quattro archi con \textit{error\_rate=0.02};
+\textit{test\_critical\_arc\_from\_highest\_intensity\_edge} verifica che \textit{critical\_arc}
+corrisponda all'\textit{edge\_id} del \textit{target} con intensità massima nel grafo causale;
+\textit{test\_lead\_time\_hours\_value} verifica che
+\textit{lead\_time\_hours = lead\_time\_steps $\times$ 24.0}. Un test è stato aggiunto alla
+suite del StatForecaster (\textit{test\_fit\_empty\_train\_after\_nominal\_filter\_skips\_gracefully})
+e uno a quella del FeatureSelector (\textit{test\_edge\_metric\_key\_absent\_produces\_float\_nan},
+che verifica che un arco privo di una metrica in uno snapshot produca \textit{float("nan")} con
+\textit{dtype=float64} nel DataFrame risultante).
+
+\begin{lstlisting}[
+  language=Python,
+  caption={Test \textit{test\_h\_crit\_direct\_node\_count} in
+  \textit{tests/test\_feature\_selector.py}. Il valore atteso è calcolato
+  dinamicamente dalla configurazione: se in futuro \textit{topology.yaml}
+  includesse una quinta metrica di nodo, il test si adatterebbe
+  automaticamente senza richiedere modifiche.}
+]
+def test_h_crit_direct_node_count(
+    feature_selector, topology_builder, config, mock_snapshots
+):
+    topo = config.load_topology()
+    expected = (
+        len(topology_builder.get_compliance_set_nodes("H_crit"))
+        * len(topo["node_metrics"])
+    )
+    result = feature_selector.select_features("H_crit", mock_snapshots)
+    node_keys = [k for k in result if k.startswith("node:")]
+    assert len(node_keys) == expected
+\end{lstlisting}
+
+Il test non usa la costante 20 (cinque nodi per quattro metriche): interroga il TopologyBuilder
+per il numero di nodi e il ConfigLoader per il numero di metriche, moltiplicandoli. Se
+\textit{topology.yaml} cambiasse aggiungendo una quinta metrica, il test aggiornerebbe
+automaticamente il valore atteso senza richiedere modifiche al codice di test. Questo principio
+garantisce che la suite rimanga valida anche dopo evoluzioni della configurazione, senza richiedere
+un aggiornamento sistematico dei valori attesi.
+
+La suite copre complessivamente oltre 293 casi distribuiti in dieci file. I tipi di test
+includono la struttura degli output (forma, chiavi, tipi attesi), la correttezza numerica con
+tolleranze esplicite ($\varepsilon = 10^{-9}$ per i confronti in virgola mobile), la gestione dei
+casi limite (NaN, liste vuote, \textit{throughput} nullo, valori negativi, JSON malformato), il
+comportamento degli errori verificati con \textit{pytest.raises(ExcType, match="...")} per
+controllare anche il contenuto del messaggio, e l'assenza di effetti collaterali come
+l'idempotenza di \textit{build()}, l'isolamento della \textit{cache} e la non-corruzione dello
+stato tra test consecutivi.
+
+% =========================================================
+\section{Architettura Online e Considerazioni sul Deployment}
+\label{sec:architettura_online}
+% =========================================================
+
+Il \textit{framework} è progettato per essere operato in due fasi temporalmente distinte: una
+fase di addestramento \textit{offline}, eseguita una volta su dati storici nominali, e un ciclo
+di \textit{inference} \textit{online}, eseguito continuamente su ogni nuova finestra di
+telemetria. La distinzione è fondamentale per comprendere quali componenti mantengono stato
+tra un'esecuzione e l'altra e quali sono invece privi di stato e rieseguibili in modo
+idempotente.
+
+\subsection{Separazione tra Addestramento e Inferenza}
+\label{subsec:training_inference}
+
+Nella fase di addestramento, tutti i moduli che richiedono una calibrazione su dati storici
+vengono invocati sui soli snapshot nominali. Il \texttt{StatForecaster} viene addestrato sulle
+serie temporali nominali, apprende i parametri dei modelli predittivi e stima la frequenza
+di campionamento. Il \texttt{CausalAnalyzer} produce il grafo causale a partire dalle dipendenze
+statistiche estratte dalla storia nominale. Lo \texttt{StructuralMonitor} calibra le statistiche
+nominali per lo z-score, addestra l'Isolation Forest e calcola i valori di riferimento per il
+\gls{CUSUM}. Il \texttt{PBOBuilder} calcola il \textit{gold standard} $W^{\text{gold}}$ dalla
+distribuzione media del traffico nelle finestre nominali. Al termine di questa fase, lo stato
+addestrato di ciascun modulo viene serializzato per essere riutilizzato nelle sessioni di
+\textit{inference} successive.
+
+Nella fase di \textit{inference}, il ciclo operativo elabora ogni nuova finestra di metriche
+prodotta dall'infrastruttura di osservabilità. Per ogni finestra, il \texttt{FeatureSelector}
+estrae le serie temporali rilevanti per il \textit{compliance set} monitorato, il
+\texttt{StatForecaster} genera le previsioni sull'orizzonte $\tau$ configurato, lo
+\texttt{StructuralMonitor} aggiorna il proprio stato interno (\gls{CUSUM} e \gls{EWMA}) e
+classifica lo snapshot corrente, e infine l'\texttt{AlertGenerator} produce il giudizio di
+\textit{compliance} predittivo. I risultati del \texttt{CausalAnalyzer}, che vengono ricalcolati
+\textit{offline} su base periodica (ad esempio con cadenza giornaliera su una finestra scorrevole
+di dati nominali recenti), vengono passati all'\texttt{AlertGenerator} come struttura pre-calcolata.
+
+Tre aspetti operativi meritano attenzione nel contesto di un deployment continuo. Il
+\texttt{StatForecaster} richiede un riaddestramento periodico per adattarsi al \textit{behavioral
+drift} del sistema: Prophet può essere riaddestrato con cadenza settimanale su una finestra
+scorrevole di dati nominali recenti senza interrompere il ciclo di \textit{inference}. Il
+\texttt{StructuralMonitor} è il solo modulo con stato persistente tra finestre temporali
+consecutive: \textit{reset\_cusum()} va invocato esplicitamente dall'orchestratore quando
+il sistema è tornato nominale dopo un episodio di degrado, per azzerare l'accumulatore. Il
+\texttt{PBOBuilder} e il relativo \textit{gold standard} devono essere ricalibrati ogni volta
+che il sistema subisce modifiche architetturali significative o variazioni strutturali nei
+pattern di traffico.
+
+\subsection{Punti di Estensione verso un Sistema Operativo}
+\label{subsec:estensioni_produzione}
+
+L'implementazione attuale copre l'intera \textit{pipeline} di elaborazione dalla telemetria
+agli \textit{alert}. Il componente mancante per un deployment in produzione è l'orchestratore
+che governa il ciclo di acquisizione e invoca la \textit{pipeline} a ogni finestra temporale.
+La funzione di conversione del singolo snapshot dovrebbe essere implementata come
+\texttt{convert\_window()} nel modulo \gls{ETL}, con la stessa interfaccia contrattuale di
+\texttt{convert\_file()} ma ottimizzata per la latenza di elaborazione incrementale anziché
+per il throughput del batch.
+
+Il modulo \texttt{DSBConverter} è l'unico componente \textit{dataset-specific}
+dell'architettura. Per un sistema alimentato da Prometheus o OpenTelemetry in tempo reale,
+sarebbe sufficiente implementare un \texttt{PrometheusConverter} con la medesima interfaccia:
+produrre i tre DataFrame canonici (\textit{node\_metrics}, \textit{edge\_metrics},
+\textit{ground\_truth}) a partire dalle metriche raccolte nell'ultima finestra temporale.
+Tutto il codice a valle della conversione, dai moduli ATGBuilder fino all'AlertGenerator,
+funzionerebbe senza modifiche, per costruzione dell'architettura a formato canonico.

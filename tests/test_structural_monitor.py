@@ -841,6 +841,116 @@ def test_structural_validator_warmup_returns_false(
         )
 
 
+def test_cusum_decreases_on_recovery(
+    monitor: StructuralMonitor,
+    mock_features_h_crit: dict[str, pd.DataFrame],
+    mock_nominal_snapshots: list[dict],
+    mock_weight_series: list[dict],
+    mock_gold_standard: dict[str, float],
+) -> None:
+    """Dopo accumulo su pesi degradati, CUSUM scende verso zero con pesi
+    super-nominali (PAS > PAS_gold). Verifica la rimozione dell'inner
+    max(0,...) che prima rendeva il CUSUM monotono non-decrescente.
+
+    Nota: il decremento del CUSUM richiede ewma_new > PAS_gold, il che
+    si verifica solo quando PAS corrente supera PAS_gold. Con pesi nominali
+    (PAS = PAS_gold = 0.25) l'EWMA converge dal basso verso 0.25 e il CUSUM
+    continua ad accumularsi. I pesi super-nominali (tutto il traffico sul
+    percorso critico) producono PAS = 1.0 >> PAS_gold, cosicché dopo
+    pochi passi ewma_new > 0.25 e l'incremento diventa negativo.
+    """
+    monitor.fit(
+        "H_crit", mock_features_h_crit, mock_nominal_snapshots,
+        mock_weight_series, mock_gold_standard,
+    )
+    monitor._cusum_threshold = 0.0001
+
+    # Fase 1: accumulo con pesi degradati (PAS ≈ 0.09 < PAS_gold=0.25)
+    degraded_ws = _make_weight_series(
+        n=1, tp_override={"e4": 90.0, "e3": 10.0, "e6": 5.0, "e5": 45.0}
+    )
+    for i in range(5):
+        ts = _T0 + (20 + i) * _STEP_US
+        monitor.monitor("H_crit", mock_features_h_crit, degraded_ws, ts)
+    stat_after_degradation = monitor._cusum_stat
+    assert stat_after_degradation > 0.0, (
+        "CUSUM deve aver accumulato durante il degrado"
+    )
+
+    # Fase 2: recovery con pesi super-nominali (tutto il traffico sul
+    # percorso critico: e4=100, e3=0, e6=100, e5=0 → PAS=1.0 >> PAS_gold)
+    # ewma converge da 0.09 verso 1.0; dopo il primo passo ewma > 0.25,
+    # quindi increment = PAS_gold - ewma < 0 e il CUSUM decresce.
+    super_nominal_ws = _make_weight_series(
+        n=1, tp_override={"e4": 100.0, "e3": 0.0, "e6": 100.0, "e5": 0.0}
+    )
+    for i in range(20):
+        ts = _T0 + (25 + i) * _STEP_US
+        monitor.monitor("H_crit", mock_features_h_crit, super_nominal_ws, ts)
+    stat_after_recovery = monitor._cusum_stat
+
+    assert stat_after_recovery < stat_after_degradation, (
+        f"CUSUM deve diminuire durante il recovery con pesi super-nominali: "
+        f"dopo degrado={stat_after_degradation:.6f}, "
+        f"dopo recovery={stat_after_recovery:.6f}. "
+        "Verificare la rimozione dell'inner max(0,...) in _update_ewma_cusum."
+    )
+
+
+def test_structural_validator_uses_pas_gap_for_linear(
+    monitor: StructuralMonitor,
+    mock_features_h_crit: dict[str, pd.DataFrame],
+    mock_nominal_snapshots: list[dict],
+    mock_weight_series: list[dict],
+    mock_gold_standard: dict[str, float],
+) -> None:
+    """Per topologia lineare, il validatore usa |PAS - PAS_gold| > δ
+    (non Frobenius). Verifica con soglia esplicita e pesi degradati."""
+    monitor.fit(
+        "H_crit", mock_features_h_crit, mock_nominal_snapshots,
+        mock_weight_series, mock_gold_standard,
+    )
+    # PAS_gold = 0.25; con e4=99.0, e3=1.0: PAS ≈ 0.01
+    # |0.01 - 0.25| = 0.24 > frobenius_threshold se ≤ 0.24
+    monitor._frobenius_threshold = 0.10  # soglia < gap atteso
+
+    degraded_ws = _make_weight_series(
+        n=1, tp_override={"e4": 99.0, "e3": 1.0, "e6": 1.0, "e5": 99.0}
+    )
+    # Calcola PAS corrente e Frobenius corrente per il validatore
+    from src.layer2.pbo_builder import PBOBuilder
+    pas_series = monitor._pbo.compute_path_adherence(
+        degraded_ws, "H_crit"
+    )
+    pas_val = pas_series[-1]["pas"]
+    frob_series = monitor._pbo.compute_frobenius_distance(
+        degraded_ws, monitor._gold_standard
+    )
+    frob_val = frob_series[-1]["frobenius"] if frob_series else None
+
+    # PAS-gap = |pas_val - PAS_gold| deve superare la soglia
+    assert monitor._pas_gold is not None
+    pas_gap = abs(pas_val - monitor._pas_gold)
+    assert pas_gap > monitor._frobenius_threshold, (
+        f"PAS-gap={pas_gap:.4f} deve essere > threshold={monitor._frobenius_threshold}"
+    )
+
+    # Popola _ewma_history con valori decrescenti per soddisfare la
+    # condizione di derivata persistente del validatore strutturale
+    for _ in range(monitor._consecutive_windows + 2):
+        monitor._ewma_history.append(0.30 - _ * 0.05)
+
+    # Invocare direttamente il validatore con i valori correnti
+    result = monitor._check_structural_validator(frob_val, pas_val)
+    assert result is True, (
+        f"Validatore deve confermare con PAS-gap={pas_gap:.4f} > "
+        f"threshold={monitor._frobenius_threshold}. "
+        f"Frobenius={frob_val}. "
+        "Verificare che _check_structural_validator usi PAS-gap per "
+        "topologie lineari (non Frobenius)."
+    )
+
+
 def test_monitor_with_empty_weight_series_does_not_crash(
     fitted_monitor: StructuralMonitor,
 ) -> None:

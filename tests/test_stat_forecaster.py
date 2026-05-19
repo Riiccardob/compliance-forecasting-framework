@@ -342,3 +342,44 @@ def test_fit_empty_train_after_nominal_filter_skips_gracefully(
     assert "node:nginx-web-server:cpu_percent" not in result, (
         "Feature con training set vuoto non deve comparire nell'output di predict()"
     )
+
+
+def test_arima_ljungbox_warning_on_correlated_residuals(
+    config: ConfigLoader,
+) -> None:
+    """_fit_arima emette logger.warning Ljung-Box quando i residui sono autocorrelati.
+
+    Serie AR(1) al lag 5 — y[t] = 0.95·y[t-5] + ε[t]: autocorrelazione forte a
+    tutti i multipli di lag 5, struttura non catturabile da ARIMA(p,d,q) con
+    max_p=2, max_d=1, max_q=2. Il warning viene emesso via module-level logger.
+    """
+    import numpy as np
+    from unittest.mock import patch
+
+    rng = np.random.default_rng(42)
+    n = 200
+    values = np.zeros(n)
+    for i in range(5, n):
+        values[i] = 0.95 * values[i - 5] + rng.normal(0, 1)
+
+    timestamps = [_T0 + i * _STEP_US for i in range(n)]
+    df = pd.DataFrame(
+        {"value": values},
+        index=pd.Index(timestamps, name="timestamp"),
+    )
+    features = {"node:nginx-web-server:cpu_percent": df}
+
+    forecaster = StatForecaster(config)
+    forecaster._arima_max_p = 2
+    forecaster._arima_max_d = 1
+    forecaster._arima_max_q = 2
+    with patch("src.phase1.stat_forecaster.logger") as mock_logger:
+        forecaster.fit(
+            features,
+            model_override={"node:nginx-web-server:cpu_percent": "arima"},
+        )
+    warning_calls = [
+        call for call in mock_logger.warning.call_args_list
+        if "Ljung-Box" in str(call)
+    ]
+    assert warning_calls, "logger.warning Ljung-Box non emesso per residui autocorrelati"

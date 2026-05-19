@@ -39,6 +39,7 @@ class StatForecaster:
         config:
             ConfigLoader già inizializzato.
         """
+        self._config = config
         self._params = config.load_pipeline_params()
 
         fc = self._params["forecasting"]
@@ -254,6 +255,7 @@ class StatForecaster:
         y = df["value"].dropna().values.astype(float)
         best_aic = float("inf")
         best_model = None
+        best_p, best_d, best_q = 0, 0, 0
         for p in range(self._arima_max_p + 1):
             for d in range(self._arima_max_d + 1):
                 for q in range(self._arima_max_q + 1):
@@ -268,10 +270,24 @@ class StatForecaster:
                         if r.aic < best_aic:
                             best_aic = r.aic
                             best_model = r
+                            best_p, best_d, best_q = p, d, q
                     except Exception:
                         continue
         if best_model is None:
             raise RuntimeError(f"ARIMA fitting fallito per {key}")
+        try:
+            from statsmodels.stats.diagnostic import acorr_ljungbox
+            resid = best_model.resid
+            lags = max(1, min(10, len(resid) // 5))
+            lb = acorr_ljungbox(resid, lags=[lags], return_df=True)
+            if (lb["lb_pvalue"] < 0.05).any():
+                logger.warning(
+                    "ARIMA(%d,%d,%d) per '%s': residui autocorrelati (Ljung-Box p=%.4f) — "
+                    "considera ordine più alto o modello alternativo.",
+                    best_p, best_d, best_q, key, float(lb["lb_pvalue"].min()),
+                )
+        except Exception as exc:
+            logger.warning("Ljung-Box non disponibile per '%s': %s", key, exc)
         return best_model
 
     def _fit_linear(self, key: str, df: pd.DataFrame) -> tuple[LinearRegression, float]:

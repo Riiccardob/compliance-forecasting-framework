@@ -124,7 +124,7 @@ def test_get_causal_pairs_categories(
 ) -> None:
     """Ogni elemento è una tupla (src, tgt, category) con category valida."""
     pairs = analyzer.get_causal_pairs("H_crit", mock_features_h_crit)
-    valid_cats = {"intra", "inter", "node_arc"}
+    valid_cats = {"intra", "inter", "inter2", "node_arc"}
     for p in pairs:
         assert len(p) == 3, f"Attesa tupla di 3 elementi, ottenuto {len(p)}"
         assert p[2] in valid_cats, f"Categoria non valida: {p[2]}"
@@ -411,6 +411,63 @@ def test_frozenset_deduplication_no_reverse_pair(
             f"sono entrambi presenti nelle coppie candidate."
         )
         seen.add(pair_set)
+
+
+def test_shared_node_arc_pairs_bypass_pearson(
+    analyzer: CausalAnalyzer,
+) -> None:
+    """Le coppie (node:shared_node → edge:e_internal) classificate
+    come 'inter2' bypassano il filtro Pearson, esattamente come le
+    coppie 'inter' (prima freccia cross-property).
+    Sul dataset DSB: home-timeline-service è in Shared(H_crit, H_cache).
+    e4 è un arco interno a H_crit con home-timeline-service come source."""
+    rng = np.random.default_rng(0)
+    n = 30
+    # Serie con correlazione Pearson molto bassa (|r| < 0.7)
+    features = {
+        "node:home-timeline-service:cpu_percent": _make_df(
+            rng.normal(5, 1, n)
+        ),
+        "edge:e4:latency_ms": _make_df(
+            rng.normal(10, 0.01, n)  # quasi costante → |r| ≈ 0
+        ),
+    }
+    pairs = analyzer.get_causal_pairs("H_crit", features)
+    # La coppia (node:home-timeline-service:cpu_percent, edge:e4:latency_ms)
+    # deve essere classificata come "inter2" (home-timeline-service è
+    # un nodo condiviso tra H_crit e H_cache)
+    keys_in_inter2 = {k for s, t, c in pairs if c == "inter2" for k in (s, t)}
+    assert "node:home-timeline-service:cpu_percent" in keys_in_inter2, (
+        "home-timeline-service è un nodo condiviso; la coppia "
+        "con edge:e4:latency_ms deve essere 'inter2'."
+    )
+
+
+def test_adf_applied_to_both_series(
+    analyzer: CausalAnalyzer,
+) -> None:
+    """_make_stationary_pair applica ADF a entrambe le serie e usa
+    il massimo di differenziazioni necessarie."""
+    rng = np.random.default_rng(42)
+    n = 50
+    # Serie non stazionaria (random walk) come cause
+    cause_rw = np.cumsum(rng.normal(0, 1, n))
+    # Serie già stazionaria come effect
+    effect_stat = rng.normal(0, 1, n)
+    cause_d, effect_d, n_diff = analyzer._make_stationary_pair(
+        effect_stat.copy(), cause_rw.copy()
+    )
+    # cause aveva bisogno di 1 diff, effect no → n_diff deve essere 1
+    # e entrambe devono aver ricevuto 1 differenziazione
+    assert n_diff >= 1, (
+        f"Atteso n_diff >= 1 (cause non stazionaria), ottenuto {n_diff}"
+    )
+    assert len(cause_d) == n - n_diff, (
+        f"cause_d deve avere n-{n_diff}={n-n_diff} elementi"
+    )
+    assert len(effect_d) == n - n_diff, (
+        f"effect_d deve avere n-{n_diff}={n-n_diff} elementi"
+    )
 
 
 def test_cross_property_chain_confirmed_false_on_independent_series(

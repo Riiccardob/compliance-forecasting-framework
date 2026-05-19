@@ -23,7 +23,7 @@ class CausalAnalyzer:
 
     La pipeline è:
     - Per coppie intra/node_arc: Pearson screening → Granger → TE fallback.
-    - Per coppie inter (cross-compliance-set): Granger diretto (bypass Pearson).
+    - Per coppie inter/inter2 (cross-compliance-set): Granger diretto (bypass Pearson).
 
     Tutti i parametri statistici sono letti da
     ``pipeline_params.yaml["causal_analysis"]``.
@@ -156,7 +156,7 @@ class CausalAnalyzer:
                     )
                     continue
 
-                if category == "inter":
+                if category in ("inter", "inter2"):
                     edge = self._test_pair_no_pearson(
                         source_key, target_key, s1, s2
                     )
@@ -209,7 +209,7 @@ class CausalAnalyzer:
         -------
         list[tuple[str, str, str]]
             Lista di ``(source_key, target_key, category)`` dove
-            ``category ∈ {"intra", "inter", "node_arc"}``.
+            ``category ∈ {"intra", "inter", "inter2", "node_arc"}``.
         """
         if compliance_set_name not in self._topology["compliance_sets"]:
             raise KeyError(
@@ -407,7 +407,22 @@ class CausalAnalyzer:
         pairs: list[tuple[str, str, str]] = []
         seen: set[frozenset[str]] = set()
 
+        # Pre-calcola shared_nodes per usarlo sia in node_arc che in inter
+        cs_names = list(self._topology["compliance_sets"].keys())
+        shared_nodes: set[str] = set()
+        for other in cs_names:
+            if other == compliance_set_name:
+                continue
+            try:
+                shared_nodes.update(
+                    self._tb.get_shared_nodes(compliance_set_name, other)
+                )
+            except KeyError:
+                continue
+
         # --- 1. node_arc: node:v → edge:e where v is source or target of e ---
+        # Se v ∈ Shared(H_i, H_j), la coppia è "inter2" (seconda freccia
+        # della catena cross-property: bypass Pearson come "inter").
         for nk in node_keys:
             parts = nk.split(":", 2)
             if len(parts) < 3:
@@ -423,7 +438,8 @@ class CausalAnalyzer:
                     fs = frozenset([nk, ek])
                     if fs not in seen:
                         seen.add(fs)
-                        pairs.append((nk, ek, "node_arc"))
+                        cat = "inter2" if node_id in shared_nodes else "node_arc"
+                        pairs.append((nk, ek, cat))
 
         # --- 2. intra: all pairs among M_direct not in node_arc ---
         direct_keys = node_keys + edge_keys
@@ -435,19 +451,7 @@ class CausalAnalyzer:
                     seen.add(fs)
                     pairs.append((ki, kj, "intra"))
 
-        # --- 3. inter: shared node features ↔ interf features ---
-        cs_names = list(self._topology["compliance_sets"].keys())
-        shared_nodes: set[str] = set()
-        for other in cs_names:
-            if other == compliance_set_name:
-                continue
-            try:
-                shared_nodes.update(
-                    self._tb.get_shared_nodes(compliance_set_name, other)
-                )
-            except KeyError:
-                continue
-
+        # --- 3. inter: interf features → shared node features ---
         for nk in node_keys:
             parts = nk.split(":", 2)
             if len(parts) < 3:
@@ -628,30 +632,45 @@ class CausalAnalyzer:
         effect_vals: np.ndarray,
         cause_vals: np.ndarray,
     ) -> tuple[np.ndarray, np.ndarray, int]:
-        """Applica differenziazione ADF su effect; stessa diff a cause."""
-        n_diff = 0
-        for _ in range(2):
-            try:
-                _, p_adf, *_ = adfuller(effect_vals, autolag="AIC")
-            except Exception:
-                break
-            if p_adf <= 0.05:
-                break
+        """Applica differenziazioni fino a stazionarietà ADF su
+        entrambe le serie, usando il massimo tra i diff necessari."""
+        def _diffs_needed(arr: np.ndarray) -> int:
+            n = 0
+            for _ in range(2):
+                try:
+                    _, p, *_ = adfuller(arr, autolag="AIC")
+                except Exception:
+                    break
+                if p <= 0.05:
+                    break
+                arr = np.diff(arr)
+                n += 1
+            return n
+
+        n_effect = _diffs_needed(effect_vals)
+        n_cause  = _diffs_needed(cause_vals)
+        n_diff   = max(n_effect, n_cause)
+
+        for _ in range(n_diff):
             effect_vals = np.diff(effect_vals)
-            cause_vals = np.diff(cause_vals)
-            n_diff += 1
+            cause_vals  = np.diff(cause_vals)
+
         if n_diff == 2:
-            try:
-                _, p_final, *_ = adfuller(effect_vals, autolag="AIC")
-                if p_final > 0.05:
+            for arr, name in [(effect_vals, "effect"), (cause_vals, "cause")]:
+                try:
+                    _, p_final, *_ = adfuller(arr, autolag="AIC")
+                    if p_final > 0.05:
+                        logger.warning(
+                            "Serie '%s' ancora non stazionaria "
+                            "(p=%.3f) dopo 2 differenziazioni — "
+                            "si procede comunque.",
+                            name, p_final,
+                        )
+                except Exception:
                     logger.warning(
-                        "Serie ancora non stazionaria (p=%.3f) dopo "
-                        "2 differenziazioni - si procede comunque.",
-                        p_final,
+                        "Impossibile verificare stazionarietà di "
+                        "'%s' dopo 2 differenziazioni.",
+                        name,
                     )
-            except Exception:
-                logger.warning(
-                    "Impossibile verificare stazionarietà dopo "
-                    "2 differenziazioni - si procede comunque."
-                )
+
         return effect_vals, cause_vals, n_diff
