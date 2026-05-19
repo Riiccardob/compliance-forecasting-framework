@@ -1,4 +1,4 @@
-"""Test per StatForecaster — mock leggeri, nessun CSV reale."""
+"""Test per StatForecaster - mock leggeri, nessun CSV reale."""
 import warnings
 from pathlib import Path
 
@@ -14,7 +14,7 @@ _ROOT = Path(__file__).parent.parent
 _TOPOLOGY_PATH = _ROOT / "config" / "topology.yaml"
 _PIPELINE_PATH = _ROOT / "config" / "pipeline_params.yaml"
 
-_T0 = 1_000_000_000      # µs — punto di partenza lontano dall'origine
+_T0 = 1_000_000_000      # µs - punto di partenza lontano dall'origine
 _STEP_US = 5_000_000     # 5 s in µs
 _N = 50                  # ≥ input_window × 2 = 24 × 2 = 48 → LSTM routing attivo
 

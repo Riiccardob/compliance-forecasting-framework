@@ -187,7 +187,6 @@ docs/modules
 framework.zip
 data/raw
 docs/TODO.md
-OLD_dshbd/
 eval_framework.py
 eval_run_rolling_single_experiment.py
 last_run.txt

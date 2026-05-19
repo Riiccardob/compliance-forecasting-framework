@@ -96,7 +96,7 @@ class ATGBuilder:
         if n_nm_dup > 0:
             logger.warning(
                 "node_metrics contiene %d righe duplicate su "
-                "(timestamp, node_id) — esperimenti distinti con "
+                "(timestamp, node_id) - esperimenti distinti con "
                 "timestamp µs coincidenti. Mantenuta la prima "
                 "occorrenza per coppia.",
                 n_nm_dup,
@@ -111,7 +111,7 @@ class ATGBuilder:
         if n_em_dup > 0:
             logger.warning(
                 "edge_metrics contiene %d righe duplicate su "
-                "(timestamp, edge_id) — esperimenti distinti con "
+                "(timestamp, edge_id) - esperimenti distinti con "
                 "timestamp µs coincidenti. Mantenuta la prima "
                 "occorrenza per coppia.",
                 n_em_dup,
@@ -165,7 +165,7 @@ class ATGBuilder:
 
         if len(node_ts) != len(edge_ts) or len(node_ts) != len(gt_ts):
             logger.warning(
-                "Timestamp non allineati: node=%d, edge=%d, gt=%d — "
+                "Timestamp non allineati: node=%d, edge=%d, gt=%d - "
                 "verranno usati solo i %d timestamp comuni.",
                 len(node_ts),
                 len(edge_ts),
@@ -224,7 +224,7 @@ class ATGBuilder:
             label = int(gt_row["label_trace"])
             if label not in (0, 1):
                 logger.warning(
-                    "Label non riconosciuta %r al timestamp %d — "
+                    "Label non riconosciuta %r al timestamp %d - "
                     "lo snapshot sarà né nominale né anomalo.",
                     label, ts,
                 )
@@ -243,7 +243,7 @@ class ATGBuilder:
                     if not isinstance(parsed, list):
                         logger.warning(
                             "anomaly_node_ids al ts=%d non è una lista "
-                            "(%s) — normalizzato a [].",
+                            "(%s) - normalizzato a [].",
                             ts, type(parsed).__name__,
                         )
                         anomaly_node_ids: list[str] = []
@@ -296,7 +296,7 @@ class ATGBuilder:
         if df.empty:
             logger.warning(
                 "get_node_feature_matrix: node_id '%s' non trovato "
-                "in nessuno snapshot — DataFrame vuoto restituito.",
+                "in nessuno snapshot - DataFrame vuoto restituito.",
                 node_id,
             )
             return df
@@ -332,7 +332,7 @@ class ATGBuilder:
         if df.empty:
             logger.warning(
                 "get_edge_feature_matrix: edge_id '%s' non trovato "
-                "in nessuno snapshot — DataFrame vuoto restituito.",
+                "in nessuno snapshot - DataFrame vuoto restituito.",
                 edge_id,
             )
             return df

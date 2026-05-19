@@ -58,7 +58,7 @@ class PBOBuilder:
                 f"Metriche disponibili: {edge_metrics}"
             )
 
-        # Raggruppa archi per nodo sorgente — O(1) lookup in compute_transition_weights
+        # Raggruppa archi per nodo sorgente - O(1) lookup in compute_transition_weights
         self._source_to_edges: dict[str, list[str]] = {}
         for edge in self._edges:
             self._source_to_edges.setdefault(edge["source"], []).append(edge["id"])
@@ -126,7 +126,7 @@ class PBOBuilder:
                 if has_invalid:
                     logger.warning(
                         "Valori non validi in weight_metric '%s' "
-                        "per sorgente '%s' al ts=%d — "
+                        "per sorgente '%s' al ts=%d - "
                         "usando pesi uniformi.",
                         self._weight_metric, src,
                         snap["timestamp"],
@@ -134,7 +134,7 @@ class PBOBuilder:
                 elif total_tp <= 0:
                     logger.warning(
                         "Throughput totale uscente da '%s' al ts=%d è "
-                        "zero o negativo (total=%.4f) — usando pesi uniformi.",
+                        "zero o negativo (total=%.4f) - usando pesi uniformi.",
                         src, snap["timestamp"], total_tp,
                     )
 
@@ -171,7 +171,7 @@ class PBOBuilder:
         Returns
         -------
         dict[str, float]
-            {"e1": float, "e2": float, ...} — un valore per ogni arco in E_all.
+            {"e1": float, "e2": float, ...} - un valore per ogni arco in E_all.
 
         Raises
         ------
@@ -198,7 +198,7 @@ class PBOBuilder:
         if n_used < n_nominal_in_snapshots:
             logger.warning(
                 "%d snapshot nominali su %d non trovati in "
-                "weight_series — W_gold calibrato su %d snapshot.",
+                "weight_series - W_gold calibrato su %d snapshot.",
                 n_nominal_in_snapshots - n_used,
                 n_nominal_in_snapshots,
                 n_used,

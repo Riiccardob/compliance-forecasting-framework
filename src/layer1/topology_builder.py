@@ -108,7 +108,7 @@ class TopologyBuilder:
                     logger.warning(
                         "Arco '%s' (%s → %s): entrambi gli endpoint "
                         "appartengono a compliance set distinti non condivisi. "
-                        "hyperedges=[] — questo arco è strutturalmente "
+                        "hyperedges=[] - questo arco è strutturalmente "
                         "invisibile al framework (non in A(H_Φi) né in "
                         "M_interf per nessun compliance set).",
                         edge["id"], u, v,
@@ -213,7 +213,7 @@ class TopologyBuilder:
         else:
             logger.warning(
                 "topology_type '%s' non riconosciuto per compliance "
-                "set '%s' — critical_path non calcolabile.",
+                "set '%s' - critical_path non calcolabile.",
                 topology_type, name,
             )
             return []

@@ -1,4 +1,4 @@
-"""Fase II — Analisi causale guidata dalla topologia su M_Φi."""
+"""Fase II - Analisi causale guidata dalla topologia su M_Φi."""
 import contextlib
 import io
 from typing import Any
@@ -220,7 +220,7 @@ class CausalAnalyzer:
         )
 
     # ------------------------------------------------------------------
-    # Metodi privati — analisi statistica
+    # Metodi privati - analisi statistica
     # ------------------------------------------------------------------
 
     def _align_series(
@@ -243,7 +243,7 @@ class CausalAnalyzer:
         """
         if len(s1) < 3:
             logger.warning(
-                "Pearson screening: meno di 3 campioni comuni — coppia scartata."
+                "Pearson screening: meno di 3 campioni comuni - coppia scartata."
             )
             return False
         try:
@@ -279,7 +279,7 @@ class CausalAnalyzer:
         """
         if len(cause) < max_lag + 2:
             logger.warning(
-                "Granger test: %d campioni < max_lag+2=%d — coppia saltata.",
+                "Granger test: %d campioni < max_lag+2=%d - coppia saltata.",
                 len(cause),
                 max_lag + 2,
             )
@@ -325,7 +325,7 @@ class CausalAnalyzer:
         except (IndexError, AttributeError, TypeError):
             delta_r2 = 0.0
             logger.warning(
-                "Impossibile estrarre ΔR² per lag=%d — intensità impostata a 0.0.",
+                "Impossibile estrarre ΔR² per lag=%d - intensità impostata a 0.0.",
                 best_lag,
             )
 
@@ -387,7 +387,7 @@ class CausalAnalyzer:
         return float(min(1.0, te / h_y))
 
     # ------------------------------------------------------------------
-    # Metodi privati — costruzione coppie candidate
+    # Metodi privati - costruzione coppie candidate
     # ------------------------------------------------------------------
 
     def _build_candidate_pairs(
@@ -564,7 +564,7 @@ class CausalAnalyzer:
         return chains
 
     # ------------------------------------------------------------------
-    # Metodi privati — utilità
+    # Metodi privati - utilità
     # ------------------------------------------------------------------
 
     def _test_pair_with_pearson(
@@ -646,12 +646,12 @@ class CausalAnalyzer:
                 if p_final > 0.05:
                     logger.warning(
                         "Serie ancora non stazionaria (p=%.3f) dopo "
-                        "2 differenziazioni — si procede comunque.",
+                        "2 differenziazioni - si procede comunque.",
                         p_final,
                     )
             except Exception:
                 logger.warning(
                     "Impossibile verificare stazionarietà dopo "
-                    "2 differenziazioni — si procede comunque."
+                    "2 differenziazioni - si procede comunque."
                 )
         return effect_vals, cause_vals, n_diff

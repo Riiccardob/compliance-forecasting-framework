@@ -1,4 +1,4 @@
-"""Test per CausalAnalyzer — dati mock sintetici, nessun CSV reale."""
+"""Test per CausalAnalyzer - dati mock sintetici, nessun CSV reale."""
 import warnings
 from pathlib import Path
 
@@ -428,6 +428,6 @@ def test_cross_property_chain_confirmed_false_on_independent_series(
     )
     for chain in chains:
         assert chain["confirmed"] is False, (
-            f"Catena {chain['chain']} è confirmed=True su serie indipendenti — "
+            f"Catena {chain['chain']} è confirmed=True su serie indipendenti - "
             "possibile falso positivo Granger (seed=10 dovrebbe prevenirlo)."
         )

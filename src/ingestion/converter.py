@@ -186,7 +186,7 @@ class DSBConverter:
         m = self._filename_pattern.match(filename)
         if m is None:
             logger.warning(
-                "Filename '%s' non rispetta il pattern atteso — "
+                "Filename '%s' non rispetta il pattern atteso - "
                 "le metriche verranno processate ma i metadati "
                 "(fault_type, date, rps, replica_idx) saranno None.",
                 filename,
@@ -402,7 +402,7 @@ class DSBConverter:
 
             if latency_ms.isna().all():
                 logger.warning(
-                    "[%s] Tutti i valori di latency per arco '%s' sono NaN — "
+                    "[%s] Tutti i valori di latency per arco '%s' sono NaN - "
                     "latency_ms sarà NaN per tutte le finestre.",
                     source_file, edge["id"],
                 )

@@ -1,4 +1,4 @@
-"""Test per FeatureSelector — mock in memoria, nessun CSV reale."""
+"""Test per FeatureSelector - mock in memoria, nessun CSV reale."""
 from pathlib import Path
 from typing import Any
 
@@ -138,7 +138,7 @@ def test_h_crit_no_interference(
     config: ConfigLoader,
     mock_snapshots: list[dict],
 ) -> None:
-    """M_interf(H_crit) = ∅ — nessuna chiave 'interf:' per H_crit."""
+    """M_interf(H_crit) = ∅ - nessuna chiave 'interf:' per H_crit."""
     topo = config.load_topology()
     cs_names = list(topo["compliance_sets"].keys())
     seen: set[tuple[str, str]] = set()

@@ -1,4 +1,4 @@
-"""Test per DSBConverter — dati mock sintetici, nessun CSV reale."""
+"""Test per DSBConverter - dati mock sintetici, nessun CSV reale."""
 import json
 from pathlib import Path
 
@@ -27,7 +27,7 @@ _CPU_W1 = 1.250
 # Memoria: ~93 MB in bytes
 _MEM_BYTES = 97_517_568
 
-# Rete: counter cumulativo in bytes — delta = 1 MB in entrambe le direzioni
+# Rete: counter cumulativo in bytes - delta = 1 MB in entrambe le direzioni
 _RX_W0 = 10 * 1024 * 1024
 _RX_W1 = 11 * 1024 * 1024
 _TX_W0 = 5 * 1024 * 1024
@@ -61,7 +61,7 @@ def _make_base_raw() -> pd.DataFrame:
             "window_id": "10_0",
             "0_start": _TS_W0,
             "label_trace": 0,
-            # Node 0 (nginx-web-server) — counter Prometheus
+            # Node 0 (nginx-web-server) - counter Prometheus
             "0_container_cpu_usage_seconds_total": _CPU_W0,
             "0_container_memory_usage_bytes": _MEM_BYTES,
             "0_container_network_receive_bytes_total": _RX_W0,
@@ -90,7 +90,7 @@ def _make_base_raw() -> pd.DataFrame:
 # ── Test suite ────────────────────────────────────────────────────────────────
 
 class TestDSBConverter:
-    """Test suite per DSBConverter — mock in memoria, nessun I/O su CSV reali."""
+    """Test suite per DSBConverter - mock in memoria, nessun I/O su CSV reali."""
 
     # ── Metriche di nodo ───────────────────────────────────────────────────────
 
@@ -369,7 +369,7 @@ class TestDSBConverter:
         self, converter: DSBConverter
     ) -> None:
         """In un mock a 3 finestre, il delta negativo su w2 viene
-        forward-filled con il valore positivo di w1 — non con fillna(0.0).
+        forward-filled con il valore positivo di w1 - non con fillna(0.0).
         Verifica il vero meccanismo di ffill quando esiste un predecessore
         valido."""
         _TS_W2 = 11_000_000

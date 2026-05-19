@@ -1,4 +1,4 @@
-# topology.yaml — Struttura del grafo certificato
+# topology.yaml - Struttura del grafo certificato
 # Solo topologia e definizioni statiche. Parametri algoritmici in pipeline_params.yaml.
 
 metadata:
@@ -9,7 +9,7 @@ metadata:
   window_duration_seconds: 5.0
 
 nodes:
-  - id: nginx-web-server        # index 0 — entry point HTTP
+  - id: nginx-web-server        # index 0 - entry point HTTP
   - id: nginx-thrift            # index 1
   - id: home-timeline-service   # index 2
   - id: home-timeline-redis     # index 3
@@ -50,7 +50,7 @@ edge_metrics:
 
 compliance_sets:
   H_crit:
-    description: "Real-time Dependability — percorso critico di latenza"
+    description: "Real-time Dependability - percorso critico di latenza"
     topology_type: linear
     # Percorso certificato lineare: PAS applicabile.
     nodes:
@@ -75,7 +75,7 @@ compliance_sets:
         - post-storage-mongodb
 
   H_cache:
-    description: "Cache Efficiency — monitoraggio layer di caching"
+    description: "Cache Efficiency - monitoraggio layer di caching"
     topology_type: parallel
     # Topologia con rami paralleli: PAS non applicabile.
     # Il monitoraggio strutturale usa la norma di Frobenius come fallback.

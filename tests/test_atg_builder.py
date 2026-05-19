@@ -1,4 +1,4 @@
-"""Test per ATGBuilder — mock sintetici in memoria, nessun CSV reale."""
+"""Test per ATGBuilder - mock sintetici in memoria, nessun CSV reale."""
 import json
 from pathlib import Path
 

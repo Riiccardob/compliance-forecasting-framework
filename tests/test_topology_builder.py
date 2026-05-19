@@ -1,4 +1,4 @@
-"""Test per TopologyBuilder — ipergrafo di certificazione H_cert."""
+"""Test per TopologyBuilder - ipergrafo di certificazione H_cert."""
 from pathlib import Path
 
 import networkx as nx
@@ -78,7 +78,7 @@ def test_shared_nodes_symmetric(builder: TopologyBuilder) -> None:
     )
 
 
-# ── A(H_Φi) — archi interni ───────────────────────────────────────────────────
+# ── A(H_Φi) - archi interni ───────────────────────────────────────────────────
 
 def test_edges_h_crit_count(builder: TopologyBuilder) -> None:
     """A(H_crit) ha esattamente 4 archi: e1, e2, e4, e6."""
@@ -106,7 +106,7 @@ def test_critical_path_h_cache_empty(builder: TopologyBuilder) -> None:
     assert path == []
 
 
-# ── M_interf — archi di interferenza ─────────────────────────────────────────
+# ── M_interf - archi di interferenza ─────────────────────────────────────────
 
 def test_interference_h_crit_empty(builder: TopologyBuilder) -> None:
     """M_interf(H_crit, H_cache) = ∅: nessun arco esterno a H_crit punta ai nodi condivisi."""

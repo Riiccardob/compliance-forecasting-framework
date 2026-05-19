@@ -1,4 +1,4 @@
-"""Fase I — Mapping M: feature selection topologica per compliance set."""
+"""Fase I - Mapping M: feature selection topologica per compliance set."""
 import pandas as pd
 
 from src.layer1.topology_builder import TopologyBuilder
@@ -86,9 +86,9 @@ class FeatureSelector:
         -------
         dict[str, pd.DataFrame]
             Chiavi nel formato:
-            - ``"node:<node_id>:<metrica>"`` — feature di nodo (M_direct)
-            - ``"edge:<edge_id>:<metrica>"`` — feature di arco (M_direct)
-            - ``"interf:<edge_id>:throughput_rps"`` — interferenza (M_interf)
+            - ``"node:<node_id>:<metrica>"`` - feature di nodo (M_direct)
+            - ``"edge:<edge_id>:<metrica>"`` - feature di arco (M_direct)
+            - ``"interf:<edge_id>:throughput_rps"`` - interferenza (M_interf)
 
             Ogni valore è un DataFrame con indice ``timestamp`` (int µs)
             e colonna ``"value"``.
@@ -106,7 +106,7 @@ class FeatureSelector:
 
         result: dict[str, pd.DataFrame] = {}
 
-        # M_direct — feature di nodo
+        # M_direct - feature di nodo
         for node_id in sorted(cs_nodes):
             for metric in self._node_metrics:
                 key = f"node:{node_id}:{metric}"
@@ -114,7 +114,7 @@ class FeatureSelector:
                     node_id, metric, snapshots
                 )
 
-        # M_direct — feature di arco
+        # M_direct - feature di arco
         for src, tgt in internal_edges:
             edge_id = self._edge_id_lookup.get((src, tgt))
             if edge_id is None:
@@ -125,7 +125,7 @@ class FeatureSelector:
                     edge_id, metric, snapshots
                 )
 
-        # M_interf — solo throughput_rps
+        # M_interf - solo throughput_rps
         for src, tgt in interf_edges:
             edge_id = self._edge_id_lookup.get((src, tgt))
             if edge_id is None:

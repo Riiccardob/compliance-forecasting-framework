@@ -1,4 +1,4 @@
-"""Fase I — orchestratore del forecasting per-metrica con routing Prophet/LSTM/ARIMA/Linear."""
+"""Fase I - orchestratore del forecasting per-metrica con routing Prophet/LSTM/ARIMA/Linear."""
 from typing import Any
 
 import numpy as np
@@ -98,7 +98,7 @@ class StatForecaster:
             if len(train_df) == 0:
                 logger.warning(
                     "Feature '%s': training set vuoto dopo filtraggio "
-                    "nominale — feature esclusa dal forecasting.", key
+                    "nominale - feature esclusa dal forecasting.", key
                 )
                 continue
 
@@ -390,7 +390,7 @@ class StatForecaster:
         if freq <= 0:
             logger.warning(
                 "_infer_freq_us: frequenza stimata %d µs ≤ 0 "
-                "(timestamp identici o decrescenti) — fallback a 5 s.",
+                "(timestamp identici o decrescenti) - fallback a 5 s.",
                 freq,
             )
             return 5_000_000

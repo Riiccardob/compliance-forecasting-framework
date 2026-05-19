@@ -1,4 +1,4 @@
-# pipeline_params.yaml — Parametri algoritmici della pipeline
+# pipeline_params.yaml - Parametri algoritmici della pipeline
 # Tutti i valori qui sono soggetti a tuning senza toccare la topologia.
 
 version: "1.0"

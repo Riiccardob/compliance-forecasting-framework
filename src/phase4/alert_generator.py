@@ -1,4 +1,4 @@
-"""Fase IV — Generatore di alert strutturati con lead time e causa radice."""
+"""Fase IV - Generatore di alert strutturati con lead time e causa radice."""
 from typing import Any
 
 import numpy as np
@@ -67,7 +67,7 @@ class AlertGenerator:
             self._step_duration_hours = 24.0
             self._logger.warning(
                 "forecasting.step_duration_hours non trovato in "
-                "pipeline_params.yaml — uso default 24.0 ore per step."
+                "pipeline_params.yaml - uso default 24.0 ore per step."
             )
 
         self._divergence_threshold: float = float(
@@ -340,7 +340,7 @@ class AlertGenerator:
         n_steps = min(len(forecasts[k]) for k in relevant_keys)
         if n_steps < self._horizon_steps:
             self._logger.warning(
-                "[%s] Forecasts contengono %d step < horizon_steps=%d — "
+                "[%s] Forecasts contengono %d step < horizon_steps=%d - "
                 "lead time stimato su orizzonte ridotto.",
                 compliance_set_name, n_steps, self._horizon_steps,
             )
@@ -367,7 +367,7 @@ class AlertGenerator:
                         0.0 if display_bound == "lower" else sla_threshold
                     )
                     self._logger.warning(
-                        "yhat=NaN per feature '%s' step %d — "
+                        "yhat=NaN per feature '%s' step %d - "
                         "uso fallback conservativo %.4f (display_bound=%s).",
                         key, step, conservative_fallback, display_bound,
                     )

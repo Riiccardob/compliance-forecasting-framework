@@ -93,7 +93,7 @@ def test_pipeline_params_loads(tmp_path: Path) -> None:
     assert isinstance(mock_loader.load_pipeline_params(), dict)
 
 
-# ── Pipeline content — DSB regression guard ───────────────────────────────────
+# ── Pipeline content - DSB regression guard ───────────────────────────────────
 
 def test_lstm_config_present(pipeline: dict) -> None:
     assert "lstm" in pipeline["forecasting"]
@@ -237,7 +237,7 @@ def test_window_duration_seconds_invalid_raises(
 
 def test_malformed_yaml_raises(tmp_path: Path) -> None:
     """YAML sintaticamente invalido solleva ValueError con messaggio
-    esplicito — non propaga yaml.YAMLError raw."""
+    esplicito - non propaga yaml.YAMLError raw."""
     malformed = tmp_path / "malformed.yaml"
     malformed.write_text(
         "metadata:\n  key: valid\nnodes: [\n  - broken",
@@ -306,7 +306,7 @@ def test_load_pipeline_cache_deep_isolation(tmp_path: Path) -> None:
     assert p2["anomaly_detection"]["cusum"]["ewma_alpha"] != 999.0
 
 
-# ── DSB topology content — regression guard ───────────────────────────────────
+# ── DSB topology content - regression guard ───────────────────────────────────
 
 class TestTopologyYamlContent:
     """Regression guard on the content of config/topology.yaml for

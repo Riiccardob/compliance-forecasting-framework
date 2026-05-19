@@ -1,4 +1,4 @@
-"""Test per PBOBuilder — Probabilistic Behavioral Overlay."""
+"""Test per PBOBuilder - Probabilistic Behavioral Overlay."""
 import math
 import logging
 from pathlib import Path
@@ -326,7 +326,7 @@ def test_weight_negative_throughput_uses_uniform_fallback(
     )
     ws = pbo.compute_transition_weights([snap])
     w = ws[0]["weights"]
-    # home-timeline-service ha e3 e e4 — fallback uniforme = 0.5
+    # home-timeline-service ha e3 e e4 - fallback uniforme = 0.5
     assert abs(w["e3"] - 0.5) < 1e-9
     assert abs(w["e4"] - 0.5) < 1e-9
 
@@ -369,7 +369,7 @@ def test_gold_standard_covers_absent_edge(
     mock_snapshots: list[dict],
 ) -> None:
     """W_gold include e6 anche se e6 è assente da uno snapshot
-    nominale — viene trattato come peso 0.0 per quel timestamp."""
+    nominale - viene trattato come peso 0.0 per quel timestamp."""
     import copy
     ws_mod = copy.deepcopy(weight_series)
     ws_mod[0]["weights"].pop("e6", None)

@@ -1,4 +1,4 @@
-"""Test per StructuralMonitor — mock sintetici, nessun CSV reale."""
+"""Test per StructuralMonitor - mock sintetici, nessun CSV reale."""
 import copy
 from pathlib import Path
 from typing import Any
@@ -231,7 +231,7 @@ def test_monitor_raises_before_fit(
         monitor.monitor("H_crit", _make_features_h_crit(), [mock_weight_series[-1]], _T0)
 
 
-# ── Livello 1 — Threshold (3) ────────────────────────────────────────────────
+# ── Livello 1 - Threshold (3) ────────────────────────────────────────────────
 
 def test_threshold_no_violation_on_nominal(
     fitted_monitor: StructuralMonitor,
@@ -277,7 +277,7 @@ def test_threshold_nan_value_not_a_violation(
     assert len(e1_lat_violated) == 0
 
 
-# ── Livello 1 — Z-score (3) ──────────────────────────────────────────────────
+# ── Livello 1 - Z-score (3) ──────────────────────────────────────────────────
 
 def test_zscore_no_violation_on_nominal(
     fitted_monitor: StructuralMonitor,
@@ -369,7 +369,7 @@ def test_zscore_nan_not_a_violation(
     assert len(nan_violated) == 0
 
 
-# ── Livello 2 — Isolation Forest (3) ─────────────────────────────────────────
+# ── Livello 2 - Isolation Forest (3) ─────────────────────────────────────────
 
 def test_if_inactive_without_base_signal(
     fitted_monitor: StructuralMonitor,
@@ -434,7 +434,7 @@ def test_if_detects_multivariate_anomaly(
 
     monitor.fit("H_crit", nominal_features, nominal_snaps, mock_weight_series, mock_gold_standard)
 
-    # Test: cpu=1000 in tutte le dimensioni — outlier estremo (>400σ dal training)
+    # Test: cpu=1000 in tutte le dimensioni - outlier estremo (>400σ dal training)
     extreme_cpu = 1000.0
     test_ts = _T0 + n * _STEP_US
     test_features = _make_features_h_crit(cpu=extreme_cpu, latency=10.0, ts=test_ts)
@@ -458,7 +458,7 @@ def test_if_imputes_nan_in_state_vector(
     assert isinstance(result, dict)
 
 
-# ── Livello 3 — EWMA + CUSUM (4) ─────────────────────────────────────────────
+# ── Livello 3 - EWMA + CUSUM (4) ─────────────────────────────────────────────
 
 def test_cusum_starts_at_zero(
     monitor: StructuralMonitor,
@@ -575,7 +575,7 @@ def test_cusum_signal_when_threshold_exceeded(
     )
 
 
-# ── Livello 4 — Validatore strutturale (3) ───────────────────────────────────
+# ── Livello 4 - Validatore strutturale (3) ───────────────────────────────────
 
 def test_structural_confirmed_requires_both_signals(
     fitted_monitor: StructuralMonitor,

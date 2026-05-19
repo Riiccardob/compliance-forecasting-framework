@@ -1,4 +1,4 @@
-"""Fase III — Monitoraggio strutturale gerarchico su M_Φi."""
+"""Fase III - Monitoraggio strutturale gerarchico su M_Φi."""
 from collections import deque
 from typing import Any
 
@@ -228,7 +228,7 @@ class StructuralMonitor:
                 )
             except (ValueError, KeyError, IndexError) as exc:
                 self._logger.warning(
-                    "Impossibile calcolare PAS_gold: %s — usando Frobenius.", exc
+                    "Impossibile calcolare PAS_gold: %s - usando Frobenius.", exc
                 )
                 self._pas_gold = None
                 self._reference = 0.0
@@ -300,23 +300,23 @@ class StructuralMonitor:
                 self._compliance_set_name,
             )
 
-        # Livello 1a — threshold SLA
+        # Livello 1a - threshold SLA
         threshold_violations = self._check_threshold(
             compliance_set_name, features, timestamp
         )
 
-        # Livello 1b — z-score
+        # Livello 1b - z-score
         zscore_violations = self._check_zscore(features, timestamp)
 
         base_signal = len(threshold_violations) > 0 or len(zscore_violations) > 0
 
-        # Livello 2 — Isolation Forest (condizionale)
+        # Livello 2 - Isolation Forest (condizionale)
         if base_signal:
             if_signal = self._check_isolation_forest(features, timestamp)
         else:
             if_signal = False
 
-        # Livello 3 — EWMA + CUSUM
+        # Livello 3 - EWMA + CUSUM
         (
             cusum_signal,
             cusum_stat,
@@ -325,7 +325,7 @@ class StructuralMonitor:
             pas_value,
         ) = self._update_ewma_cusum(weight_series, compliance_set_name)
 
-        # Livello 4 — Validatore strutturale (condizionale)
+        # Livello 4 - Validatore strutturale (condizionale)
         structural_confirmed = False
         if if_signal and cusum_signal:
             structural_confirmed = self._check_structural_validator(
@@ -364,7 +364,7 @@ class StructuralMonitor:
         self._ewma_history.clear()
 
     # ------------------------------------------------------------------
-    # Livello 1 — Threshold e Z-score
+    # Livello 1 - Threshold e Z-score
     # ------------------------------------------------------------------
 
     def _check_threshold(
@@ -433,7 +433,7 @@ class StructuralMonitor:
         return violations
 
     # ------------------------------------------------------------------
-    # Livello 2 — Isolation Forest
+    # Livello 2 - Isolation Forest
     # ------------------------------------------------------------------
 
     def _check_isolation_forest(
@@ -449,7 +449,7 @@ class StructuralMonitor:
         nan_mask = np.isnan(x)
         if nan_mask.any():
             self._logger.warning(
-                "IF: %d dimensioni NaN nel vettore corrente — imputazione con training mean.",
+                "IF: %d dimensioni NaN nel vettore corrente - imputazione con training mean.",
                 int(nan_mask.sum()),
             )
             x = np.where(nan_mask, self._node_means, x)
@@ -458,7 +458,7 @@ class StructuralMonitor:
         return bool(pred == -1)
 
     # ------------------------------------------------------------------
-    # Livello 3 — EWMA + CUSUM
+    # Livello 3 - EWMA + CUSUM
     # ------------------------------------------------------------------
 
     def _update_ewma_cusum(
@@ -546,7 +546,7 @@ class StructuralMonitor:
         return self._ewma_state
 
     # ------------------------------------------------------------------
-    # Livello 4 — Validatore strutturale
+    # Livello 4 - Validatore strutturale
     # ------------------------------------------------------------------
 
     def _check_structural_validator(

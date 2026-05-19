@@ -1,4 +1,4 @@
-"""Test per AlertGenerator — mock sintetici, nessun CSV reale."""
+"""Test per AlertGenerator - mock sintetici, nessun CSV reale."""
 import copy
 from pathlib import Path
 from typing import Any
@@ -983,7 +983,7 @@ def test_orange_min_days_less_than_yellow_min_days_or_raises(
         # Con orange=7, yellow=2, lead_time=5:
         # 5 < 7=orange_min_days → RED (errato, dovrebbe essere ORANGE)
         # Questo test documenta il comportamento attuale senza asserire
-        # su quale sia il valore corretto — è un punto di attenzione
+        # su quale sia il valore corretto - è un punto di attenzione
         # per chi configura il YAML.
         assert alert is not None, "Violazione attesa con yhat=200 su H_crit"
     except (ValueError, KeyError):
