@@ -1,5 +1,6 @@
 from dash import html, dcc
 import dash_cytoscape as cyto
+from dashboard.layout.help_utils import help_icon
 
 _TITLE_STYLE = {
     "fontSize": "18px",
@@ -87,6 +88,16 @@ def create_s3() -> html.Div:
 
         html.Div([
             html.Div([
+                help_icon(
+                    "Grafo delle relazioni causali tra le feature del compliance set. "
+                    "Ogni nodo e una feature (CPU di un servizio, latenza di un arco...). "
+                    "Una freccia da A a B significa che le variazioni in A precedono "
+                    "statisticamente le variazioni in B. "
+                    "Archi blu: causalita lineare (test di Granger, p<0.05). "
+                    "Archi viola: dipendenza non-lineare (Transfer Entropy > 0.1). "
+                    "Lo spessore dell'arco indica l'intensita causale (0=debole, 1=forte). "
+                    "Clicca un arco per vedere i dettagli nel pannello destro.", left=True
+                ),
                 html.Div([
                     html.Div([
                         html.Div(style={
@@ -143,7 +154,8 @@ def create_s3() -> html.Div:
                     minZoom=0.2,
                     maxZoom=4.0,
                 ),
-            ], style={"flex": "1", "display": "flex", "flexDirection": "column"}),
+            ], style={"flex": "1", "display": "flex", "flexDirection": "column",
+                      "position": "relative"}),
             html.Div(
                 id="s3-edge-detail",
                 style={
@@ -166,6 +178,13 @@ def create_s3() -> html.Div:
         ], style={"display": "flex"}),
 
         html.Div([
+            help_icon(
+                "Una catena cross-property e una sequenza causale che coinvolge "
+                "piu compliance set: un arco esterno (M_interf) porta carico su "
+                "un nodo condiviso tra H_crit e H_cache, che a sua volta influenza "
+                "un arco interno al set target. "
+                "CONFERMATA = entrambi i test di Granger della catena sono significativi."
+            ),
             html.Div(
                 "Catene cross-property",
                 style={
@@ -181,5 +200,5 @@ def create_s3() -> html.Div:
                 id="s3-chains",
                 style={"fontSize": "12px", "color": "var(--muted)"},
             ),
-        ]),
+        ], style={"position": "relative"}),
     ])

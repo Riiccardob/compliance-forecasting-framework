@@ -1,5 +1,6 @@
 from dash import html, dcc
 import dash_mantine_components as dmc  # noqa: F401
+from dashboard.layout.help_utils import help_icon
 
 _TITLE_STYLE = {
     "fontSize": "18px",
@@ -139,6 +140,16 @@ def create_s4() -> html.Div:
         }),
 
         html.Div([
+            help_icon(
+                "I gauge mostrano l'attivazione dei 4 livelli del monitoraggio "
+                "gerarchico per lo snapshot selezionato. "
+                "Verde basso = livello non attivo (nominale). "
+                "Rosso pieno = livello attivo (anomalia rilevata). "
+                "Il valore numerico sotto indica l'intensita del segnale. "
+                "I livelli si attivano in cascata: IF si attiva solo se "
+                "Threshold o Z-score e gia attivo. "
+                "Structural Validator si attiva solo se IF e CUSUM sono entrambi attivi."
+            ),
             _gauge("Threshold", "s4-gauge-threshold",
                    "Livello 1a: verifica se una metrica supera direttamente "
                    "la soglia SLA definita nel certificato (es. latency > 100ms). "
@@ -162,6 +173,7 @@ def create_s4() -> html.Div:
             "gap": "16px",
             "marginBottom": "12px",
             "justifyContent": "flex-start",
+            "position": "relative",
         }),
 
         html.Div(
@@ -182,6 +194,15 @@ def create_s4() -> html.Div:
         ),
 
         html.Div([
+            help_icon(
+                "Timeline che mostra l'attivazione dei segnali nel tempo "
+                "per tutti gli snapshot processati dalla pipeline. "
+                "Ogni riga = un livello di monitoraggio. "
+                "Ogni quadratino = uno snapshot. "
+                "Rosso = segnale attivo. Grigio scuro = nessun segnale. "
+                "La riga Ground Truth usa i label reali del dataset per confronto: "
+                "verde = snapshot nominale, rosso = anomalia reale (fault injection).", left=True
+            ),
             html.Div(
                 "Timeline segnali",
                 style={
@@ -221,9 +242,17 @@ def create_s4() -> html.Div:
                 config={"displayModeBar": False},
                 style={"height": "200px"},
             ),
-        ], style={"marginBottom": "20px"}),
+        ], style={"marginBottom": "20px", "position": "relative"}),
 
         html.Div([
+            help_icon(
+                "PAS (Path Adherence Score, asse sinistro oro): misura quanto il "
+                "traffico segue il percorso critico nominale. Range 0-1. "
+                "Frobenius (asse destro rosso): deviazione della distribuzione "
+                "traffico dal baseline nominale. Range 0-inf. "
+                "Su DeathStarBench entrambi sono costanti (PAS=0.25, Frobenius=0) "
+                "per limitazione del dataset (throughput aggregato per finestra).", left=True
+            ),
             html.Div(
                 dcc.Graph(
                     id="s4-frob-pas-chart",
@@ -232,22 +261,38 @@ def create_s4() -> html.Div:
                 style={"flex": "1"},
             ),
             html.Div(
-                id="s4-result-card",
                 style={
                     "width": "280px",
                     "minWidth": "280px",
                     "marginLeft": "16px",
-                    "backgroundColor": "var(--surface)",
-                    "border": "1px solid var(--border)",
-                    "padding": "16px",
-                    "fontSize": "12px",
-                    "overflowY": "auto",
-                    "maxHeight": "320px",
+                    "position": "relative",
                 },
-                children=html.Div(
-                    "Seleziona uno snapshot.",
-                    style={"color": "var(--muted)"},
-                ),
+                children=[
+                    help_icon(
+                        "Dettaglio tecnico del risultato di monitoraggio per lo snapshot. "
+                        "base_signal: True se Threshold o Z-score ha rilevato anomalia. "
+                        "if_signal: True se Isolation Forest conferma (attivo solo se base_signal). "
+                        "cusum_signal: True se CUSUM > 5.0. "
+                        "structural_confirmed: True solo se IF e CUSUM sono entrambi attivi "
+                        "e Frobenius > soglia per 3 finestre consecutive. "
+                        "Su DSB structural_confirmed e sempre False per limitazione dataset."
+                    ),
+                    html.Div(
+                        id="s4-result-card",
+                        style={
+                            "backgroundColor": "var(--surface)",
+                            "border": "1px solid var(--border)",
+                            "padding": "16px",
+                            "fontSize": "12px",
+                            "overflowY": "auto",
+                            "maxHeight": "320px",
+                        },
+                        children=html.Div(
+                            "Seleziona uno snapshot.",
+                            style={"color": "var(--muted)"},
+                        ),
+                    ),
+                ],
             ),
-        ], style={"display": "flex"}),
+        ], style={"display": "flex", "position": "relative"}),
     ])

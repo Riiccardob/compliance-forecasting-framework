@@ -1,5 +1,6 @@
 from dash import html, dcc
 import dash_mantine_components as dmc  # noqa: F401
+from dashboard.layout.help_utils import help_icon
 
 _TITLE_STYLE = {
     "fontSize": "18px",
@@ -22,6 +23,14 @@ def create_s5() -> html.Div:
         html.Div("Alert", style=_TITLE_STYLE),
 
         html.Div([
+            help_icon(
+                "Filtri per navigare gli alert generati dalla pipeline. "
+                "Criticita: Yellow = lead time > 7 giorni (preavviso lungo). "
+                "Orange = 2-7 giorni oppure segnale IF o CUSUM attivo. "
+                "Red = lead time < 2 giorni oppure tutti i segnali attivi. "
+                "Il lead time e il numero di step previsionali prima della "
+                "violazione della soglia SLA.", left=True
+            ),
             html.Div([
                 html.Div("Criticita", style=_LABEL_STYLE),
                 dcc.Checklist(
@@ -88,11 +97,21 @@ def create_s5() -> html.Div:
             "backgroundColor": "var(--surface)",
             "border": "1px solid var(--border)",
             "padding": "16px",
+            "position": "relative",
         }),
 
-        html.Div(id="s5-summary", style={
-            "display": "flex", "gap": "12px", "marginBottom": "16px",
-        }),
+        html.Div(style={"position": "relative"}, children=[
+            help_icon(
+                "Riepilogo degli alert filtrati. "
+                "Ogni alert corrisponde a una previsione di violazione SLA per "
+                "un compliance set in uno snapshot specifico. "
+                "Clicca una riga della tabella per vedere il dettaglio completo "
+                "e il confronto con il ground truth del dataset.", left=True
+            ),
+            html.Div(id="s5-summary", style={
+                "display": "flex", "gap": "12px", "marginBottom": "16px",
+            }),
+        ]),
 
         html.Div(id="s5-table", style={"marginBottom": "20px"}),
 
@@ -131,6 +150,13 @@ def create_s5() -> html.Div:
         ], style={"display": "flex", "marginBottom": "20px"}),
 
         html.Div([
+            help_icon(
+                "Distribuzione temporale degli alert. "
+                "Asse X: data/ora dell'alert. "
+                "Asse Y: compliance set. "
+                "Colori: giallo=Yellow, arancione=Orange, rosso=Red. "
+                "Ogni punto rappresenta un alert generato per quello snapshot.", left=True
+            ),
             html.Div(
                 "Distribuzione criticita nel tempo",
                 style={
@@ -146,7 +172,7 @@ def create_s5() -> html.Div:
                 config={"displayModeBar": False},
                 style={"height": "200px"},
             ),
-        ]),
+        ], style={"position": "relative"}),
 
         dcc.Store(id="s5-selected-alert", data=None),
     ])

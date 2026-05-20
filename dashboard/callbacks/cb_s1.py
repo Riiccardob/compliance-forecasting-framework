@@ -335,11 +335,22 @@ def update_atg_ts(metric, slider_idx):
                     if snap["edges"].get(e, {}).get(metric) is not None]
         y.append(sum(vals) / len(vals) if vals else None)
 
+    _MAX_PTS = 1500
+    if len(x_dt) > _MAX_PTS:
+        step      = len(x_dt) // _MAX_PTS
+        x_dt      = x_dt[::step]
+        y         = y[::step]
+        snaps_sub = snaps[::step]
+        subsampled = True
+    else:
+        snaps_sub  = snaps
+        subsampled = False
+
     fig = go.Figure(go.Scatter(
         x=x_dt, y=y, mode="lines",
         line={"color": "#c4a35a", "width": 1.2},
     ))
-    for i, snap in enumerate(snaps):
+    for snap in snaps_sub:
         if snap["label"]:
             t0 = pd.to_datetime(snap["timestamp"],             unit="us")
             t1 = pd.to_datetime(snap["timestamp"] + 5_000_000, unit="us")
@@ -358,8 +369,10 @@ def update_atg_ts(metric, slider_idx):
             annotation_font_size=9,
         )
 
+    title_suffix = f" (campione 1/{step})" if subsampled else ""
     fig.update_layout(
-        title=f"{metric} — tutti gli snapshot (linea oro = posizione slider)",
+        title=(f"{metric} — tutti gli snapshot{title_suffix} "
+               f"(linea oro = posizione slider)"),
         xaxis_title="data/ora (UTC)", yaxis_title=metric,
         **_DARK_LAYOUT,
     )
@@ -597,13 +610,13 @@ def update_pbo(tab, slider_val):
                 x=ts_list, y=frob_vals, name="Frobenius",
                 line={"color": "#b55e5e", "width": 1.5}, yaxis="y2",
             ))
-            for ts in ts_list:
-                if ts in anom_ts:
-                    fig_pf.add_vrect(
-                        x0=ts, x1=ts + 5_000_000,
-                        fillcolor="#b55e5e", opacity=0.06,
-                        line_width=0, layer="below",
-                    )
+            _anom_ts_list = [ts for ts in ts_list if ts in anom_ts][:200]
+            for ts in _anom_ts_list:
+                fig_pf.add_vrect(
+                    x0=ts, x1=ts + 5_000_000,
+                    fillcolor="#b55e5e", opacity=0.06,
+                    line_width=0, layer="below",
+                )
             fig_pf.add_hline(
                 y=0.25,
                 line_dash="dash",

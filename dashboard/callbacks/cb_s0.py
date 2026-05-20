@@ -132,7 +132,6 @@ def start_atg_build(n_clicks, paths):
     Output("s0-btn-load",       "disabled"),
     Output("s0-btn-load",       "style"),
     Output("s0-snapshot-table", "children"),
-    Output("s0-btn-run",        "disabled"),
     Output("s0-btn-run",        "style"),
     Input("s0-poll", "n_intervals"),
     State("s0-pipeline-config", "data"),
@@ -219,25 +218,35 @@ def poll(n, pipeline_config, current_mode, current_n):
         or (current_mode == "batch"
             and pipeline_config.get("n_snapshots") != current_n)
     )
-    atg_ready        = _S["atg_done"] or DataManager().is_data_loaded()
-    btn_run_disabled = not atg_ready or not config_changed
-    btn_run_opacity  = "1" if (atg_ready and config_changed) else "0.4"
-    btn_run_cursor   = "pointer" if (atg_ready and config_changed) else "not-allowed"
+    atg_ready       = _S["atg_done"] or DataManager().is_data_loaded()
+    btn_run_opacity = "1" if (atg_ready and config_changed) else "0.4"
+    btn_run_cursor  = "pointer" if (atg_ready and config_changed) else "not-allowed"
     btn_run_style = {
         **_BTN_BASE,
         "backgroundColor": "var(--crit)",
         "color": "#ffffff",
         "marginTop": "16px",
-        "opacity": btn_run_opacity,
-        "cursor": btn_run_cursor,
+        "opacity":       btn_run_opacity,
+        "cursor":        btn_run_cursor,
+        "pointerEvents": "auto" if (atg_ready and config_changed) else "none",
     }
 
     return (
         atg_pct, atg_msg,
         load_status, load_style,
         btn_load_disabled, btn_load_style,
-        snap_table, btn_run_disabled, btn_run_style,
+        snap_table, btn_run_style,
     )
+
+
+# ── Callback: disabilita poll fuori da S0 ────────────────────────────────
+
+@callback(
+    Output("s0-poll", "disabled"),
+    Input("active-section", "data"),
+)
+def toggle_poll(section):
+    return section != "s0"
 
 
 # ── Callback: toggle batch controls / full warning ───────────────────────

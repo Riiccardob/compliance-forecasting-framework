@@ -22,6 +22,7 @@ app = dash.Dash(
     suppress_callback_exceptions=True,
 )
 app.title = "Compliance Forecasting"
+app.server.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
 from dashboard.layout.sidebar import create_sidebar  # noqa: E402
 
@@ -96,4 +97,9 @@ if mp.current_process().name == "MainProcess":
         )
 
 if __name__ == "__main__":
-    app.run(debug=True, use_reloader=False, port=8050)
+    app.run(
+        debug=True,
+        use_reloader=False,
+        port=8050,
+        threaded=True,
+    )

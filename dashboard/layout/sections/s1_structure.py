@@ -1,6 +1,7 @@
 from dash import html, dcc
 import dash_mantine_components as dmc
 import dash_cytoscape as cyto
+from dashboard.layout.help_utils import help_icon
 
 _CARD = {
     "backgroundColor": "var(--surface)",
@@ -168,8 +169,16 @@ def _atg_panel() -> html.Div:
     return html.Div(
         children=[
             html.Div(
-                style=_CARD,
+                style={**_CARD, "position": "relative"},
                 children=[
+                    help_icon(
+                        "Uno snapshot e una finestra temporale di 5 secondi del "
+                        "sistema. Contiene le metriche di tutti i 7 microservizi "
+                        "(CPU, memoria, rete) e dei 6 archi (latenza, error rate, "
+                        "throughput). Il label indica se il sistema era in stato "
+                        "nominale (nessun fault) o anomalo (fault injection attiva). "
+                        "Lo slider seleziona quale snapshot visualizzare nelle heatmap."
+                    ),
                     html.Div("Snapshot", style=_LABEL),
                     dcc.Slider(
                         id="s1-atg-slider",
@@ -179,7 +188,7 @@ def _atg_panel() -> html.Div:
                         value=0,
                         marks=None,
                         tooltip={"placement": "bottom", "always_visible": False},
-                        updatemode="drag",
+                        updatemode="mouseup",
                     ),
                     html.Div(
                         id="s1-atg-snap-label",
@@ -193,8 +202,17 @@ def _atg_panel() -> html.Div:
                 style={"display": "flex", "gap": "12px", "marginBottom": "12px"},
                 children=[
                     html.Div(
-                        style={**_CARD, "flex": "1", "marginBottom": "0"},
+                        style={**_CARD, "flex": "1", "marginBottom": "0",
+                               "position": "relative"},
                         children=[
+                            help_icon(
+                                "Heatmap delle metriche di risorse per ogni microservizio "
+                                "nello snapshot selezionato. Righe = metriche (CPU, memoria, "
+                                "rete RX, rete TX). Colonne = microservizi. "
+                                "Colori piu chiari = valori piu alti. "
+                                "Il bordo rosso evidenzia il nodo riportato come anomalo "
+                                "nel ground truth del dataset.", left=True
+                            ),
                             html.Div("Feature nodo (heatmap)", style=_LABEL),
                             dcc.Graph(
                                 id="s1-atg-node-heatmap",
@@ -210,8 +228,18 @@ def _atg_panel() -> html.Div:
                         ],
                     ),
                     html.Div(
-                        style={**_CARD, "flex": "1", "marginBottom": "0"},
+                        style={**_CARD, "flex": "1", "marginBottom": "0",
+                               "position": "relative"},
                         children=[
+                            help_icon(
+                                "Heatmap delle metriche di comunicazione per ogni arco "
+                                "(connessione tra microservizi) nello snapshot. "
+                                "Righe = metriche (latenza ms, error rate, throughput rps). "
+                                "Colonne = archi (e1..e6). "
+                                "Colori piu chiari = valori piu alti. "
+                                "La latenza misura il ritardo di risposta, l'error rate "
+                                "la percentuale di richieste fallite."
+                            ),
                             html.Div("Feature arco (heatmap)", style=_LABEL),
                             dcc.Graph(
                                 id="s1-atg-edge-heatmap",
@@ -229,8 +257,17 @@ def _atg_panel() -> html.Div:
                 ],
             ),
             html.Div(
-                style=_CARD,
+                style={**_CARD, "position": "relative"},
                 children=[
+                    help_icon(
+                        "Andamento della metrica selezionata nel tempo, mediata su "
+                        "tutti i nodi o archi del sistema. "
+                        "La linea dorata verticale indica la posizione dello snapshot "
+                        "corrente (selezionato con lo slider sopra). "
+                        "Le zone rosse trasparenti indicano finestre anomale secondo "
+                        "il ground truth del dataset GAMMA/DSB. "
+                        "Con molti snapshot il grafico usa un campione rappresentativo."
+                    ),
                     html.Div(
                         style={"display": "flex", "alignItems": "center",
                                "gap": "12px", "marginBottom": "8px"},
@@ -293,8 +330,19 @@ def _pbo_panel() -> html.Div:
                 style={"display": "flex", "gap": "12px", "marginBottom": "12px"},
                 children=[
                     html.Div(
-                        style={**_CARD, "flex": "1", "marginBottom": "0"},
+                        style={**_CARD, "flex": "1", "marginBottom": "0",
+                               "position": "relative"},
                         children=[
+                            help_icon(
+                                "W_t e la matrice dei pesi di transizione del traffico al "
+                                "tempo t: ogni cella w(e) indica la frazione del traffico "
+                                "totale dal nodo sorgente che passa per l'arco e. "
+                                "W_gold e la media di W_t sui soli snapshot nominali "
+                                "(baseline del comportamento atteso). "
+                                "Su DeathStarBench le due colonne sono identiche perche il "
+                                "throughput e aggregato a livello di finestra -- non disaggregato "
+                                "per singolo arco. Questo e un limite del dataset, non del framework."
+                            ),
                             html.Div("Matrice W_t (heatmap)", style=_LABEL),
                             html.Div([
                                 html.Div("Snapshot W_t", style=_LABEL),
@@ -304,7 +352,7 @@ def _pbo_panel() -> html.Div:
                                     marks=None,
                                     tooltip={"placement": "bottom",
                                              "always_visible": False},
-                                    updatemode="drag",
+                                    updatemode="mouseup",
                                 ),
                                 html.Div(
                                     id="s1-pbo-snap-label",
@@ -337,8 +385,18 @@ def _pbo_panel() -> html.Div:
                         ],
                     ),
                     html.Div(
-                        style={**_CARD, "flex": "1", "marginBottom": "0"},
+                        style={**_CARD, "flex": "1", "marginBottom": "0",
+                               "position": "relative"},
                         children=[
+                            help_icon(
+                                "PAS (Path Adherence Score): prodotto dei pesi lungo il percorso "
+                                "critico di H_crit. PAS=1.0 significa tutto il traffico sul "
+                                "percorso principale; PAS=0.0 nessun traffico. "
+                                "Frobenius: norma ||W_t - W_gold||_F, misura quanto la distribuzione "
+                                "del traffico si discosta dal baseline nominale. "
+                                "Su DSB entrambi sono costanti (PAS=0.25, Frobenius=0) per la "
+                                "limitazione del dataset descritta sopra."
+                            ),
                             html.Div("PAS / Norma Frobenius", style=_LABEL),
                             dcc.Graph(
                                 id="s1-pbo-pas-frob-chart",
