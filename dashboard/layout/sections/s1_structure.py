@@ -111,6 +111,18 @@ def _topology_panel() -> html.Div:
 
     return html.Div([
         legend,
+        html.Button(
+            "Reimposta vista",
+            id="s1-cyto-reset",
+            n_clicks=0,
+            style={
+                "fontSize": "11px", "padding": "4px 10px",
+                "backgroundColor": "var(--surface)",
+                "border": "1px solid var(--border)",
+                "color": "var(--muted)", "cursor": "pointer",
+                "marginBottom": "6px", "borderRadius": "2px",
+            },
+        ),
         html.Div(
             style={"display": "flex", "gap": "12px"},
             children=[
@@ -123,6 +135,8 @@ def _topology_panel() -> html.Div:
                         stylesheet=cyto_stylesheet,
                         style={"width": "100%", "height": "420px"},
                         responsive=True,
+                        minZoom=0.3,
+                        maxZoom=3.0,
                     ),
                 ),
                 html.Div(
@@ -261,6 +275,21 @@ def _pbo_panel() -> html.Div:
     return html.Div(
         children=[
             html.Div(
+                "Il Probabilistic Behavioral Overlay (PBO) rappresenta come il "
+                "traffico si distribuisce tra i percorsi del sistema. "
+                "W_t e la matrice dei pesi di transizione al tempo t: "
+                "w(u->v,t) = throughput(u->v,t) / somma throughput da u. "
+                "W_gold e la media di W_t sui soli snapshot nominali (baseline). "
+                "PAS (Path Adherence Score) misura quanto il percorso critico "
+                "H_crit segue il comportamento nominale: PAS = prod(w lungo il percorso). "
+                "Frobenius = ||W_t - W_gold||_F misura la deviazione globale dal baseline.",
+                style={
+                    "fontSize": "12px", "color": "var(--muted)",
+                    "marginBottom": "12px", "lineHeight": "1.6",
+                    "borderLeft": "2px solid var(--border)", "paddingLeft": "8px",
+                },
+            ),
+            html.Div(
                 style={"display": "flex", "gap": "12px", "marginBottom": "12px"},
                 children=[
                     html.Div(
@@ -294,6 +323,16 @@ def _pbo_panel() -> html.Div:
                                     "margin": {"l": 70, "r": 10, "t": 10, "b": 60},
                                     "font": {"color": "var(--text)", "size": 10},
                                 }},
+                            ),
+                            html.Div(
+                                ("Su GAMMA/DSB: W_t = W_gold per ogni snapshot perche il "
+                                 "throughput e aggregato a livello di finestra (non per singolo arco). "
+                                 "Le due colonne della heatmap sono quindi sempre identiche. "
+                                 "Questo e una limitazione del dataset, non del framework."),
+                                style={
+                                    "fontSize": "11px", "color": "var(--muted)",
+                                    "marginTop": "6px", "fontStyle": "italic",
+                                },
                             ),
                         ],
                     ),
@@ -353,9 +392,9 @@ def create_s1() -> html.Div:
                 children=[
                     dmc.TabsList(
                         children=[
-                            dmc.TabsTab("Topologia", value="topology"),
-                            dmc.TabsTab("ATG Temporale", value="atg"),
-                            dmc.TabsTab("PBO", value="pbo"),
+                            dmc.TabsTab("Topologia — ipergrafo H_cert", value="topology"),
+                            dmc.TabsTab("ATG — metriche nel tempo", value="atg"),
+                            dmc.TabsTab("PBO — distribuzione traffico", value="pbo"),
                         ],
                     ),
                     dmc.TabsPanel(

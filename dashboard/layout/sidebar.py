@@ -45,6 +45,15 @@ def _build_header() -> html.Div:
                     "marginTop": "2px",
                 },
             ),
+            html.Div(
+                "Monitoraggio predittivo di proprieta non funzionali",
+                style={
+                    "fontSize": "10px",
+                    "color": "var(--muted)",
+                    "marginTop": "4px",
+                    "lineHeight": "1.4",
+                },
+            ),
         ],
     )
 

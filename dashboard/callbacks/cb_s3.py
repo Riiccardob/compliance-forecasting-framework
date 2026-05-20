@@ -1,5 +1,5 @@
 import plotly.graph_objects as go  # noqa: F401
-from dash import callback, Output, Input, html
+from dash import callback, clientside_callback, Output, Input, html
 from dashboard.core.data_manager import DataManager
 
 _CAUSAL_STYLESHEET = [
@@ -215,3 +215,22 @@ def show_edge_detail(edge_data):
                 ),
             ])
     return html.Div("Dettaglio non trovato.", style={"color": "var(--muted)"})
+
+
+# ---------------------------------------------------------------------------
+# Clientside callback - reset viewport Cytoscape S3
+# ---------------------------------------------------------------------------
+clientside_callback(
+    """
+    function(n_clicks) {
+        if (n_clicks > 0) {
+            var cy = document.getElementById('s3-cytoscape');
+            if (cy && cy._cy) { cy._cy.fit(); cy._cy.center(); }
+        }
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("s3-cytoscape", "zoom"),
+    Input("s3-cyto-reset", "n_clicks"),
+    prevent_initial_call=True,
+)

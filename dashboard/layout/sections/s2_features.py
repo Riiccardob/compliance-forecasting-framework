@@ -57,6 +57,8 @@ def create_s2() -> html.Div:
             ),
         ], style={"marginBottom": "16px"}),
 
+        html.Div(id="s2-intro"),
+
         html.Div(id="s2-counts", style={
             "display": "flex",
             "gap": "12px",

@@ -4,7 +4,8 @@ from dashboard.app import app, background_callback_manager
 
 @app.callback(
     output=[
-        Output("s0-run-log", "children"),
+        Output("s0-run-log",        "children"),
+        Output("s0-pipeline-config","data"),
     ],
     inputs=Input("s0-btn-run", "n_clicks"),
     state=[
@@ -33,7 +34,7 @@ from dashboard.app import app, background_callback_manager
 )
 def run_pipeline_callback(set_progress, n_clicks, mode, n_snapshots):
     if not n_clicks:
-        return [""]
+        return [""], None
 
     MODE_MAP = {"sample": "DEMO", "batch": "BATCH", "full": "FULL", "full_ds": "FULL"}
     mode = MODE_MAP.get(mode, mode) or "DEMO"
@@ -46,7 +47,7 @@ def run_pipeline_callback(set_progress, n_clicks, mode, n_snapshots):
 
     dm = DataManager()
     if not dm.is_data_loaded():
-        return ["Errore: dati non caricati. Caricare i CSV prima."]
+        return ["Errore: dati non caricati. Caricare i CSV prima."], None
 
     _MODE_MAP = {"sample": "DEMO", "batch": "BATCH", "full": "FULL",
                  "DEMO": "DEMO", "BATCH": "BATCH", "FULL": "FULL"}
@@ -82,7 +83,7 @@ def run_pipeline_callback(set_progress, n_clicks, mode, n_snapshots):
     results = run_pipeline(mode, snapshot_indices, _progress)
 
     if "error" in results:
-        return [f"Errore pipeline: {results['error']}"]
+        return [f"Errore pipeline: {results['error']}"], None
 
     lines = [f"Pipeline completata - modalita {mode}"]
     lines.append(f"Snapshot processati: {results['n_snapshots']}")
@@ -91,4 +92,5 @@ def run_pipeline_callback(set_progress, n_clicks, mode, n_snapshots):
         n_links  = len(cs_data.get("causal_graph", {}).get("edges", []))
         lines.append(f"{cs}: {n_alerts} alert, {n_links} link causali")
 
-    return [" | ".join(lines)]
+    config_used = {"mode": mode, "n_snapshots": n_snapshots}
+    return [" | ".join(lines)], config_used

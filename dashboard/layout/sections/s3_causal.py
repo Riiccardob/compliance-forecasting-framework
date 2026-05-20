@@ -112,6 +112,18 @@ def create_s3() -> html.Div:
                     "fontSize": "11px", "color": "var(--muted)",
                     "alignItems": "center", "flexWrap": "wrap",
                 }),
+                html.Button(
+                    "Reimposta vista",
+                    id="s3-cyto-reset",
+                    n_clicks=0,
+                    style={
+                        "fontSize": "11px", "padding": "4px 10px",
+                        "backgroundColor": "var(--surface)",
+                        "border": "1px solid var(--border)",
+                        "color": "var(--muted)", "cursor": "pointer",
+                        "marginBottom": "6px", "borderRadius": "2px",
+                    },
+                ),
                 cyto.Cytoscape(
                     id="s3-cytoscape",
                     elements=[],
@@ -128,6 +140,8 @@ def create_s3() -> html.Div:
                     },
                     stylesheet=[],
                     boxSelectionEnabled=False,
+                    minZoom=0.2,
+                    maxZoom=4.0,
                 ),
             ], style={"flex": "1", "display": "flex", "flexDirection": "column"}),
             html.Div(

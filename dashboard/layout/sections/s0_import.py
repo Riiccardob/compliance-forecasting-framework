@@ -274,4 +274,5 @@ def create_s0():
             "gt":   _DEFAULT_GT,
         }),
         dcc.Interval(id="s0-poll", interval=1000, n_intervals=0),
+        dcc.Store(id="s0-pipeline-config", data=None),
     ])

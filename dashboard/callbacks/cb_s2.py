@@ -9,6 +9,13 @@ _MODEL_COLORS = {
     "linear":  "#7aaa8f",
 }
 
+_MODEL_REASONS = {
+    "prophet": "stagionalita/trend",
+    "lstm":    "sequenze lunghe",
+    "arima":   "stazionarieta",
+    "linear":  "correlazione lineare",
+}
+
 _DARK_LAYOUT = {
     "paper_bgcolor": "rgba(0,0,0,0)", "plot_bgcolor": "rgba(0,0,0,0)",
     "font": {"color": "#e2ddd5", "size": 11},
@@ -51,6 +58,7 @@ def _hex_to_rgb(hex_str: str) -> str:
     Output("s2-feature-dd", "options"),
     Output("s2-feature-dd", "value"),
     Output("s2-feature-explanation", "children"),
+    Output("s2-intro", "children"),
     Input("s2-cs-select", "value"),
 )
 def update_cs(cs):
@@ -91,7 +99,32 @@ def update_cs(cs):
         style={"fontSize": "11px", "color": "var(--muted)", "marginBottom": "8px"},
     )
 
-    return cards, opts, default, expl
+    if cs == "H_crit":
+        cs_desc = (
+            "H_crit — compliance set lineare (5 nodi, 4 archi). "
+            "Topologia sequenziale: il percorso critico P_cert attraversa i nodi "
+            "in sequenza, quindi il PAS (Path Adherence Score) e applicabile. "
+            "Le feature M_interf rappresentano il throughput degli archi esterni "
+            "che portano carico verso i nodi condivisi con H_cache."
+        )
+    else:
+        cs_desc = (
+            "H_cache — compliance set parallelo (4 nodi, 3 archi). "
+            "Topologia ramificata: non esiste un unico percorso critico lineare, "
+            "quindi il PAS non e applicabile. "
+            "Il framework usa la norma di Frobenius ||W_t - W_gold||_F come fallback "
+            "per misurare la deviazione globale dal baseline di distribuzione del traffico."
+        )
+    intro = html.Div(
+        cs_desc,
+        style={
+            "fontSize": "12px", "color": "var(--muted)",
+            "marginBottom": "12px", "lineHeight": "1.6",
+            "borderLeft": "2px solid var(--border)", "paddingLeft": "8px",
+        },
+    )
+
+    return cards, opts, default, expl, intro
 
 
 # ---------------------------------------------------------------------------
@@ -188,12 +221,20 @@ def update_forecast(feature_key, cs):
         legend={"bgcolor": "rgba(0,0,0,0)"},
         **_DARK_LAYOUT,
     )
-    tag = html.Span(model, style={
-        "backgroundColor": f"rgba({rgb},0.15)",
-        "color": color,
-        "padding": "2px 8px",
-        "borderRadius": "2px",
-        "fontSize": "11px",
-        "fontFamily": "JetBrains Mono",
-    })
+    reason = _MODEL_REASONS.get(model, "routing automatico")
+    tag = html.Div([
+        html.Span(model, style={
+            "backgroundColor": f"rgba({rgb},0.15)",
+            "color": color,
+            "padding": "2px 8px",
+            "borderRadius": "2px",
+            "fontSize": "11px",
+            "fontFamily": "JetBrains Mono",
+            "marginRight": "8px",
+        }),
+        html.Span(f"selezionato per: {reason}", style={
+            "fontSize": "11px",
+            "color": "var(--muted)",
+        }),
+    ])
     return fig, tag

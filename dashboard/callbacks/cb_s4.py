@@ -150,7 +150,7 @@ def update_monitor_view(cs, snap_idx):
     )
 
     # Dual-axis PAS + Frobenius
-    ts_list   = [r["timestamp"]              for r in mon]
+    ts_list   = [r.get("timestamp")          for r in mon]
     pas_vals  = [r.get("pas_value")          for r in mon]
     frob_vals = [r.get("frobenius_distance") for r in mon]
 
@@ -173,6 +173,16 @@ def update_monitor_view(cs, snap_idx):
         legend={"bgcolor": "rgba(0,0,0,0)"},
         **_DARK_LAYOUT,
     )
+    fig_pf.add_annotation(
+        text=("PAS=1.0: tutto il traffico sul percorso critico | "
+              "PAS=0.0: percorso critico non usato | "
+              "Frobenius=0: nessuna deviazione dal baseline"),
+        xref="paper", yref="paper",
+        x=0, y=-0.22, showarrow=False,
+        font={"size": 9, "color": "#5a5a5a"},
+        align="left",
+    )
+    fig_pf.update_layout(margin={"l": 8, "r": 8, "t": 32, "b": 50})
     return g_th, g_zs, g_if, g_cu, fig_tl, fig_pf, v_th, v_zs, v_if, v_cu
 
 
@@ -225,9 +235,21 @@ def update_result_card(cs, snap_idx):
             "padding": "4px 0", "borderBottom": "1px solid var(--border)",
         }))
 
-    title = html.Div(
-        f"MonitorResult -- snap {idx}",
-        style={"fontWeight": "600", "color": "var(--text)",
-               "marginBottom": "10px", "fontSize": "12px"},
-    )
-    return html.Div([title] + items)
+    header_block = html.Div([
+        html.Div(
+            f"Snapshot {idx} — " + (
+                "ANOMALIA RILEVATA" if m.get("base_signal")
+                else "Nessuna anomalia"
+            ),
+            style={"fontWeight": "600", "color": (
+                "#b55e5e" if m.get("base_signal") else "#7aaa8f"
+            ), "marginBottom": "6px", "fontSize": "12px"},
+        ),
+        html.Div(
+            "Dettaglio tecnico del risultato di monitoraggio "
+            "per lo snapshot selezionato:",
+            style={"fontSize": "11px", "color": "var(--muted)",
+                   "marginBottom": "10px", "lineHeight": "1.5"},
+        ),
+    ])
+    return html.Div([header_block] + items)

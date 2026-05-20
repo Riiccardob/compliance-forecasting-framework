@@ -1,5 +1,6 @@
+import pandas as pd
 import plotly.graph_objects as go
-from dash import callback, Output, Input, html, ctx
+from dash import callback, clientside_callback, Output, Input, html, ctx
 from dashboard.core.data_manager import DataManager
 
 _CS_INFO = {
@@ -242,9 +243,16 @@ def update_atg_heatmaps(idx):
             style={"color": "var(--muted)"},
         )
     else:
+        import json as _json
         a_type    = snap.get("anomaly_type") or "?"
-        a_nodes   = snap.get("anomalous_nodes") or []
-        nodes_txt = ", ".join(a_nodes) if a_nodes else "?"
+        _raw_nodes = snap.get("anomaly_node_ids") or "[]"
+        try:
+            a_nodes = (_json.loads(_raw_nodes)
+                       if isinstance(_raw_nodes, str)
+                       else (_raw_nodes or []))
+        except (ValueError, TypeError):
+            a_nodes = []
+        nodes_txt = ", ".join(a_nodes) if a_nodes else "N/A"
         snap_label = html.Span([
             html.Span(f"Snapshot {idx} / {ts_sec:.3f} -- ",
                       style={"color": "var(--muted)"}),
@@ -265,7 +273,6 @@ def update_atg_heatmaps(idx):
     )
 
     if is_anom:
-        import json as _json
         raw = snap.get("anomaly_node_ids") or "[]"
         try:
             anom_nodes = (_json.loads(raw) if isinstance(raw, str)
@@ -306,17 +313,18 @@ def update_atg_heatmaps(idx):
 @callback(
     Output("s1-atg-ts-graph", "figure"),
     Input("s1-atg-metric-dd", "value"),
+    Input("s1-atg-slider",    "value"),
 )
-def update_atg_ts(metric):
+def update_atg_ts(metric, slider_idx):
     dm    = DataManager()
     snaps = dm.get_snapshots()
     if not snaps or not metric:
         return _empty_fig("Serie temporale -- nessun dato")
 
     is_node = metric in _NODE_METRICS
-    x, y = [], []
+    x_dt, y = [], []
     for snap in snaps:
-        x.append(snap["timestamp"])
+        x_dt.append(pd.to_datetime(snap["timestamp"], unit="us"))
         if is_node:
             vals = [snap["nodes"].get(n, {}).get(metric)
                     for n in _NODE_IDS
@@ -328,17 +336,31 @@ def update_atg_ts(metric):
         y.append(sum(vals) / len(vals) if vals else None)
 
     fig = go.Figure(go.Scatter(
-        x=x, y=y, mode="lines",
+        x=x_dt, y=y, mode="lines",
         line={"color": "#c4a35a", "width": 1.2},
     ))
-    for snap in snaps:
+    for i, snap in enumerate(snaps):
         if snap["label"]:
-            ts = snap["timestamp"]
-            fig.add_vrect(x0=ts, x1=ts + 5_000_000,
+            t0 = pd.to_datetime(snap["timestamp"],             unit="us")
+            t1 = pd.to_datetime(snap["timestamp"] + 5_000_000, unit="us")
+            fig.add_vrect(x0=t0, x1=t1,
                           fillcolor="#b55e5e", opacity=0.08, line_width=0)
+
+    if slider_idx is not None and 0 <= int(slider_idx) < len(snaps):
+        curr_ts = pd.to_datetime(snaps[int(slider_idx)]["timestamp"], unit="us")
+        fig.add_vline(
+            x=curr_ts.timestamp() * 1000,
+            line_color="#c4a35a",
+            line_width=1.5,
+            line_dash="dot",
+            annotation_text=f"snap {slider_idx}",
+            annotation_font_color="#c4a35a",
+            annotation_font_size=9,
+        )
+
     fig.update_layout(
-        title=f"{metric} (media su tutti i nodi/archi)",
-        xaxis_title="timestamp (us)", yaxis_title=metric,
+        title=f"{metric} — tutti gli snapshot (linea oro = posizione slider)",
+        xaxis_title="data/ora (UTC)", yaxis_title=metric,
         **_DARK_LAYOUT,
     )
     return fig
@@ -561,7 +583,7 @@ def update_pbo(tab, slider_val):
     if results and "H_crit" in results.get("compliance_sets", {}):
         mon_crit = results["compliance_sets"]["H_crit"].get("monitor_results", [])
         if mon_crit:
-            ts_list   = [m["timestamp"] for m in mon_crit]
+            ts_list   = [m.get("timestamp") for m in mon_crit]
             pas_vals  = [m.get("pas_value") for m in mon_crit]
             frob_vals = [m.get("frobenius_distance") for m in mon_crit]
             snaps     = dm.get_snapshots()
@@ -620,3 +642,22 @@ def update_pbo(tab, slider_val):
                   "padding": "5px 0", "borderBottom": "1px solid var(--border)"}))
 
     return fig_w, fig_pf, html.Div([header] + rows), _DSB_NOTE
+
+
+# ---------------------------------------------------------------------------
+# Clientside callback - reset viewport Cytoscape S1
+# ---------------------------------------------------------------------------
+clientside_callback(
+    """
+    function(n_clicks) {
+        if (n_clicks > 0) {
+            var cy = document.getElementById('s1-cytoscape');
+            if (cy && cy._cy) { cy._cy.fit(); cy._cy.center(); }
+        }
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("s1-cytoscape", "zoom"),
+    Input("s1-cyto-reset", "n_clicks"),
+    prevent_initial_call=True,
+)
