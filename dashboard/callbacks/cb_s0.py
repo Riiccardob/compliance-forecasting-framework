@@ -133,6 +133,7 @@ def start_atg_build(n_clicks, paths):
     Output("s0-btn-load",       "style"),
     Output("s0-snapshot-table", "children"),
     Output("s0-btn-run",        "style"),
+    Output("s0-btn-run",        "disabled"),
     Input("s0-poll", "n_intervals"),
     State("s0-pipeline-config", "data"),
     State("s0-mode",            "value"),
@@ -235,7 +236,9 @@ def poll(n, pipeline_config, current_mode, current_n):
         atg_pct, atg_msg,
         load_status, load_style,
         btn_load_disabled, btn_load_style,
-        snap_table, btn_run_style,
+        snap_table,
+        btn_run_style,
+        False,
     )
 
 

@@ -15,7 +15,6 @@ from dashboard.app import app, background_callback_manager
     background=True,
     manager=background_callback_manager,
     running=[
-        (Output("s0-btn-run", "disabled"), True, False),
         (Output("s0-progress", "style"),
          {"display": "block", "marginTop": "8px"}, {"display": "none"}),
         (Output("s0-progress-label", "style"),
