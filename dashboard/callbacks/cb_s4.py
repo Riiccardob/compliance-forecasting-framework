@@ -1,3 +1,4 @@
+import pandas as pd
 import plotly.graph_objects as go
 from dash import callback, Output, Input, html
 from dashboard.core.data_manager import DataManager
@@ -20,6 +21,27 @@ _LEVEL_KEYS = {
     "zscore":    lambda r: bool(r.get("zscore_violations")),
     "if":        lambda r: bool(r.get("if_signal")),
     "cusum":     lambda r: bool(r.get("cusum_signal")),
+}
+
+_FIELD_LABELS = {
+    "base_signal":     ("Anomalia rilevata",
+                        "True se almeno Threshold o Z-score hanno segnalato"),
+    "if_signal":       ("Isolation Forest",
+                        "ML multivariato (attivo solo se anomalia rilevata)"),
+    "cusum_signal":    ("CUSUM accumulato",
+                        "Degrado comportamentale nel tempo (S_t > 5.0)"),
+    "structural_conf": ("Conferma strutturale",
+                        "Tutti i livelli attivi + Frobenius > soglia x 3 finestre"),
+    "cusum_stat":      ("Valore CUSUM (S_t)",
+                        "Accumulatore CUSUM. Su DSB rimane 0 (dataset limit.)"),
+    "frobenius":       ("Distanza Frobenius",
+                        "||W_t - W_gold||_F. Su DSB = 0 sempre"),
+    "pas_value":       ("PAS corrente",
+                        "Path Adherence Score sul percorso critico H_crit"),
+    "threshold_viol":  ("Feature fuori SLA",
+                        "Numero di metriche che superano la soglia certificata"),
+    "zscore_viol":     ("Feature anomale (z-score)",
+                        "Numero di metriche con |z| > 3.0 rispetto al nominale"),
 }
 
 
@@ -108,6 +130,10 @@ def update_monitor_view(cs, snap_idx):
     all_snaps   = DataManager().get_snapshots()
     ts_to_label = {s["timestamp"]: s["label"] for s in all_snaps}
     mon_timestamps = [m.get("timestamp") for m in mon]
+    mon_ts_dt = [
+        pd.to_datetime(ts, unit="us") if ts is not None else None
+        for ts in mon_timestamps
+    ]
 
     fig_tl = go.Figure()
     for lv in ["threshold", "zscore", "if", "cusum"]:
@@ -116,7 +142,7 @@ def update_monitor_view(cs, snap_idx):
             for r in mon
         ]
         fig_tl.add_trace(go.Scatter(
-            x=[r.get("timestamp") for r in mon],
+            x=mon_ts_dt,
             y=[_LIVELLI_LABELS[lv]] * len(mon),
             mode="markers",
             marker={"symbol": "square", "size": 6, "color": colors},
@@ -129,7 +155,7 @@ def update_monitor_view(cs, snap_idx):
         for ts in mon_timestamps
     ]
     fig_tl.add_trace(go.Scatter(
-        x=mon_timestamps,
+        x=mon_ts_dt,
         y=["Ground Truth"] * len(mon),
         mode="markers",
         marker={"symbol": "square", "size": 8, "color": gt_colors},
@@ -139,7 +165,7 @@ def update_monitor_view(cs, snap_idx):
 
     fig_tl.update_layout(
         title="Timeline segnali",
-        xaxis_title="timestamp (us)",
+        xaxis_title="data/ora (UTC)",
         yaxis={
             "categoryorder": "array",
             "categoryarray": ["CUSUM", "Isol. Forest", "Z-score",
@@ -150,29 +176,41 @@ def update_monitor_view(cs, snap_idx):
     )
 
     # Dual-axis PAS + Frobenius
-    ts_list   = [r["timestamp"]              for r in mon]
+    ts_list   = [r.get("timestamp")          for r in mon]
     pas_vals  = [r.get("pas_value")          for r in mon]
     frob_vals = [r.get("frobenius_distance") for r in mon]
+    ts_dt     = [pd.to_datetime(ts, unit="us") if ts is not None else None for ts in ts_list]
 
     fig_pf = go.Figure()
     if any(v is not None for v in pas_vals):
         fig_pf.add_trace(go.Scatter(
-            x=ts_list, y=pas_vals, name="PAS",
+            x=ts_dt, y=pas_vals, name="PAS",
             line={"color": "#c4a35a", "width": 1.5}, yaxis="y1",
         ))
     if any(v is not None for v in frob_vals):
         fig_pf.add_trace(go.Scatter(
-            x=ts_list, y=frob_vals, name="Frobenius",
+            x=ts_dt, y=frob_vals, name="Frobenius",
             line={"color": "#b55e5e", "width": 1.5}, yaxis="y2",
         ))
     fig_pf.update_layout(
         title="PAS e Frobenius nel tempo",
+        xaxis_title="data/ora (UTC)",
         yaxis ={"title": "PAS",       "color": "#c4a35a", "side": "left"},
         yaxis2={"title": "Frobenius", "color": "#b55e5e",
                 "overlaying": "y", "side": "right"},
         legend={"bgcolor": "rgba(0,0,0,0)"},
         **_DARK_LAYOUT,
     )
+    fig_pf.add_annotation(
+        text=("PAS=1.0: tutto il traffico sul percorso critico | "
+              "PAS=0.0: percorso critico non usato | "
+              "Frobenius=0: nessuna deviazione dal baseline"),
+        xref="paper", yref="paper",
+        x=0, y=-0.22, showarrow=False,
+        font={"size": 9, "color": "#5a5a5a"},
+        align="left",
+    )
+    fig_pf.update_layout(margin={"l": 8, "r": 8, "t": 32, "b": 50})
     return g_th, g_zs, g_if, g_cu, fig_tl, fig_pf, v_th, v_zs, v_if, v_cu
 
 
@@ -203,31 +241,49 @@ def update_result_card(cs, snap_idx):
                          style={"color": color, "fontFamily": "JetBrains Mono"})
 
     rows = [
-        ("base_signal",      _bool_span(m.get("base_signal"))),
-        ("if_signal",        _bool_span(m.get("if_signal"))),
-        ("cusum_signal",     _bool_span(m.get("cusum_signal"))),
-        ("structural_conf.", _bool_span(m.get("structural_confirmed"))),
-        ("cusum_stat",       f"{m.get('cusum_stat', 0):.4f}"),
-        ("frobenius",        f"{m.get('frobenius_distance') or 0:.4f}"),
-        ("pas_value",        str(m.get("pas_value", "N/A"))),
-        ("threshold_viol.",  str(len(m.get("threshold_violations", [])))),
-        ("zscore_viol.",     str(len(m.get("zscore_violations", [])))),
+        ("base_signal",     _bool_span(m.get("base_signal"))),
+        ("if_signal",       _bool_span(m.get("if_signal"))),
+        ("cusum_signal",    _bool_span(m.get("cusum_signal"))),
+        ("structural_conf", _bool_span(m.get("structural_confirmed"))),
+        ("cusum_stat",      f"{m.get('cusum_stat', 0):.4f}"),
+        ("frobenius",       f"{m.get('frobenius_distance') or 0:.4f}"),
+        ("pas_value",       str(m.get("pas_value", "N/A"))),
+        ("threshold_viol",  str(len(m.get("threshold_violations", [])))),
+        ("zscore_viol",     str(len(m.get("zscore_violations", [])))),
     ]
     items = []
-    for label, value in rows:
+    for key, value in rows:
+        label_text, tooltip_text = _FIELD_LABELS.get(key, (key, ""))
         val_el = value if isinstance(value, html.Span) else html.Span(
             value, style={"color": "var(--text)", "fontFamily": "JetBrains Mono"})
         items.append(html.Div([
-            html.Span(label, style={"color": "var(--muted)"}),
+            html.Div([
+                html.Span(label_text,
+                          style={"color": "var(--muted)", "fontSize": "11px"}),
+                html.Span(" (?)",
+                          title=tooltip_text,
+                          style={"color": "var(--border)", "fontSize": "9px",
+                                 "cursor": "help", "marginLeft": "3px"}) if tooltip_text else None,
+            ], style={"display": "flex", "alignItems": "center"}),
             val_el,
-        ], style={
-            "display": "flex", "justifyContent": "space-between",
-            "padding": "4px 0", "borderBottom": "1px solid var(--border)",
-        }))
+        ], style={"display": "flex", "justifyContent": "space-between",
+                  "padding": "4px 0", "borderBottom": "1px solid var(--border)"}))
 
-    title = html.Div(
-        f"MonitorResult -- snap {idx}",
-        style={"fontWeight": "600", "color": "var(--text)",
-               "marginBottom": "10px", "fontSize": "12px"},
-    )
-    return html.Div([title] + items)
+    header_block = html.Div([
+        html.Div(
+            f"Snapshot {idx} - " + (
+                "ANOMALIA RILEVATA" if m.get("base_signal")
+                else "Nessuna anomalia"
+            ),
+            style={"fontWeight": "600", "color": (
+                "#b55e5e" if m.get("base_signal") else "#7aaa8f"
+            ), "marginBottom": "6px", "fontSize": "12px"},
+        ),
+        html.Div(
+            "Dettaglio tecnico del risultato di monitoraggio "
+            "per lo snapshot selezionato:",
+            style={"fontSize": "11px", "color": "var(--muted)",
+                   "marginBottom": "10px", "lineHeight": "1.5"},
+        ),
+    ])
+    return html.Div([header_block] + items)

@@ -1,12 +1,42 @@
+from pathlib import Path as _Path
+import sys as _sys
+_sys.path.insert(0, str(_Path(__file__).parent.parent.parent))
+
+import pandas as pd
 import plotly.graph_objects as go
 from dash import callback, Output, Input, html
 from dashboard.core.data_manager import DataManager
+from src.utils.config_loader import ConfigLoader
+
+_ROOT_CFG = _Path(__file__).parent.parent.parent
+try:
+    _cfg = ConfigLoader(
+        _ROOT_CFG / "config" / "topology.yaml",
+        _ROOT_CFG / "config" / "pipeline_params.yaml",
+    )
+    _step_h = float(_cfg.load_pipeline_params()
+                    .get("forecasting", {})
+                    .get("step_duration_hours", 24.0))
+except Exception:
+    _step_h = 24.0
+
+_SLA_MAP = {
+    "H_crit": {"latency_ms": 100.0, "error_rate": 0.05},
+    "H_cache": {"latency_ms": 20.0,  "error_rate": 0.10},
+}
 
 _MODEL_COLORS = {
     "prophet": "#c4a35a",
     "lstm":    "#8957e5",
     "arima":   "#388bfd",
     "linear":  "#7aaa8f",
+}
+
+_MODEL_REASONS = {
+    "prophet": "stagionalita/trend",
+    "lstm":    "sequenze lunghe",
+    "arima":   "stazionarieta",
+    "linear":  "correlazione lineare",
 }
 
 _DARK_LAYOUT = {
@@ -51,6 +81,7 @@ def _hex_to_rgb(hex_str: str) -> str:
     Output("s2-feature-dd", "options"),
     Output("s2-feature-dd", "value"),
     Output("s2-feature-explanation", "children"),
+    Output("s2-intro", "children"),
     Input("s2-cs-select", "value"),
 )
 def update_cs(cs):
@@ -91,7 +122,32 @@ def update_cs(cs):
         style={"fontSize": "11px", "color": "var(--muted)", "marginBottom": "8px"},
     )
 
-    return cards, opts, default, expl
+    if cs == "H_crit":
+        cs_desc = (
+            "H_crit - compliance set lineare (5 nodi, 4 archi). "
+            "Topologia sequenziale: il percorso critico P_cert attraversa i nodi "
+            "in sequenza, quindi il PAS (Path Adherence Score) e applicabile. "
+            "Le feature M_interf rappresentano il throughput degli archi esterni "
+            "che portano carico verso i nodi condivisi con H_cache."
+        )
+    else:
+        cs_desc = (
+            "H_cache - compliance set parallelo (4 nodi, 3 archi). "
+            "Topologia ramificata: non esiste un unico percorso critico lineare, "
+            "quindi il PAS non e applicabile. "
+            "Il framework usa la norma di Frobenius ||W_t - W_gold||_F come fallback "
+            "per misurare la deviazione globale dal baseline di distribuzione del traffico."
+        )
+    intro = html.Div(
+        cs_desc,
+        style={
+            "fontSize": "12px", "color": "var(--muted)",
+            "marginBottom": "12px", "lineHeight": "1.6",
+            "borderLeft": "2px solid var(--border)", "paddingLeft": "8px",
+        },
+    )
+
+    return cards, opts, default, expl, intro
 
 
 # ---------------------------------------------------------------------------
@@ -119,18 +175,22 @@ def update_series(feature_key, cs):
     snaps = dm.get_snapshots()
     ts_to_label = {s["timestamp"]: s["label"] for s in snaps}
 
+    x_dt = pd.to_datetime(df.index, unit="us")
+
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=df.index.tolist(), y=df["value"].tolist(),
+        x=x_dt.tolist(), y=df["value"].tolist(),
         mode="lines", name=feature_key,
         line={"color": "#c4a35a", "width": 1.2},
     ))
     for ts in df.index:
         if ts_to_label.get(ts, 0):
-            fig.add_vrect(x0=ts, x1=ts + 5_000_000,
+            t0 = pd.to_datetime(ts, unit="us")
+            t1 = pd.to_datetime(ts + 5_000_000, unit="us")
+            fig.add_vrect(x0=t0, x1=t1,
                           fillcolor="#b55e5e", opacity=0.07, line_width=0)
     fig.update_layout(
-        title=feature_key, xaxis_title="timestamp (us)",
+        title=feature_key, xaxis_title="data/ora (UTC)",
         yaxis_title="valore", **_DARK_LAYOUT,
     )
     return fig
@@ -182,18 +242,53 @@ def update_forecast(feature_key, cs):
         mode="lines", name=model,
         line={"color": color, "width": 1.5},
     ))
+    x_labels = []
+    for i, _ in enumerate(df.index, start=1):
+        h = i * _step_h
+        if h < 24:
+            x_labels.append(f"+{h:.0f}h")
+        elif h % 24 == 0:
+            x_labels.append(f"+{int(h/24)}g")
+        else:
+            x_labels.append(f"+{h/24:.1f}g")
+
     fig.update_layout(
         title=f"Forecast -- {model}",
-        xaxis_title="step", yaxis_title="yhat",
+        xaxis={"tickvals": df.index.tolist(), "ticktext": x_labels,
+               "title": "orizzonte previsionale"},
+        yaxis_title="yhat",
         legend={"bgcolor": "rgba(0,0,0,0)"},
         **_DARK_LAYOUT,
     )
-    tag = html.Span(model, style={
-        "backgroundColor": f"rgba({rgb},0.15)",
-        "color": color,
-        "padding": "2px 8px",
-        "borderRadius": "2px",
-        "fontSize": "11px",
-        "fontFamily": "JetBrains Mono",
-    })
+
+    metric_name = feature_key.split(":")[-1]
+    sla_val = _SLA_MAP.get(cs, {}).get(metric_name)
+    if sla_val is not None:
+        fig.add_hline(
+            y=sla_val,
+            line_dash="dash",
+            line_color="#b55e5e",
+            line_width=1.5,
+            annotation_text=f"SLA max: {sla_val}",
+            annotation_font_color="#b55e5e",
+            annotation_font_size=9,
+            annotation_position="top right",
+        )
+
+    reason = _MODEL_REASONS.get(model, "routing automatico")
+    tag = html.Div([
+        html.Span(model, style={
+            "backgroundColor": f"rgba({rgb},0.15)",
+            "color": color,
+            "padding": "2px 8px",
+            "borderRadius": "2px",
+            "fontSize": "11px",
+            "fontFamily": "JetBrains Mono",
+            "marginRight": "8px",
+        }),
+        html.Span(f"selezionato per: {reason}", style={
+            "fontSize": "11px",
+            "color": "var(--muted)",
+        }),
+    ])
     return fig, tag

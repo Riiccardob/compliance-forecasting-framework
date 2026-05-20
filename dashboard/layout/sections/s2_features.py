@@ -1,5 +1,6 @@
 from dash import html, dcc
 import dash_mantine_components as dmc
+from dashboard.layout.help_utils import help_icon
 
 _TITLE_STYLE = {
     "fontSize": "18px",
@@ -57,6 +58,8 @@ def create_s2() -> html.Div:
             ),
         ], style={"marginBottom": "16px"}),
 
+        html.Div(id="s2-intro"),
+
         html.Div(id="s2-counts", style={
             "display": "flex",
             "gap": "12px",
@@ -66,7 +69,13 @@ def create_s2() -> html.Div:
         html.Div(id="s2-feature-explanation"),
 
         html.Div([
-            html.Div([
+            html.Div(style={"flex": "1", "position": "relative"}, children=[
+                help_icon(
+                    "Serie temporale della feature selezionata nel dropdown. "
+                    "Le zone rosse indicano finestre anomale (ground truth). "
+                    "Il modello di forecasting e addestrato sulle sole finestre "
+                    "nominali (zona bianca) e poi applicato a tutte.", left=True
+                ),
                 html.Div([
                     html.Div("Feature", style=_LABEL_STYLE),
                     dcc.Dropdown(
@@ -86,9 +95,16 @@ def create_s2() -> html.Div:
                     config={"displayModeBar": False},
                     figure={"data": [], "layout": _GRAPH_LAYOUT},
                 ),
-            ], style={"flex": "1"}),
+            ]),
 
-            html.Div([
+            html.Div(style={"flex": "1", "marginLeft": "16px", "position": "relative"}, children=[
+                help_icon(
+                    "Previsione della feature per i prossimi N step temporali "
+                    "(default: 12 step da 24h = 12 giorni). "
+                    "La linea solida e il valore previsto (yhat). "
+                    "La banda traslucida e l'intervallo di confidenza. "
+                    "Se la previsione supera la soglia SLA, viene generato un alert."
+                ),
                 html.Div("Previsione StatForecaster", style=_LABEL_STYLE),
                 html.Div(
                     id="s2-model-tag",
@@ -103,6 +119,6 @@ def create_s2() -> html.Div:
                     config={"displayModeBar": False},
                     figure={"data": [], "layout": _GRAPH_LAYOUT},
                 ),
-            ], style={"flex": "1", "marginLeft": "16px"}),
+            ]),
         ], style={"display": "flex"}),
     ])

@@ -1,5 +1,6 @@
 from dash import html, dcc
 import dash_cytoscape as cyto
+from dashboard.layout.help_utils import help_icon
 
 _TITLE_STYLE = {
     "fontSize": "18px",
@@ -112,6 +113,18 @@ def create_s3() -> html.Div:
                     "fontSize": "11px", "color": "var(--muted)",
                     "alignItems": "center", "flexWrap": "wrap",
                 }),
+                html.Button(
+                    "Reimposta vista",
+                    id="s3-cyto-reset",
+                    n_clicks=0,
+                    style={
+                        "fontSize": "11px", "padding": "4px 10px",
+                        "backgroundColor": "var(--surface)",
+                        "border": "1px solid var(--border)",
+                        "color": "var(--muted)", "cursor": "pointer",
+                        "marginBottom": "6px", "borderRadius": "2px",
+                    },
+                ),
                 cyto.Cytoscape(
                     id="s3-cytoscape",
                     elements=[],
@@ -128,8 +141,21 @@ def create_s3() -> html.Div:
                     },
                     stylesheet=[],
                     boxSelectionEnabled=False,
+                    minZoom=0.2,
+                    maxZoom=4.0,
                 ),
-            ], style={"flex": "1", "display": "flex", "flexDirection": "column"}),
+                help_icon(
+                    "Grafo delle relazioni causali tra le feature del compliance set. "
+                    "Ogni nodo e una feature (CPU di un servizio, latenza di un arco...). "
+                    "Una freccia da A a B significa che le variazioni in A precedono "
+                    "statisticamente le variazioni in B. "
+                    "Archi blu: causalita lineare (test di Granger, p<0.05). "
+                    "Archi viola: dipendenza non-lineare (Transfer Entropy > 0.1). "
+                    "Lo spessore dell'arco indica l'intensita causale (0=debole, 1=forte). "
+                    "Clicca un arco per vedere i dettagli nel pannello destro.", left=True
+                ),
+            ], style={"flex": "1", "display": "flex", "flexDirection": "column",
+                      "position": "relative"}),
             html.Div(
                 id="s3-edge-detail",
                 style={
@@ -152,20 +178,40 @@ def create_s3() -> html.Div:
         ], style={"display": "flex"}),
 
         html.Div([
-            html.Div(
-                "Catene cross-property",
-                style={
+            html.Div([
+                html.Div("Catene cross-property", style={
                     "fontSize": "11px",
                     "color": "var(--muted)",
                     "letterSpacing": "0.05em",
                     "textTransform": "uppercase",
-                    "marginTop": "20px",
                     "marginBottom": "8px",
-                },
-            ),
-            html.Div(
-                id="s3-chains",
-                style={"fontSize": "12px", "color": "var(--muted)"},
-            ),
+                    "marginTop": "20px",
+                }),
+                html.Span(
+                    "?",
+                    title=(
+                        "Una catena cross-property e una sequenza causale che "
+                        "coinvolge piu compliance set: un arco esterno (M_interf) "
+                        "porta carico su un nodo condiviso tra H_crit e H_cache, "
+                        "che a sua volta influenza un arco interno al set target. "
+                        "CONFERMATA = entrambi i test di Granger della catena "
+                        "sono significativi."
+                    ),
+                    style={
+                        "display": "inline-flex",
+                        "alignItems": "center",
+                        "justifyContent": "center",
+                        "width": "15px", "height": "15px",
+                        "borderRadius": "50%",
+                        "border": "1px solid var(--muted)",
+                        "color": "var(--muted)",
+                        "fontSize": "9px",
+                        "cursor": "help",
+                        "marginLeft": "6px",
+                        "verticalAlign": "middle",
+                    },
+                ),
+            ], style={"display": "flex", "alignItems": "center"}),
+            html.Div(id="s3-chains", style={"fontSize": "12px", "color": "var(--muted)"}),
         ]),
     ])

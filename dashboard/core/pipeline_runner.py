@@ -83,6 +83,7 @@ def run_pipeline(
                 fcast  = fcast_global
                 w_curr = pbo.compute_transition_weights([snap])
                 m_res  = mon.monitor(cs, feats, w_curr, snap["timestamp"])
+                m_res["timestamp"] = snap["timestamp"]
                 monitor_results.append(m_res)
                 alert  = ag.generate(cs, fcast, causal_graph, m_res, snap["timestamp"])
                 if alert is not None:

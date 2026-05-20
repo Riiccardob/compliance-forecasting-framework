@@ -2,7 +2,9 @@ import base64
 import threading
 from pathlib import Path
 
-from dash import callback, Output, Input, State, html, ctx
+import pandas as pd
+import plotly.graph_objects as go
+from dash import callback, Output, Input, State, html, dcc, ctx
 
 from dashboard.core.data_manager import DataManager
 
@@ -132,9 +134,16 @@ def start_atg_build(n_clicks, paths):
     Output("s0-btn-load",       "disabled"),
     Output("s0-btn-load",       "style"),
     Output("s0-snapshot-table", "children"),
+    Output("s0-btn-run",          "disabled"),
+    Output("s0-btn-run",          "style"),
+    Output("s0-dataset-preview",  "children"),
+    Output("s0-dataset-preview",  "style"),
     Input("s0-poll", "n_intervals"),
+    State("s0-pipeline-config", "data"),
+    State("s0-mode",            "value"),
+    State("s0-n-snapshots",     "value"),
 )
-def poll(n):
+def poll(n, pipeline_config, current_mode, current_n):
     _BTN_BASE = {
         "border": "none", "padding": "10px 20px",
         "cursor": "pointer", "fontSize": "13px",
@@ -193,6 +202,7 @@ def poll(n):
     if _S["atg_done"]:
         from collections import Counter
         dm    = DataManager()
+        snaps = dm.get_snapshots()
         anom  = dm.get_anomalous_snapshots()
         types = Counter(s.get("anomaly_type") or "unknown" for s in anom)
         pills = [
@@ -205,15 +215,164 @@ def poll(n):
             for t, c in types.most_common()
         ]
         snap_table = html.Div(pills) if pills else html.Div("")
-    else:
-        snap_table = html.Div("")
 
+        #  Dataset preview 
+        nominal_ts   = [pd.to_datetime(s["timestamp"], unit="us")
+                        for s in snaps if s["label"] == 0]
+        anomalous_ts = [pd.to_datetime(s["timestamp"], unit="us")
+                        for s in snaps if s["label"] == 1]
+        anomalous_ft = [s.get("anomaly_type") or "" for s in snaps if s["label"] == 1]
+
+        fig_tl = go.Figure()
+        if nominal_ts:
+            fig_tl.add_trace(go.Scatter(
+                x=nominal_ts, y=[0] * len(nominal_ts),
+                mode="markers", name="Nominale",
+                marker={"color": "#7aaa8f", "size": 3, "opacity": 0.5},
+                hovertemplate="Nominale<br>%{x}<extra></extra>",
+            ))
+        if anomalous_ts:
+            fig_tl.add_trace(go.Scatter(
+                x=anomalous_ts, y=[1] * len(anomalous_ts),
+                mode="markers", name="Anomalo",
+                marker={"color": "#b55e5e", "size": 5,
+                        "symbol": "diamond", "opacity": 0.7},
+                customdata=[[ft] for ft in anomalous_ft],
+                hovertemplate="Anomalo<br>%{x}<br>tipo: %{customdata[0]}<extra></extra>",
+            ))
+        fig_tl.update_layout(
+            title="Distribuzione temporale degli snapshot",
+            yaxis={"tickvals": [0, 1], "ticktext": ["Nominale", "Anomalo"],
+                   "gridcolor": "#2a2a2a"},
+            xaxis={"title": "data/ora (UTC)", "gridcolor": "#2a2a2a"},
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font={"color": "#e2ddd5", "size": 11},
+            height=200, margin={"l": 60, "r": 10, "t": 36, "b": 40},
+            legend={"bgcolor": "rgba(0,0,0,0)"},
+        )
+
+        _PIE_COLORS = ["#b55e5e", "#e07b39", "#c4a35a",
+                       "#388bfd", "#3fb950", "#888888"]
+        fig_pie = go.Figure(go.Pie(
+            labels=list(types.keys()), values=list(types.values()), hole=0.45,
+            marker={"colors": _PIE_COLORS[:len(types)],
+                    "line": {"color": "#2a2a2a", "width": 1}},
+            textfont={"color": "#e2ddd5"},
+            hovertemplate="%{label}<br>%{value} snapshot (%{percent})<extra></extra>",
+        ))
+        fig_pie.update_layout(
+            title="Tipi di anomalia",
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font={"color": "#e2ddd5", "size": 11},
+            height=220, margin={"l": 10, "r": 10, "t": 36, "b": 10},
+            legend={"bgcolor": "rgba(0,0,0,0)"},
+        )
+
+        n_tot  = len(snaps)
+        n_anom = len(anom)
+        table_rows = []
+        for ft, count in types.most_common():
+            pct_tot  = count / n_tot  * 100 if n_tot  else 0
+            pct_anom = count / n_anom * 100 if n_anom else 0
+            table_rows.append(html.Div([
+                html.Span(ft, style={"flex": "1", "color": "var(--text)",
+                                     "fontSize": "12px"}),
+                html.Span(str(count), style={"width": "60px", "textAlign": "right",
+                                             "fontFamily": "JetBrains Mono",
+                                             "fontSize": "11px", "color": "#e2ddd5"}),
+                html.Span(f"{pct_tot:.1f}%", style={"width": "70px", "textAlign": "right",
+                                                     "fontFamily": "JetBrains Mono",
+                                                     "fontSize": "11px",
+                                                     "color": "var(--muted)"}),
+                html.Span(f"{pct_anom:.1f}%", style={"width": "80px", "textAlign": "right",
+                                                      "fontFamily": "JetBrains Mono",
+                                                      "fontSize": "11px",
+                                                      "color": "#b55e5e"}),
+            ], style={"display": "flex", "padding": "4px 8px",
+                      "borderBottom": "1px solid var(--border)"}))
+
+        tbl_hdr = html.Div([
+            html.Span("Tipo",      style={"flex": "1", "fontSize": "10px",
+                                           "color": "var(--muted)"}),
+            html.Span("N",         style={"width": "60px", "textAlign": "right",
+                                           "fontSize": "10px", "color": "var(--muted)"}),
+            html.Span("% tot",     style={"width": "70px", "textAlign": "right",
+                                           "fontSize": "10px", "color": "var(--muted)"}),
+            html.Span("% anomali", style={"width": "80px", "textAlign": "right",
+                                           "fontSize": "10px", "color": "var(--muted)"}),
+        ], style={"display": "flex", "padding": "4px 8px",
+                  "backgroundColor": "var(--bg)",
+                  "borderBottom": "1px solid var(--border)"})
+
+        fault_table = html.Div(
+            [tbl_hdr] + table_rows,
+            style={"border": "1px solid var(--border)",
+                   "backgroundColor": "var(--surface)"},
+        )
+
+        preview_children = html.Div([
+            html.Div("Distribuzione del dataset", style={
+                "fontSize": "12px", "fontWeight": "600", "color": "var(--text)",
+                "marginBottom": "12px", "marginTop": "20px",
+                "borderTop": "1px solid var(--border)", "paddingTop": "12px",
+            }),
+            dcc.Graph(figure=fig_tl, config={"displayModeBar": False}),
+            html.Div([
+                html.Div([
+                    dcc.Graph(figure=fig_pie, config={"displayModeBar": False}),
+                ], style={"flex": "1"}),
+                html.Div([fault_table], style={"flex": "1", "marginLeft": "16px"}),
+            ], style={"display": "flex", "marginTop": "12px"}),
+        ])
+        preview_style = {"display": "block"}
+    else:
+        snap_table       = html.Div("")
+        preview_children = []
+        preview_style    = {"display": "none"}
+
+    atg_ready = _S["atg_done"] or DataManager().is_data_loaded()
+    config_changed = (
+        pipeline_config is None
+        or pipeline_config.get("mode") != current_mode
+        or (current_mode == "batch"
+            and pipeline_config.get("n_snapshots") != int(current_n or 50))
+    )
+    btn_disabled = not atg_ready or not config_changed
+    btn_opacity  = "1" if (atg_ready and config_changed) else "0.4"
+    btn_cursor   = "pointer" if (atg_ready and config_changed) else "not-allowed"
+    btn_run_style = {
+        "border": "none",
+        "padding": "10px 20px",
+        "fontSize": "13px",
+        "fontWeight": "600",
+        "borderRadius": "2px",
+        "width": "100%",
+        "backgroundColor": "var(--crit)",
+        "color": "#ffffff",
+        "marginTop": "16px",
+        "opacity": btn_opacity,
+        "cursor": btn_cursor,
+    }
     return (
         atg_pct, atg_msg,
         load_status, load_style,
         btn_load_disabled, btn_load_style,
         snap_table,
+        btn_disabled,
+        btn_run_style,
+        preview_children,
+        preview_style,
     )
+
+
+#  Callback: disabilita poll fuori da S0 
+
+@callback(
+    Output("s0-poll", "disabled"),
+    Input("active-section", "data"),
+)
+def toggle_poll(section):
+    return section != "s0"
 
 
 #  Callback: toggle batch controls / full warning 

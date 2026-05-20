@@ -1,5 +1,6 @@
+import pandas as pd
 import plotly.graph_objects as go
-from dash import callback, Output, Input, html, ctx
+from dash import callback, clientside_callback, Output, Input, html, ctx, Patch
 from dashboard.core.data_manager import DataManager
 
 _CS_INFO = {
@@ -106,6 +107,11 @@ _NODE_IDS = ["nginx-web-server", "nginx-thrift", "home-timeline-service",
              "post-storage-memcached", "post-storage-mongodb"]
 _EDGE_IDS = ["e1", "e2", "e3", "e4", "e5", "e6"]
 
+_EDGE_SLA = {
+    "latency_ms": 100.0,
+    "error_rate": 0.05,
+}
+
 
 def _detail_rows(title: str, rows: list[tuple[str, str]]) -> html.Div:
     return html.Div([
@@ -208,7 +214,14 @@ def init_atg_slider(tab):
     n     = len(snaps)
     if n == 0:
         return 0, {0: "0"}
-    marks = {0: "0", n // 2: str(n // 2), n - 1: str(n - 1)}
+    t_start = pd.to_datetime(snaps[0]["timestamp"],    unit="us").strftime("%d/%m/%y")
+    t_mid   = pd.to_datetime(snaps[n // 2]["timestamp"], unit="us").strftime("%d/%m/%y")
+    t_end   = pd.to_datetime(snaps[-1]["timestamp"],   unit="us").strftime("%d/%m/%y")
+    marks = {
+        0:      {"label": f"0 ({t_start})",     "style": {"fontSize": "9px", "color": "var(--muted)"}},
+        n // 2: {"label": f"{n//2} ({t_mid})",  "style": {"fontSize": "9px", "color": "var(--muted)"}},
+        n - 1:  {"label": f"{n-1} ({t_end})",   "style": {"fontSize": "9px", "color": "var(--muted)"}},
+    }
     return n - 1, marks
 
 
@@ -242,9 +255,16 @@ def update_atg_heatmaps(idx):
             style={"color": "var(--muted)"},
         )
     else:
+        import json as _json
         a_type    = snap.get("anomaly_type") or "?"
-        a_nodes   = snap.get("anomalous_nodes") or []
-        nodes_txt = ", ".join(a_nodes) if a_nodes else "?"
+        _raw_nodes = snap.get("anomaly_node_ids") or "[]"
+        try:
+            a_nodes = (_json.loads(_raw_nodes)
+                       if isinstance(_raw_nodes, str)
+                       else (_raw_nodes or []))
+        except (ValueError, TypeError):
+            a_nodes = []
+        nodes_txt = ", ".join(a_nodes) if a_nodes else "N/A"
         snap_label = html.Span([
             html.Span(f"Snapshot {idx} / {ts_sec:.3f} -- ",
                       style={"color": "var(--muted)"}),
@@ -253,11 +273,16 @@ def update_atg_heatmaps(idx):
                       style={"color": "#e2ddd5"}),
         ])
 
-    z_node = [[snap["nodes"].get(n, {}).get(m) for n in _NODE_IDS]
-               for m in _NODE_METRICS]
+    z_node   = [[snap["nodes"].get(n, {}).get(m) for n in _NODE_IDS]
+                for m in _NODE_METRICS]
+    z_text_n = [[f"{v:.2g}" if v is not None else "N/A" for v in row]
+                for row in z_node]
+    cs_n     = [[0, "#1c1c1c"], [1, "#b55e5e"]] if is_anom \
+               else [[0, "#1c1c1c"], [1, "#c4a35a"]]
     fig_node = go.Figure(go.Heatmap(
         z=z_node, x=[n.split("-")[-1] for n in _NODE_IDS], y=_NODE_METRICS,
-        colorscale=[[0, "#1c1c1c"], [1, "#c4a35a"]], showscale=True,
+        colorscale=cs_n, showscale=True,
+        text=z_text_n, texttemplate="%{text}", textfont={"size": 9},
     ))
     fig_node.update_layout(
         title=f"Nodi -- snap {idx} ({label})", **_DARK_LAYOUT,
@@ -265,7 +290,6 @@ def update_atg_heatmaps(idx):
     )
 
     if is_anom:
-        import json as _json
         raw = snap.get("anomaly_node_ids") or "[]"
         try:
             anom_nodes = (_json.loads(raw) if isinstance(raw, str)
@@ -287,61 +311,227 @@ def update_atg_heatmaps(idx):
                 layer="above",
             )
 
-    z_edge = [[snap["edges"].get(e, {}).get(m) for e in _EDGE_IDS]
-               for m in _EDGE_METRICS]
+    z_edge   = [[snap["edges"].get(e, {}).get(m) for e in _EDGE_IDS]
+                for m in _EDGE_METRICS]
+    z_text_e = [[f"{v:.2g}" if v is not None else "N/A" for v in row]
+                for row in z_edge]
+    cs_e     = [[0, "#1c1c1c"], [1, "#b55e5e"]] if is_anom \
+               else [[0, "#1c1c1c"], [1, "#388bfd"]]
     fig_edge = go.Figure(go.Heatmap(
         z=z_edge, x=_EDGE_IDS, y=_EDGE_METRICS,
-        colorscale=[[0, "#1c1c1c"], [1, "#388bfd"]], showscale=True,
+        colorscale=cs_e, showscale=True,
+        text=z_text_e, texttemplate="%{text}", textfont={"size": 9},
     ))
     fig_edge.update_layout(
         title=f"Archi -- snap {idx} ({label})", **_DARK_LAYOUT,
         yaxis={"tickfont": {"size": 9}}, xaxis={"tickfont": {"size": 9}},
     )
+    for row_idx, metric in enumerate(_EDGE_METRICS):
+        sla_val = _EDGE_SLA.get(metric)
+        if sla_val is None:
+            continue
+        for col_idx, eid in enumerate(_EDGE_IDS):
+            val = snap["edges"].get(eid, {}).get(metric)
+            if val is not None and float(val) > sla_val:
+                fig_edge.add_shape(
+                    type="rect",
+                    x0=col_idx - 0.5, x1=col_idx + 0.5,
+                    y0=row_idx - 0.5, y1=row_idx + 0.5,
+                    line={"color": "#b55e5e", "width": 2},
+                    fillcolor="rgba(0,0,0,0)",
+                    layer="above",
+                )
     return fig_node, fig_edge, snap_label
 
 
 # ---------------------------------------------------------------------------
 # Callback 5 - serie temporale
 # ---------------------------------------------------------------------------
+def _build_ts_shapes(snaps: list) -> tuple[list, list]:
+    """Return (x_dt_sub, anomaly_bands) for the subsampled snapshot list."""
+    _MAX_PTS = 1500
+    x_dt_all = [pd.to_datetime(s["timestamp"], unit="us") for s in snaps]
+    if len(x_dt_all) > _MAX_PTS:
+        step     = len(x_dt_all) // _MAX_PTS
+        x_dt_sub = x_dt_all[::step]
+        snaps_sub = snaps[::step]
+    else:
+        x_dt_sub  = x_dt_all
+        snaps_sub = snaps
+
+    bands, in_band, band_start = [], False, None
+    for i, snap in enumerate(snaps_sub):
+        if snap["label"] and not in_band:
+            band_start = x_dt_sub[i]
+            in_band = True
+        elif not snap["label"] and in_band:
+            bands.append((band_start, x_dt_sub[i - 1]))
+            in_band = False
+    if in_band and band_start is not None:
+        bands.append((band_start, x_dt_sub[-1]))
+    return x_dt_sub, bands
+
+
+def _vline_shape(x_iso: str) -> dict:
+    return {
+        "type": "line", "x0": x_iso, "x1": x_iso,
+        "y0": 0, "y1": 1, "xref": "x", "yref": "paper",
+        "line": {"color": "#c4a35a", "width": 1.5, "dash": "dot"},
+    }
+
+
+def _vline_annotation(x_iso: str, label: str) -> dict:
+    return {
+        "x": x_iso, "y": 1, "xref": "x", "yref": "paper",
+        "text": label, "showarrow": False,
+        "font": {"color": "#c4a35a", "size": 9}, "yshift": 5,
+    }
+
+
 @callback(
     Output("s1-atg-ts-graph", "figure"),
-    Input("s1-atg-metric-dd", "value"),
+    Input("s1-atg-metric-dd",   "value"),
+    Input("s1-atg-slider",      "value"),
+    Input("s1-atg-entity-type", "value"),
+    Input("s1-atg-entity-dd",   "value"),
 )
-def update_atg_ts(metric):
+def update_atg_ts(metric, slider_idx, entity_type, entity_id):
     dm    = DataManager()
     snaps = dm.get_snapshots()
+
+    #  Slider-only trigger: rebuild only shapes/annotations via Patch 
+    # Avoids recomputing the full series (up to 41k snapshots).
+    if ctx.triggered_id == "s1-atg-slider" and snaps:
+        if slider_idx is None or not (0 <= int(slider_idx) < len(snaps)):
+            return Patch()
+
+        _, bands = _build_ts_shapes(snaps)
+        curr_ts  = pd.to_datetime(snaps[int(slider_idx)]["timestamp"], unit="us")
+        x_iso    = curr_ts.isoformat()
+
+        shapes = [
+            {
+                "type": "rect", "xref": "x", "yref": "paper",
+                "x0": t0.isoformat(), "x1": t1.isoformat(),
+                "y0": 0, "y1": 1,
+                "fillcolor": "#b55e5e", "opacity": 0.08,
+                "line": {"width": 0}, "layer": "below",
+            }
+            for t0, t1 in bands
+        ] + [_vline_shape(x_iso)]
+
+        patched = Patch()
+        patched["layout"]["shapes"]      = shapes
+        patched["layout"]["annotations"] = [_vline_annotation(x_iso, f"snap {slider_idx}")]
+        return patched
+
+    #  Full render: metric/entity changed or initial call 
     if not snaps or not metric:
         return _empty_fig("Serie temporale -- nessun dato")
 
-    is_node = metric in _NODE_METRICS
-    x, y = [], []
-    for snap in snaps:
-        x.append(snap["timestamp"])
-        if is_node:
-            vals = [snap["nodes"].get(n, {}).get(metric)
-                    for n in _NODE_IDS
-                    if snap["nodes"].get(n, {}).get(metric) is not None]
-        else:
-            vals = [snap["edges"].get(e, {}).get(metric)
-                    for e in _EDGE_IDS
-                    if snap["edges"].get(e, {}).get(metric) is not None]
-        y.append(sum(vals) / len(vals) if vals else None)
+    if entity_type == "node" and entity_id:
+        x_dt, y = [], []
+        for snap in snaps:
+            x_dt.append(pd.to_datetime(snap["timestamp"], unit="us"))
+            val = snap["nodes"].get(entity_id, {}).get(metric)
+            y.append(float(val) if val is not None else None)
+    elif entity_type == "edge" and entity_id:
+        x_dt, y = [], []
+        for snap in snaps:
+            x_dt.append(pd.to_datetime(snap["timestamp"], unit="us"))
+            val = snap["edges"].get(entity_id, {}).get(metric)
+            y.append(float(val) if val is not None else None)
+    else:
+        # entity_type == "all": average over all elements
+        is_node = metric in _NODE_METRICS
+        x_dt, y = [], []
+        for snap in snaps:
+            x_dt.append(pd.to_datetime(snap["timestamp"], unit="us"))
+            if is_node:
+                vals = [snap["nodes"].get(n, {}).get(metric)
+                        for n in _NODE_IDS
+                        if snap["nodes"].get(n, {}).get(metric) is not None]
+            else:
+                vals = [snap["edges"].get(e, {}).get(metric)
+                        for e in _EDGE_IDS
+                        if snap["edges"].get(e, {}).get(metric) is not None]
+            y.append(sum(vals) / len(vals) if vals else None)
+
+    _MAX_PTS = 1500
+    if len(x_dt) > _MAX_PTS:
+        step       = len(x_dt) // _MAX_PTS
+        x_dt       = x_dt[::step]
+        y          = y[::step]
+        snaps_sub  = snaps[::step]
+        subsampled = True
+    else:
+        snaps_sub  = snaps
+        subsampled = False
+
+    bands = []
+    in_band, band_start = False, None
+    for i, snap in enumerate(snaps_sub):
+        if snap["label"] and not in_band:
+            band_start = x_dt[i]
+            in_band = True
+        elif not snap["label"] and in_band:
+            bands.append((band_start, x_dt[i - 1]))
+            in_band = False
+    if in_band and band_start is not None:
+        bands.append((band_start, x_dt[-1]))
 
     fig = go.Figure(go.Scatter(
-        x=x, y=y, mode="lines",
+        x=x_dt, y=y, mode="lines",
         line={"color": "#c4a35a", "width": 1.2},
     ))
-    for snap in snaps:
-        if snap["label"]:
-            ts = snap["timestamp"]
-            fig.add_vrect(x0=ts, x1=ts + 5_000_000,
-                          fillcolor="#b55e5e", opacity=0.08, line_width=0)
+    for t0, t1 in bands:
+        fig.add_vrect(x0=t0, x1=t1, fillcolor="#b55e5e", opacity=0.08, line_width=0)
+
+    # Vline - always added last so Patch can target shapes[-1] / annotations[0]
+    if slider_idx is not None and 0 <= int(slider_idx) < len(snaps):
+        curr_ts      = pd.to_datetime(snaps[int(slider_idx)]["timestamp"], unit="us")
+        x_iso        = curr_ts.isoformat()
+        vline_opacity = 1.0
+        anno_text    = f"snap {slider_idx}"
+    else:
+        x_iso        = x_dt[0].isoformat() if x_dt else "1970-01-01"
+        vline_opacity = 0.0
+        anno_text    = ""
+
+    fig.add_shape(**{**_vline_shape(x_iso), "opacity": vline_opacity})
+    fig.update_layout(annotations=[{**_vline_annotation(x_iso, anno_text),
+                                    "opacity": vline_opacity}])
+
+    title_suffix = f" (campione 1/{step})" if subsampled else ""
+    if entity_type in ("node", "edge") and entity_id:
+        title_base = f"{entity_id} : {metric}"
+    else:
+        title_base = f"{metric} (media su tutti gli elementi)"
     fig.update_layout(
-        title=f"{metric} (media su tutti i nodi/archi)",
-        xaxis_title="timestamp (us)", yaxis_title=metric,
+        title=f"{title_base}{title_suffix}",
+        xaxis_title="data/ora (UTC)", yaxis_title=metric,
         **_DARK_LAYOUT,
     )
     return fig
+
+
+# ---------------------------------------------------------------------------
+# Callback 5b - mostra/nasconde e popola il dropdown elemento
+# ---------------------------------------------------------------------------
+@callback(
+    Output("s1-atg-entity-dd-wrap", "style"),
+    Output("s1-atg-entity-dd",      "options"),
+    Output("s1-atg-entity-dd",      "value"),
+    Input("s1-atg-entity-type",     "value"),
+)
+def update_entity_dd(entity_type):
+    if entity_type == "node":
+        opts = [{"label": nid, "value": nid} for nid in _NODE_IDS]
+        return {"display": "block"}, opts, _NODE_IDS[0]
+    if entity_type == "edge":
+        opts = [{"label": eid, "value": eid} for eid in _EDGE_IDS]
+        return {"display": "block"}, opts, _EDGE_IDS[0]
+    return {"display": "none"}, [], None
 
 
 # ---------------------------------------------------------------------------
@@ -525,17 +715,37 @@ _DSB_NOTE = html.Div(
 )
 
 
+_NODE_POS = {
+    "nginx-web-server":       (0.0, 0.5),
+    "nginx-thrift":           (0.2, 0.5),
+    "home-timeline-service":  (0.4, 0.5),
+    "home-timeline-redis":    (0.6, 0.8),
+    "post-storage-service":   (0.6, 0.2),
+    "post-storage-memcached": (0.8, 0.4),
+    "post-storage-mongodb":   (0.8, 0.0),
+}
+_EDGE_ENDPOINTS = {
+    "e1": ("nginx-web-server",       "nginx-thrift"),
+    "e2": ("nginx-thrift",            "home-timeline-service"),
+    "e3": ("home-timeline-service",   "home-timeline-redis"),
+    "e4": ("home-timeline-service",   "post-storage-service"),
+    "e5": ("post-storage-service",    "post-storage-memcached"),
+    "e6": ("post-storage-service",    "post-storage-mongodb"),
+}
+
+
 @callback(
+    Output("s1-pbo-wgold-fig",      "figure"),
     Output("s1-pbo-weight-heatmap", "figure"),
     Output("s1-pbo-pas-frob-chart", "figure"),
-    Output("s1-pbo-edge-table", "children"),
-    Output("s1-pbo-dsb-note", "children"),
+    Output("s1-pbo-edge-table",     "children"),
+    Output("s1-pbo-dsb-note",       "children"),
     Input("s1-tabs", "value"),
     Input("s1-pbo-slider", "value"),
 )
 def update_pbo(tab, slider_val):
     if tab != "pbo":
-        return go.Figure(), go.Figure(), [], []
+        return go.Figure(), go.Figure(), go.Figure(), [], []
 
     dm = DataManager()
     ws = dm.get_weight_series()
@@ -544,7 +754,63 @@ def update_pbo(tab, slider_val):
     if not ws or not wg:
         msg = html.Div("Pipeline non ancora eseguita.",
                        style={"color": "var(--muted)", "padding": "20px"})
-        return _empty_fig("W_t vs W_gold"), _empty_fig("PAS / Frobenius"), msg, _DSB_NOTE
+        return (go.Figure(), _empty_fig("W_t vs W_gold"),
+                _empty_fig("PAS / Frobenius"), msg, _DSB_NOTE)
+
+    #  Grafo W_gold 
+    fig_wg = go.Figure()
+    for eid, (src, tgt) in _EDGE_ENDPOINTS.items():
+        x0, y0 = _NODE_POS[src]
+        x1, y1 = _NODE_POS[tgt]
+        w     = wg.get(eid, 0.0)
+        width = max(1.0, w * 12)
+        fig_wg.add_trace(go.Scatter(
+            x=[x0, x1], y=[y0, y1],
+            mode="lines",
+            line={"color": "#c4a35a", "width": width},
+            hovertemplate=f"{eid}: w_gold={w:.4f}<extra></extra>",
+            showlegend=False,
+        ))
+        fig_wg.add_annotation(
+            x=(x0 + x1) / 2, y=(y0 + y1) / 2,
+            text=f"w={w:.3f}", showarrow=False,
+            font={"size": 9, "color": "#e2ddd5"},
+            bgcolor="rgba(28,28,28,0.8)",
+        )
+    for eid, (src, tgt) in _EDGE_ENDPOINTS.items():
+        x0, y0 = _NODE_POS[src]
+        x1, y1 = _NODE_POS[tgt]
+        w = wg.get(eid, 0.0)
+        ax    = x0 + (x1 - x0) * 0.3
+        ay    = y0 + (y1 - y0) * 0.3
+        x_arr = x0 + (x1 - x0) * 0.7
+        y_arr = y0 + (y1 - y0) * 0.7
+        fig_wg.add_annotation(
+            x=x_arr, y=y_arr, ax=ax, ay=ay,
+            xref="x", yref="y", axref="x", ayref="y",
+            arrowhead=2, arrowwidth=max(1, int(w * 4)),
+            arrowcolor="#c4a35a",
+            showarrow=True, text="",
+        )
+    for nid, (x, y) in _NODE_POS.items():
+        node_color = "#8957e5" if nid in _SHARED else "#e2ddd5"
+        fig_wg.add_trace(go.Scatter(
+            x=[x], y=[y], mode="markers+text",
+            marker={"size": 16, "color": "#1c1c1c",
+                    "line": {"color": node_color, "width": 2}},
+            text=[nid.split("-")[-1]],
+            textposition="top center",
+            textfont={"size": 9, "color": "#e2ddd5"},
+            showlegend=False,
+            hovertemplate=f"<b>{nid}</b><extra></extra>",
+        ))
+    fig_wg.update_layout(
+        xaxis={"visible": False, "range": [-0.05, 0.95]},
+        yaxis={"visible": False, "range": [-0.1, 1.0]},
+        height=280, margin={"l": 10, "r": 10, "t": 10, "b": 10},
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+    )
 
     w_idx  = min(int(slider_val or 0), len(ws) - 1)
     snap_w = ws[w_idx]["weights"]
@@ -561,27 +827,31 @@ def update_pbo(tab, slider_val):
     if results and "H_crit" in results.get("compliance_sets", {}):
         mon_crit = results["compliance_sets"]["H_crit"].get("monitor_results", [])
         if mon_crit:
-            ts_list   = [m["timestamp"] for m in mon_crit]
+            ts_list   = [m.get("timestamp") for m in mon_crit]
             pas_vals  = [m.get("pas_value") for m in mon_crit]
             frob_vals = [m.get("frobenius_distance") for m in mon_crit]
             snaps     = dm.get_snapshots()
             anom_ts   = {s["timestamp"] for s in snaps if s["label"] == 1}
+            ts_dt     = [pd.to_datetime(ts, unit="us") if ts is not None else None
+                         for ts in ts_list]
             fig_pf = go.Figure()
             fig_pf.add_trace(go.Scatter(
-                x=ts_list, y=pas_vals, name="PAS (H_crit)",
+                x=ts_dt, y=pas_vals, name="PAS (H_crit)",
                 line={"color": "#c4a35a", "width": 1.5}, yaxis="y1",
             ))
             fig_pf.add_trace(go.Scatter(
-                x=ts_list, y=frob_vals, name="Frobenius",
+                x=ts_dt, y=frob_vals, name="Frobenius",
                 line={"color": "#b55e5e", "width": 1.5}, yaxis="y2",
             ))
-            for ts in ts_list:
-                if ts in anom_ts:
-                    fig_pf.add_vrect(
-                        x0=ts, x1=ts + 5_000_000,
-                        fillcolor="#b55e5e", opacity=0.06,
-                        line_width=0, layer="below",
-                    )
+            _anom_ts_list = [ts for ts in ts_list if ts in anom_ts][:200]
+            for ts in _anom_ts_list:
+                t0 = pd.to_datetime(ts, unit="us")
+                t1 = pd.to_datetime(ts + 5_000_000, unit="us")
+                fig_pf.add_vrect(
+                    x0=t0, x1=t1,
+                    fillcolor="#b55e5e", opacity=0.06,
+                    line_width=0, layer="below",
+                )
             fig_pf.add_hline(
                 y=0.25,
                 line_dash="dash",
@@ -592,6 +862,7 @@ def update_pbo(tab, slider_val):
             )
             fig_pf.update_layout(
                 title="PAS e Frobenius nel tempo",
+                xaxis_title="data/ora (UTC)",
                 yaxis={"title": "PAS", "color": "#c4a35a", "side": "left"},
                 yaxis2={"title": "Frobenius", "color": "#b55e5e",
                         "overlaying": "y", "side": "right"},
@@ -619,4 +890,34 @@ def update_pbo(tab, slider_val):
         ], style={"display": "flex", "alignItems": "center",
                   "padding": "5px 0", "borderBottom": "1px solid var(--border)"}))
 
-    return fig_w, fig_pf, html.Div([header] + rows), _DSB_NOTE
+    return fig_wg, fig_w, fig_pf, html.Div([header] + rows), _DSB_NOTE
+
+
+# ---------------------------------------------------------------------------
+# Clientside callback - reset viewport Cytoscape S1
+# ---------------------------------------------------------------------------
+clientside_callback(
+    """
+    function(n_clicks) {
+        if (!n_clicks || n_clicks < 1) {
+            return window.dash_clientside.no_update;
+        }
+        function findCy(el) {
+            if (!el) return null;
+            if (el._cy) return el._cy;
+            for (var i = 0; i < el.children.length; i++) {
+                var found = findCy(el.children[i]);
+                if (found) return found;
+            }
+            return null;
+        }
+        var wrapper = document.getElementById('s1-cytoscape');
+        var cy = findCy(wrapper);
+        if (cy) { cy.fit(); cy.center(); }
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("s1-cytoscape", "zoom"),
+    Input("s1-cyto-reset", "n_clicks"),
+    prevent_initial_call=True,
+)

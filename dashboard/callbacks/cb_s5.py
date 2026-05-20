@@ -6,12 +6,12 @@ from dashboard.core.data_manager import DataManager
 
 _CRIT_COLOR = {
     "yellow": "#c4a35a",
-    "orange": "#c4a35a",
+    "orange": "#e07b39",
     "red":    "#b55e5e",
 }
 _CRIT_BG = {
-    "yellow": "rgba(196,163,90,0.12)",
-    "orange": "rgba(196,163,90,0.22)",
+    "yellow": "rgba(196,163,90,0.10)",
+    "orange": "rgba(224,123,57,0.15)",
     "red":    "rgba(181,94,94,0.18)",
 }
 _DARK_LAYOUT = {
@@ -48,6 +48,15 @@ def _mini_card(label: str, value: int, color: str) -> html.Div:
         "padding": "8px 12px",
         "flex": "1",
     })
+
+
+def _fmt_ts(ts_us: int) -> str:
+    if not ts_us:
+        return "N/A"
+    try:
+        return pd.to_datetime(ts_us, unit="us").strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return str(ts_us)
 
 
 _GANTT_COLORS = {
@@ -153,13 +162,60 @@ def update_table(crit_filter, cs_filter, type_filter):
         _mini_card("Red",          n_red,           "#b55e5e"),
     ]
 
+    cs_names   = sorted({a["cs"] for a in all_alerts}) if all_alerts else ["H_crit", "H_cache"]
+    _crit_cols = ["yellow", "orange", "red"]
+
+    def _ct_cell(text: str, color: str = "var(--muted)", bold: bool = False) -> html.Div:
+        return html.Div(text, style={
+            "padding": "4px 8px", "fontSize": "11px", "color": color,
+            "fontFamily": "JetBrains Mono, monospace",
+            "fontWeight": "600" if bold else "normal",
+            "textAlign": "center", "flex": "1",
+        })
+
+    ct_header = html.Div([
+        _ct_cell(""),
+        _ct_cell("Yellow", color="#c4a35a", bold=True),
+        _ct_cell("Orange", color="#e07b39", bold=True),
+        _ct_cell("Red",    color="#b55e5e", bold=True),
+        _ct_cell("Tot.",   color="var(--text)", bold=True),
+    ], style={"display": "flex", "borderBottom": "1px solid var(--border)",
+              "backgroundColor": "var(--surface)"})
+
+    ct_rows = []
+    for cs in cs_names:
+        counts = {c: sum(1 for a in all_alerts
+                         if a["cs"] == cs and a.get("criticality") == c)
+                  for c in _crit_cols}
+        total = sum(counts.values())
+        ct_rows.append(html.Div([
+            _ct_cell(cs,                        color="var(--text)", bold=True),
+            _ct_cell(str(counts["yellow"]),     color="#c4a35a"),
+            _ct_cell(str(counts["orange"]),     color="#e07b39"),
+            _ct_cell(str(counts["red"]),        color="#b55e5e"),
+            _ct_cell(str(total),                color="var(--text)", bold=True),
+        ], style={"display": "flex", "borderBottom": "1px solid var(--border)"}))
+
+    cross_table = html.Div(
+        [ct_header] + ct_rows,
+        style={
+            "backgroundColor": "var(--surface)",
+            "border": "1px solid var(--border)",
+            "minWidth": "280px",
+        },
+    )
+    summary_out = html.Div([
+        html.Div(summary_cards, style={"display": "flex", "gap": "12px", "flex": "1"}),
+        cross_table,
+    ], style={"display": "flex", "gap": "12px", "alignItems": "flex-start"})
+
     if not all_alerts:
         empty = html.Div("Nessun alert per i filtri correnti.",
                          style={"color": "var(--muted)", "padding": "20px"})
-        return summary_cards, empty, go.Figure(layout={**_DARK_LAYOUT})
+        return summary_out, empty, go.Figure(layout={**_DARK_LAYOUT})
 
     header = html.Div([
-        html.Span("Timestamp",    style=_th(120)),
+        html.Span("Timestamp",    style=_th(160)),
         html.Span("CS",           style=_th(80)),
         html.Span("Criticita",    style=_th(80)),
         html.Span("Proprieta",    style=_th(100)),
@@ -177,7 +233,7 @@ def update_table(crit_filter, cs_filter, type_filter):
         color = _CRIT_COLOR.get(crit, "#e2ddd5")
         bg    = _CRIT_BG.get(crit, "rgba(0,0,0,0)")
         rows.append(html.Div([
-            html.Span(str(a.get("timestamp", 0)),           style=_td(120, mono=True)),
+            html.Span(_fmt_ts(a.get("timestamp", 0)),        style=_td(160, mono=True)),
             html.Span(a.get("cs", ""),                      style=_td(80)),
             html.Span(crit.upper(),                         style=_td(80, color=color)),
             html.Span(a.get("property_at_risk", ""),        style=_td(100)),
@@ -193,7 +249,7 @@ def update_table(crit_filter, cs_filter, type_filter):
     table = html.Div([header] + rows,
                      style={"backgroundColor": "var(--surface)",
                             "border": "1px solid var(--border)"})
-    return summary_cards, table, _build_gantt(all_alerts)
+    return summary_out, table, _build_gantt(all_alerts)
 
 
 # ---------------------------------------------------------------------------

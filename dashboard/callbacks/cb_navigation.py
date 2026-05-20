@@ -5,9 +5,12 @@ from dashboard.layout.sections.s0_import import create_s0
 SECTIONS = ["s0", "s1", "s2", "s3", "s4", "s5"]
 
 SECTION_LABELS = {
-    "s0": "Importazione", "s1": "Struttura",
-    "s2": "Feature", "s3": "Analisi Causale",
-    "s4": "Monitoraggio", "s5": "Alert",
+    "s0": "S0 - Caricamento",
+    "s1": "S1 - Struttura",
+    "s2": "S2 - Feature",
+    "s3": "S3 - Analisi Causale",
+    "s4": "S4 - Monitoraggio",
+    "s5": "S5 - Alert",
 }
 
 
