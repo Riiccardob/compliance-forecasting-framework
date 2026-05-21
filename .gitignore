@@ -183,7 +183,7 @@ cython_debug/
 DATASET/
 venv/
 docs/paper
-docs/modules
+# docs/modules
 framework.zip
 data/raw
 docs/TODO.md
