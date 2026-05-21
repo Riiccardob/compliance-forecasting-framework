@@ -1,8 +1,7 @@
-from dash import Output, Input, State, html
-from dashboard.app import app, background_callback_manager
+from dash import callback, Output, Input, State
 
 
-@app.callback(
+@callback(
     output=Output("s0-run-log", "children"),
     inputs=Input("s0-btn-run", "n_clicks"),
     state=[
@@ -10,7 +9,6 @@ from dashboard.app import app, background_callback_manager
         State("s0-n-snapshots", "value"),
     ],
     background=True,
-    manager=background_callback_manager,
     running=[
         (Output("s0-btn-run", "disabled"), True, False),
         (Output("s0-progress", "style"),
@@ -73,7 +71,7 @@ def run_pipeline_callback(set_progress, n_clicks, mode, n_snapshots):
         snapshot_indices = []
 
     def _progress(value: int, label: str) -> None:
-        set_progress(value, label)
+        set_progress((value, label))
 
     results = run_pipeline(mode, snapshot_indices, _progress)
 
