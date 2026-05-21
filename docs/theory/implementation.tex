@@ -51,6 +51,7 @@ Pearson.
 Tutte le dipendenze sono dichiarate con versione fissata nel file \textit{pyproject.toml} e
 riproducibili tramite \textit{uv}, garantendo che l'ambiente di esecuzione sia identico tra
 sviluppo, integrazione continua e produzione.
+
 Lo sviluppo ha seguito una metodologia \gls{TDD} in modo rigoroso: ogni modulo è stato costruito
 a partire da una suite di test unitari che formalizzano il contratto dell'interfaccia pubblica
 prima ancora che l'implementazione esista. Questa sequenza ha avuto conseguenze architetturali
@@ -81,8 +82,8 @@ metodologici.}
 \textit{src/layer1/}  & \textit{topology\_builder.py}   & Layer~1        & Costruzione di $H_{\text{cert}}$ \\
 \textit{src/layer2/}  & \textit{atg\_builder.py}        & Layer~2        & Sequenza di snapshot $G_t$ \\
                       & \textit{pbo\_builder.py}        & Layer~2        & PBO, PAS, norma di Frobenius \\
-\textit{src/phase1/}  & \textit{feature\_selector.py}   & Fase~I         & Selezione di $M_{\Phi_i}$ dalla topologia \\
-                      & \textit{stat\_forecaster.py}    & Fase~I         & Previsione locale delle metriche \\
+\textit{src/layer3/}  & \textit{feature\_selector.py}   & Layer~3 / Fase~I & Selezione di $M_{\Phi_i}$ dalla topologia \\
+\textit{src/phase1/}  & \textit{stat\_forecaster.py}    & Fase~I           & Previsione locale delle metriche \\
 \textit{src/phase2/}  & \textit{causal\_analyzer.py}    & Fase~II        & Analisi causale guidata dalla topologia \\
 \textit{src/phase3/}  & \textit{structural\_monitor.py} & Fase~III       & Monitoraggio gerarchico a quattro livelli \\
 \textit{src/phase4/}  & \textit{alert\_generator.py}    & Fase~IV        & Sintesi e classificazione dell'\textit{alert} \\
@@ -300,7 +301,7 @@ prodotti dagli strumenti di osservabilità. Tra i dati grezzi e i moduli di anal
 interpone uno strato di conversione il cui scopo è produrre un \textbf{formato canonico
 intermedio} indipendente dal dataset specifico. Questa separazione consente di sostituire
 la sorgente dati senza modificare una riga di codice al di fuori del pacchetto
-\textit{etl/}.
+\textit{src/ingestion/}.
 
 Il formato canonico si compone di tre file CSV con schemi fissi, che rispecchiano direttamente
 la distinzione strutturale del Layer~2 tra \textit{feature} persistenti di nodo, \textit{feature}
@@ -318,8 +319,8 @@ anomalia, la lista JSON dei nodi anomali e i metadati dell'esperimento, con
 \textit{timestamp} come chiave.
 
 Qualunque componente di conversione che produca questi tre file con gli schemi descritti è
-compatibile con il \textit{framework} senza modificare una riga di codice al di fuori del
-pacchetto \textit{etl/}. Tale componente è l'unico modulo \textit{dataset-specific}
+pertanto compatibile con l'intera \textit{pipeline} del \textit{framework}. 
+Tale componente è l'unico modulo \textit{dataset-specific}
 dell'intera architettura: si occupa di estrarre i metadati, aggregare le tracce per finestra
 temporale, calcolare le metriche con le opportune correzioni sui contatori cumulativi e
 produrre il \textit{ground truth}. L'implementazione specifica adottata nella valutazione
@@ -353,8 +354,8 @@ L'Espansione Topologica introduce nodi virtuali di sincronizzazione, uno per ogn
 \textit{compliance set}, collegati tramite archi fittizi a tutti i nodi del set. Questa strategia
 rende la semantica AND esplicita nella topologia, ma introduce $m$ nodi aggiuntivi (uno per
 proprietà) le cui \textit{feature} devono essere ricalcolate a ogni passo temporale, producendo
-un \textit{overhead} computazionale crescente con il numero di proprietà monitorate. Produce
-inoltre strutture eterogenee (nodi reali e nodi fittizi nello stesso grafo) che complicano le
+un \textit{overhead} computazionale crescente con il numero di proprietà monitorate. Tale strategia produce
+inoltre strutture eterogenee — nodi reali e nodi fittizi nello stesso grafo — che complicano le
 operazioni di interrogazione e la compatibilità con le \textit{pipeline} di osservabilità
 industriali, le quali producono metriche associate agli archi e ai nodi reali del sistema.
 
@@ -366,7 +367,7 @@ $A(H_{\Phi_i}) = \{e = (u,v) \mid u \in H_{\Phi_i} \wedge v \in H_{\Phi_i}\}$. Q
 approccio è compatibile con qualsiasi libreria di analisi su grafi che supporti attributi sugli
 archi, non introduce nodi fittizi, non richiede ricalcolo a \textit{runtime} e consente di
 aggiungere una nuova proprietà certificata aggiornando solo le annotazioni degli archi già
-esistenti. La semantica AND del \textit{Compliance Set} è rispettata integralmente dalla
+esistenti. La semantica AND del \textit{compliance set} è rispettata integralmente dalla
 logica applicativa dei moduli superiori (FeatureSelector, StructuralMonitor, CausalAnalyzer)
 che interrogano questo attributo: l'assenza di un tipo \textit{Hypergraph} nativo non implica
 una simulazione approssimata, ma una codifica equivalente della stessa semantica in una
@@ -457,7 +458,7 @@ $M^{\text{interf}}$, risultando strutturalmente invisibile all'intero \textit{fr
 Il warning segnala una potenziale lacuna di copertura del monitoraggio prima che qualsiasi
 analisi sia eseguita, evitando che la situazione rimanga silente fino all'esecuzione.
 
-La chiamata finale \textit{copy.deepcopy(self.\_graph)} implementa il Pattern Prototype: il
+La chiamata finale \textit{copy.deepcopy(self.\_graph)} implementa il \textit{Pattern Prototype}: il
 grafo originale è conservato come \textit{template} immutabile internamente; ogni consumatore
 riceve una copia indipendente e può modificarla liberamente senza corrompere la struttura
 centralizzata. Questa garanzia è verificata da un test dedicato:
@@ -572,8 +573,8 @@ di addestramento, non come difetto del modulo.
 
 La seconda fase è l'allineamento per \textit{inner join}. Il metodo calcola l'intersezione dei
 \textit{timestamp} unici dei tre DataFrame deduplicati e include nel risultato finale solo le
-finestre presenti simultaneamente in tutti e tre. Pre-indicizza i DataFrame per \textit{timestamp}
-con \textit{groupby} prima del ciclo principale, riducendo il costo di \textit{lookup} da $O(n)$
+finestre presenti simultaneamente in tutti e tre. Il metodo pre-indicizza i DataFrame per \textit{timestamp}
+tramite \textit{groupby} prima del ciclo principale, riducendo il costo di \textit{lookup} da $O(n)$
 a $O(1)$ per snapshot. Se l'intersezione è vuota, viene sollevato \textit{ValueError}: questa è
 l'unica condizione che blocca la costruzione, perché un insieme vuoto di snapshot è
 strutturalmente inutilizzabile per qualsiasi analisi successiva. Una piccola differenza nel numero
@@ -608,11 +609,11 @@ una lista vuota con \textit{logger.warning}, senza propagare eccezioni ai moduli
 I metodi ausiliari \textit{get\_node\_feature\_matrix} e \textit{get\_edge\_feature\_matrix}
 materializzano le matrici $\mathbf{X}_{V,t}$ e $\mathbf{X}_{E,t}$ come DataFrame pandas
 indicizzati per \textit{timestamp}, con le metriche come colonne. Questi DataFrame sono
-direttamente consumabili dal FeatureSelector senza ulteriori trasformazioni. Qualora
+direttamente impiegabili dal FeatureSelector senza ulteriori trasformazioni. Qualora
 l'identificatore richiesto non sia presente in nessuno snapshot della lista, entrambi i
 metodi restituiscono un DataFrame vuoto ed emettono \textit{logger.warning} con il nome
-dell'identificatore. Questo comportamento è coerente con quello di \textit{build()}, che
-logga attivamente gli identificatori non riconosciuti durante la fase di costruzione:
+dell'identificatore. Questo comportamento è coerente con quello di \textit{build()}, che registra attivamente gli
+identificatori non riconosciuti durante la fase di costruzione:
 la visibilità dell'assenza è garantita in entrambe le direzioni. I metodi statici
 \textit{get\_nominal\_snapshots} e \textit{get\_anomalous\_snapshots} filtrano la lista per
 etichetta e, il secondo, opzionalmente per tipo di anomalia con corrispondenza esatta sulla
@@ -649,30 +650,39 @@ arco rispetto alla somma totale degli archi uscenti dallo stesso nodo. Il meccan
   (somma pesi uscenti = 1) deve essere garantita anche in condizioni degeneri:
   throughput zero, valori negativi o NaN.}
 ]
-for source_node, out_edges in node_out_edges.items():
-    vals = [
-        snapshot["edges"][eid].get(weight_metric, 0.0)
-        for eid in out_edges
-        if eid in snapshot["edges"]
-    ]
-    total = sum(v for v in vals if isinstance(v, (int, float))
-                and not math.isnan(v) and v >= 0)
-    if total <= 0 or any(
-        not isinstance(v, (int, float)) or math.isnan(v) or v < 0
-        for v in vals
-    ):
-        # Fallback uniforme: 1/n per tutti gli archi uscenti
-        n = len(out_edges)
+for src, edge_ids in self._source_to_edges.items():
+    available = [eid for eid in edge_ids if eid in snap["edges"]]
+    if not available:
+        continue
+    raw_values: dict[str, float] = {}
+    for eid in available:
+        try:
+            raw_values[eid] = float(
+                snap["edges"][eid][self._weight_metric]
+            )
+        except (TypeError, ValueError):
+            raw_values[eid] = float("nan")
+
+    has_invalid = any(
+        not math.isfinite(v) or v < 0
+        for v in raw_values.values()
+    )
+    total_tp = sum(
+        v for v in raw_values.values()
+        if math.isfinite(v) and v >= 0
+    )
+    if has_invalid or total_tp <= 0:
+        w_uniform = 1.0 / len(available)
+        for eid in available:
+            weights[eid] = w_uniform
         logger.warning(
-            "Throughput non valido per nodo '%s' (ts=%d): "
+            "Throughput non valido per nodo '%s' al ts=%d: "
             "fallback uniforme 1/%d.",
-            source_node, ts, n,
+            src, snap["timestamp"], len(available),
         )
-        for eid in out_edges:
-            weights[eid] = 1.0 / n
     else:
-        for eid, v in zip(out_edges, vals):
-            weights[eid] = max(0.0, v) / total
+        for eid in available:
+            weights[eid] = raw_values[eid] / total_tp
 \end{lstlisting}
 
 Il ciclo esterno itera sui nodi con archi uscenti; per ciascuno, raccoglie i valori della metrica
@@ -690,7 +700,7 @@ fissa nel codice. Il \textit{gold standard} copre tutti gli archi della topologi
 \textit{throughput} è zero e il suo peso non è stato registrato), contribuisce con peso 0 alla
 media. Un test dedicato verifica questa proprietà: costruire il \textit{gold standard} su due
 snapshot nominali dove il primo non ha \textit{e6} produce
-$W^{\text{gold}}[\text{e6}] = (0.0 + 0.6) / 2 = 0.3$, non il solo valore del secondo snapshot.
+$W^{\text{gold}}[\text{e6}] = (0.0 + 0.6) / 2 = 0.3$, anziché il solo valore del secondo snapshot.
 
 Il metodo \textit{compute\_path\_adherence} è applicabile solo ai \textit{compliance set} con
 \textit{topology\_type == "linear"} e solleva \textit{ValueError} per i tipi paralleli. Il
@@ -864,7 +874,7 @@ costo di perdere la capacità di rilevare le interferenze \textit{cross-property
 \label{sec:impl_fase1}
 % =========================================================
 
-La Fase~I della \textit{pipeline} trasforma le serie temporali in $M_{\Phi_i}$ in previsioni
+La Fase~I della \textit{pipeline} trasforma le serie temporali di $M_{\Phi_i}$ in previsioni
 quantitative sull'orizzonte $\tau$ configurato. L'implementazione di questa fase nel modulo
 StatForecaster affronta tre problemi ingegneristici distinti: come selezionare il modello più
 adeguato per ogni serie senza intervento manuale, come gestire i \textit{timestamp} irregolari
@@ -875,7 +885,7 @@ e le trasformazioni necessarie.
 \subsection{Il Routing Dinamico dei Modelli con il Pattern Strategy}
 \label{subsec:routing_strategy}
 
-Il StatForecaster implementa il \textit{Pattern Strategy} per l'assegnazione dei modelli
+Lo StatForecaster implementa il \textit{Pattern Strategy} per l'assegnazione dei modelli
 predittivi: il comportamento di \textit{fitting} e predizione varia a seconda del modello
 selezionato per ogni serie, ma l'interfaccia pubblica (\textit{fit} e \textit{predict}) rimane
 invariata indipendentemente dai modelli scelti. La selezione avviene tramite il metodo privato
@@ -917,7 +927,7 @@ La seconda regola verifica se il nome finale della metrica (il segmento dopo l'u
 destinazione è LSTM; ma se il numero di campioni nominali disponibili è inferiore a due volte la
 finestra di \textit{input} (\textit{input\_window}), si applica un \textit{fallback} automatico
 a Prophet con emissione di avviso. Questo \textit{fallback} è fondamentale per garantire che il
-sistema non tenti di addestrare un modello con memoria lagghata su serie troppo corte, producendo
+sistema non tenti di addestrare un modello su serie troppo corte tramite feature laggiate, producendo
 un \textit{Ridge} con finestre di dimensione zero o negativa.
 
 La terza regola è il \textit{default} incondizionato: Prophet. Questa scelta è motivata dalla
@@ -1033,8 +1043,8 @@ residui del modello ottimale vengono sottoposti al test di Ljung-Box
 (\textit{acorr\_ljungbox}) su un numero di ritardi pari a
 $\min(10,\lfloor n/5 \rfloor)$: se la \textit{p-value} è inferiore a $0{,}05$, viene
 emesso un \textit{logger.warning} con l'ordine $(p^*,d^*,q^*)$ ottimale e la
-\textit{p-value} minima. Il test è puramente diagnostico — non altera il modello
-selezionato — e segnala i casi in cui la struttura di autocorrelazione residua
+\textit{p-value} minima. Il test è puramente diagnostico -- non altera il modello
+selezionato -- e segnala i casi in cui la struttura di autocorrelazione residua
 non è stata catturata dal modello AIC-ottimale, suggerendo all'operatore di
 considerare un ordine superiore o un modello alternativo.
 
@@ -1074,13 +1084,14 @@ numero quadratico nel totale delle \textit{feature}), il CausalAnalyzer categori
 base alla loro rilevanza semantica rispetto al \textit{compliance set} e applica i test statistici
 solo alle coppie che hanno motivazione topologica per essere causalmente correlate.
 
-\subsection{Le Tre Categorie di Coppie Candidate}
+\subsection{Le Quattro Categorie di Coppie Candidate}
 \label{subsec:causal_pairs}
 
 Il metodo \textit{\_build\_candidate\_pairs} produce triple \textit{(source\_key, target\_key,
 category)} organizzate in tre categorie. Le coppie di categoria \textit{node\_arc} collegano una
 \textit{feature} di nodo a una \textit{feature} di arco per cui il nodo è sorgente o
-destinazione: la metrica di stato interno di un componente come causa e la latenza di un arco
+destinazione, a condizione che il nodo non appartenga all'insieme
+$\text{Shared}(H_{\Phi_i}, H_{\Phi_j})$: la metrica di stato interno di un componente come causa e la latenza di un arco
 uscente dallo stesso componente come effetto. Queste coppie sono le candidate naturali per
 relazioni causali dirette tra lo stato interno di un componente e la qualità dell'interazione che
 esso serve, e costituiscono il sottoinsieme più rilevante ai fini della \textit{root cause
@@ -1100,6 +1111,7 @@ come causa della qualità dell'interazione). La direzione inversa, arco $\to$ no
 mai testata per coppie \textit{intra}. Per le coppie \textit{node\_arc} questa asimmetria
 è intenzionale e corretta; per le coppie \textit{intra} generiche è una semplificazione che
 potrebbe produrre falsi negativi in scenari dove la propagazione è inversa.
+
 La regola più importante della categorizzazione riguarda il filtro di Pearson: le coppie
 \textit{inter} lo bypassano completamente. Questo \textit{bypass}
 è giustificato dal fatto che le interferenze \textit{cross-property} si manifestano tipicamente
@@ -1108,12 +1120,12 @@ come effetti soglia non-lineari: la correlazione di Pearson è prossima a zero f
 significativa solo dopo. Applicare il filtro di Pearson alle coppie \textit{inter} eliminerebbe
 sistematicamente le interferenze più pericolose, ossia quelle che si manifestano bruscamente.
 
-Una quarta categoria, \texttt{inter2}, identifica le coppie
-$(\texttt{node:}v\texttt{:metric},\ \texttt{edge:}e_{\text{int}}\texttt{:metric})$
+Una quarta categoria, \textit{inter2}, identifica le coppie
+$(\textit{node:}v\textit{:metric},\ \textit{edge:}e_{\text{int}}\textit{:metric})$
 con $v \in \text{Shared}(H_{\Phi_i}, H_{\Phi_j})$: la seconda
 freccia della catena \textit{cross-property}
-$\theta_{e_j} \to \texttt{node:}v \to \texttt{edge:}e_{\text{int}}$.
-Come le coppie \texttt{inter}, bypassa il filtro di Pearson.
+$\theta_{e_j} \to \textit{node:}v \to \textit{edge:}e_{\text{int}}$.
+Come le coppie \textit{inter}, bypassa il filtro di Pearson.
 
 \subsection{La Pipeline a Tre Stadi per Coppia}
 \label{subsec:causal_pipeline}
@@ -1203,7 +1215,7 @@ candidata vengono eseguiti due test di Granger consecutivi: il campo \textit{con
 \textit{True} solo se entrambi superano la soglia di significatività. Le coppie auto-referenziali,
 dove l'\textit{edge\_id} della \textit{feature} di interferenza coincide con quello dell'arco
 interno, vengono saltate per evitare test triviali. Le eccezioni per singola coppia o singola
-catena sono catturate e loggate come avvisi senza interrompere la \textit{pipeline}: il modulo
+catena sono catturate e registrate come avvisi senza interrompere la \textit{pipeline}: il modulo
 restituisce sempre un grafo causale valido, anche parziale.
 
 % =========================================================
@@ -1305,7 +1317,7 @@ di base. Il gating introduce tuttavia una limitazione: anomalie puramente multiv
 ciascuna metrica rimane individualmente entro le soglie \gls{SLA} e lo z-score, ma la loro
 combinazione è anomala rispetto al profilo storico, non vengono mai sottoposte all'Isolation
 Forest perché \textit{base\_signal} è falso. Questo scenario è distinto da quello in cui una
-singola metrica è fuori soglia e IF conferma l'anomalia aggregata; richiederebbbe un'architettura
+singola metrica è fuori soglia e IF conferma l'anomalia aggregata; richiederebbe un'architettura
 alternativa in cui IF opera su tutte le finestre indipendentemente dai segnali puntuali, con costi
 computazionali maggiori.
 
@@ -1353,17 +1365,16 @@ l'accumulatore cresce (degrado), quando è negativo l'accumulatore decresce (rec
 Il \textit{clipping} a zero dell'accumulatore stesso (\textit{max(0.0, ...)}) garantisce la
 non-negatività di \textit{cusum\_stat}. L'accumulatore decresce naturalmente verso zero
 durante il recovery, quando il segnale $\tilde{s}_t$ ritorna verso il valore di riferimento.
-Il metodo \texttt{reset\_cusum()} rimane necessario tra esperimenti distinti per azzerare
+Il metodo \textit{reset\_cusum()} rimane necessario tra esperimenti distinti per azzerare
 eventuali residui accumulati.
 
 Il Livello~4, il Validatore strutturale, è attivato solo quando sia \textit{if\_signal} sia
-\textit{cusum\_signal} sono veri. Verifica due condizioni congiunte: la distanza strutturale
-attuale supera \textit{distance\_threshold} (default 0,15):
-per le topologie lineari questo corrisponde al
+\textit{cusum\_signal} sono veri. Verifica due condizioni congiunte. La prima riguarda la distanza strutturale
+attuale: per le topologie lineari questa corrisponde al
 PAS-gap $|\text{PA}(t) - \text{PAS}_{\text{gold}}| > \delta$
-come descritto in~\cite[§3.2.3]{methodology};
-per le topologie parallele alla norma di Frobenius
-$\|W(t) - W^{\text{gold}}\|_F > \delta$.
+come descritto in~\cite[§3.2.3]{methodology}, e deve superare \textit{distance\_threshold} (default 0,15);
+per le topologie parallele corrisponde alla norma di Frobenius
+$\|W(t) - W^{\text{gold}}\|_F > \delta$ con la stessa soglia.
 La seconda condizione richiede che gli ultimi \textit{consecutive\_windows} diff consecutivi
 della \textit{deque} \gls{EWMA} abbiano il segno di degrado corretto (negativo per il \gls{PAS},
 positivo per la Frobenius). La persistenza della deriva per almeno
@@ -1594,7 +1605,7 @@ automaticamente il valore atteso senza richiedere modifiche al codice di test. Q
 garantisce che la suite rimanga valida anche dopo evoluzioni della configurazione, senza richiedere
 un aggiornamento sistematico dei valori attesi.
 
-La suite copre complessivamente oltre 293 casi distribuiti in dieci file. I tipi di test
+La suite copre complessivamente 296 casi distribuiti in dieci file. I tipi di test
 includono la struttura degli output (forma, chiavi, tipi attesi), la correttezza numerica con
 tolleranze esplicite ($\varepsilon = 10^{-9}$ per i confronti in virgola mobile), la gestione dei
 casi limite (NaN, liste vuote, \textit{throughput} nullo, valori negativi, JSON malformato), il

@@ -193,3 +193,14 @@ last_run.txt
 runner.py
 test.txt
 dashboard/cache/*
+# ignora tutto dentro data
+data/*
+
+# ma tieni la cartella converted
+!data/converted/
+
+# ignora tutto dentro converted
+data/converted/*
+
+# tieni un placeholder
+!data/converted/.gitkeep
