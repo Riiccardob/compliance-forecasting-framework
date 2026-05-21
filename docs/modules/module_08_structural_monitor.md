@@ -106,6 +106,17 @@ S_t = max(0, S_{t−1} + (s_t − 0 − k))
 
 dove `k = tolerance_factor` (default `0.0` — con `k > 0` si ignorano variazioni inferiori a `k`). Il `max(0, ...)` esterno impedisce che `S_t` diventi negativo (CUSUM con reset a zero). `cusum_signal = True` se `S_t > alert_threshold`. L'accumulatore decresce verso zero durante il recovery (quando PAS risale verso PAS_gold). Il reset esplicito tramite `reset_cusum()` rimane necessario tra esperimenti distinti.
 
+> **Comportamento CUSUM:** la formula implementata segue il CUSUM
+> standard: l'accumulatore cresce quando il segnale è sotto il
+> riferimento (degrado) e decresce quando è sopra (recovery).
+> L'accumulatore non scende mai sotto zero per via dell'outer
+> max(0,...). Il decremento durante il recovery richiede che
+> ewma_t > PAS_gold + k; con k=0.0 e pesi nominali (PAS = PAS_gold),
+> l'EWMA converge asintoticamente a PAS_gold senza mai superarlo,
+> quindi il CUSUM rimane stabile a zero su dataset DSB. Il decremento
+> è verificabile solo con dataset a throughput variabile dove il PAS
+> durante il recovery supera PAS_gold.
+
 **Nota:** `tolerance_factor` deve essere `< PAS_gold` per le topologie lineari. Con `PAS_gold = 0.25` e `tolerance_factor = 0.0` il CUSUM si attiva per qualsiasi decremento del PAS. Con `tolerance_factor ≥ 0.25` il CUSUM non accumula mai su H_crit.
 
 ### Derivata EWMA persistente (Validatore strutturale)
@@ -340,5 +351,5 @@ Mock costruiti in memoria. 20 snapshot nominali con valori DSB nominali (cpu≈5
 |---|---|
 | `test_structural_validator_warmup_returns_false` | Warmup: `consecutive_windows` iterazioni con pesi degradati → `structural_confirmed=False` per definizione (`_ewma_history` ha meno di `consecutive_windows + 1` valori richiesti per calcolare le differenze). |
 | `test_monitor_with_empty_weight_series_does_not_crash` | `weight_series=[]` → `monitor()` completa senza eccezioni; `frobenius_distance is None` (non calcolabile). |
-| `test_cusum_decreases_on_recovery` | CUSUM scende verso zero durante il recovery con pesi super-nominali (PAS=1.0 >> PAS_gold=0.25) dopo accumulo su pesi degradati. Il decremento richiede ewma_new > PAS_gold: con pesi nominali (PAS=PAS_gold) l'EWMA converge dal basso e il CUSUM continua ad accumularsi; i pesi super-nominali producono ewma_new > PAS_gold e increment < 0. Verifica la rimozione dell'inner `max(0,...)`. |
+| `test_cusum_decreases_on_recovery` | CUSUM scende verso zero durante il recovery con pesi super-nominali (PAS=1.0 >> PAS_gold=0.25) dopo accumulo su pesi degradati. Verifica che la formula standard (senza inner max) produca incremento negativo quando ewma_new > PAS_gold, riducendo S_t verso zero. |
 | `test_structural_validator_uses_pas_gap_for_linear` | Il validatore usa PAS-gap (`|PAS(t) − PAS_gold| > δ`, non Frobenius) per topologie lineari. Verifica con soglia esplicita e pesi fortemente degradati (PAS-gap ≈ 0.24 > threshold=0.10). |

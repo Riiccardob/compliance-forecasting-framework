@@ -162,10 +162,57 @@ def update_table(crit_filter, cs_filter, type_filter):
         _mini_card("Red",          n_red,           "#b55e5e"),
     ]
 
+    cs_names   = sorted({a["cs"] for a in all_alerts}) if all_alerts else ["H_crit", "H_cache"]
+    _crit_cols = ["yellow", "orange", "red"]
+
+    def _ct_cell(text: str, color: str = "var(--muted)", bold: bool = False) -> html.Div:
+        return html.Div(text, style={
+            "padding": "4px 8px", "fontSize": "11px", "color": color,
+            "fontFamily": "JetBrains Mono, monospace",
+            "fontWeight": "600" if bold else "normal",
+            "textAlign": "center", "flex": "1",
+        })
+
+    ct_header = html.Div([
+        _ct_cell(""),
+        _ct_cell("Yellow", color="#c4a35a", bold=True),
+        _ct_cell("Orange", color="#e07b39", bold=True),
+        _ct_cell("Red",    color="#b55e5e", bold=True),
+        _ct_cell("Tot.",   color="var(--text)", bold=True),
+    ], style={"display": "flex", "borderBottom": "1px solid var(--border)",
+              "backgroundColor": "var(--surface)"})
+
+    ct_rows = []
+    for cs in cs_names:
+        counts = {c: sum(1 for a in all_alerts
+                         if a["cs"] == cs and a.get("criticality") == c)
+                  for c in _crit_cols}
+        total = sum(counts.values())
+        ct_rows.append(html.Div([
+            _ct_cell(cs,                        color="var(--text)", bold=True),
+            _ct_cell(str(counts["yellow"]),     color="#c4a35a"),
+            _ct_cell(str(counts["orange"]),     color="#e07b39"),
+            _ct_cell(str(counts["red"]),        color="#b55e5e"),
+            _ct_cell(str(total),                color="var(--text)", bold=True),
+        ], style={"display": "flex", "borderBottom": "1px solid var(--border)"}))
+
+    cross_table = html.Div(
+        [ct_header] + ct_rows,
+        style={
+            "backgroundColor": "var(--surface)",
+            "border": "1px solid var(--border)",
+            "minWidth": "280px",
+        },
+    )
+    summary_out = html.Div([
+        html.Div(summary_cards, style={"display": "flex", "gap": "12px", "flex": "1"}),
+        cross_table,
+    ], style={"display": "flex", "gap": "12px", "alignItems": "flex-start"})
+
     if not all_alerts:
         empty = html.Div("Nessun alert per i filtri correnti.",
                          style={"color": "var(--muted)", "padding": "20px"})
-        return summary_cards, empty, go.Figure(layout={**_DARK_LAYOUT})
+        return summary_out, empty, go.Figure(layout={**_DARK_LAYOUT})
 
     header = html.Div([
         html.Span("Timestamp",    style=_th(160)),
@@ -202,7 +249,7 @@ def update_table(crit_filter, cs_filter, type_filter):
     table = html.Div([header] + rows,
                      style={"backgroundColor": "var(--surface)",
                             "border": "1px solid var(--border)"})
-    return summary_cards, table, _build_gantt(all_alerts)
+    return summary_out, table, _build_gantt(all_alerts)
 
 
 # ---------------------------------------------------------------------------

@@ -233,6 +233,7 @@ def create_s0():
             },
         ),
         html.Div(id="s0-snapshot-table", style={"marginTop": "12px"}),
+        html.Div(id="s0-dataset-preview", style={"display": "none"}),
     ])
 
     def _badge(num, text):
@@ -249,6 +250,29 @@ def create_s0():
         ], style={"display": "flex", "alignItems": "center",
                   "gap": "6px", "fontSize": "11px",
                   "color": "var(--muted)"})
+
+    def _arch_card(tag, title, keywords, color, description):
+        return html.Div([
+            html.Div(tag, style={"fontSize": "9px", "color": color,
+                                 "textTransform": "uppercase",
+                                 "letterSpacing": "0.08em",
+                                 "marginBottom": "2px"}),
+            html.Div(title, style={"fontSize": "12px", "fontWeight": "600",
+                                   "color": "var(--text)", "marginBottom": "4px"}),
+            html.Div(keywords, style={"fontSize": "10px", "color": color,
+                                      "fontFamily": "JetBrains Mono, monospace",
+                                      "marginBottom": "6px"}),
+            html.Div(description, style={"fontSize": "11px",
+                                         "color": "var(--muted)",
+                                         "lineHeight": "1.5"}),
+        ], style={
+            "backgroundColor": "var(--surface)",
+            "border": f"1px solid {color}22",
+            "borderTop": f"2px solid {color}",
+            "padding": "10px 12px",
+            "flex": "1",
+            "minWidth": "140px",
+        })
 
     welcome = html.Div([
         html.Div("Compliance Forecasting Framework", style={
@@ -272,8 +296,56 @@ def create_s0():
         html.Hr(style={"borderColor": "var(--border)", "marginBottom": "16px"}),
     ])
 
+    framework_section = html.Div([
+        html.Div("Il framework — architettura a tre layer e quattro fasi",
+                 style={"fontSize": "13px", "fontWeight": "600",
+                        "color": "var(--text)", "marginBottom": "12px",
+                        "letterSpacing": "0.02em"}),
+        html.Div([
+            _arch_card("Layer 1", "Ipergrafo H_cert",
+                       "H_cert · Shared · A(H_Phi_i)",
+                       "#388bfd",
+                       "Struttura statica design-time. Codifica i compliance "
+                       "set H_crit e H_cache come iperarchi del service dependency graph. "
+                       "Definisce quali nodi e archi devono rispettare ogni proprieta SLA."),
+            _arch_card("Layer 2", "ATG + PBO",
+                       "G_t · W_t · W_gold · PAS",
+                       "#3fb950",
+                       "Attributed Temporal Graph dinamico. Cattura le metriche "
+                       "di nodo e arco nel tempo. Il PBO converte il traffico "
+                       "in matrice stocastica W_t e calcola lo scostamento dal "
+                       "baseline nominale (PAS, Frobenius)."),
+            _arch_card("Layer 3", "Feature Selection",
+                       "M_Phi_i · M_interf · FeatureSelector",
+                       "#8957e5",
+                       "Seleziona le feature rilevanti per ogni compliance set "
+                       "seguendo la topologia: metriche di nodo/arco interni (M_direct) "
+                       "e throughput degli archi di interferenza cross-property (M_interf)."),
+            _arch_card("Fase I+II", "Forecast + Causal",
+                       "Prophet · ARIMA · LSTM · Granger · TE",
+                       "#c4a35a",
+                       "Fase I: forecasting locale con routing automatico per feature. "
+                       "Fase II: causalita Pearson → Granger → Transfer Entropy "
+                       "sul grafo topologico per costruire il CausalGraph."),
+            _arch_card("Fase III", "Structural Monitor",
+                       "Threshold · Z-score · IF · CUSUM",
+                       "#e07b39",
+                       "Monitoraggio gerarchico a 4 livelli: violazione SLA, "
+                       "anomalia statistica (z-score), Isolation Forest multivariato, "
+                       "EWMA/CUSUM per accumulo degrado comportamentale nel tempo."),
+            _arch_card("Fase IV", "Alert Generator",
+                       "Lead time tau* · Yellow/Orange/Red",
+                       "#b55e5e",
+                       "Sintesi semantica: aggrega previsioni, segnali strutturali "
+                       "e grafo causale. Calcola il lead time tau* (step prima della "
+                       "violazione SLA) e classifica la criticita dell'alert."),
+        ], style={"display": "flex", "gap": "10px",
+                  "marginBottom": "20px", "flexWrap": "wrap"}),
+    ], style={"marginBottom": "16px"})
+
     return html.Div([
         welcome,
+        framework_section,
         html.Div(style={"display": "flex", "gap": "16px"},
                  children=[left, right]),
         dcc.Store(id="s0-upload-paths", data={

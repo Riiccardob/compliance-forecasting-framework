@@ -1,3 +1,4 @@
+import pandas as pd
 import plotly.graph_objects as go
 from dash import callback, Output, Input, html
 from dashboard.core.data_manager import DataManager
@@ -108,6 +109,10 @@ def update_monitor_view(cs, snap_idx):
     all_snaps   = DataManager().get_snapshots()
     ts_to_label = {s["timestamp"]: s["label"] for s in all_snaps}
     mon_timestamps = [m.get("timestamp") for m in mon]
+    mon_ts_dt = [
+        pd.to_datetime(ts, unit="us") if ts is not None else None
+        for ts in mon_timestamps
+    ]
 
     fig_tl = go.Figure()
     for lv in ["threshold", "zscore", "if", "cusum"]:
@@ -116,7 +121,7 @@ def update_monitor_view(cs, snap_idx):
             for r in mon
         ]
         fig_tl.add_trace(go.Scatter(
-            x=[r.get("timestamp") for r in mon],
+            x=mon_ts_dt,
             y=[_LIVELLI_LABELS[lv]] * len(mon),
             mode="markers",
             marker={"symbol": "square", "size": 6, "color": colors},
@@ -129,7 +134,7 @@ def update_monitor_view(cs, snap_idx):
         for ts in mon_timestamps
     ]
     fig_tl.add_trace(go.Scatter(
-        x=mon_timestamps,
+        x=mon_ts_dt,
         y=["Ground Truth"] * len(mon),
         mode="markers",
         marker={"symbol": "square", "size": 8, "color": gt_colors},
@@ -139,7 +144,7 @@ def update_monitor_view(cs, snap_idx):
 
     fig_tl.update_layout(
         title="Timeline segnali",
-        xaxis_title="timestamp (us)",
+        xaxis_title="data/ora (UTC)",
         yaxis={
             "categoryorder": "array",
             "categoryarray": ["CUSUM", "Isol. Forest", "Z-score",
@@ -153,20 +158,22 @@ def update_monitor_view(cs, snap_idx):
     ts_list   = [r.get("timestamp")          for r in mon]
     pas_vals  = [r.get("pas_value")          for r in mon]
     frob_vals = [r.get("frobenius_distance") for r in mon]
+    ts_dt     = [pd.to_datetime(ts, unit="us") if ts is not None else None for ts in ts_list]
 
     fig_pf = go.Figure()
     if any(v is not None for v in pas_vals):
         fig_pf.add_trace(go.Scatter(
-            x=ts_list, y=pas_vals, name="PAS",
+            x=ts_dt, y=pas_vals, name="PAS",
             line={"color": "#c4a35a", "width": 1.5}, yaxis="y1",
         ))
     if any(v is not None for v in frob_vals):
         fig_pf.add_trace(go.Scatter(
-            x=ts_list, y=frob_vals, name="Frobenius",
+            x=ts_dt, y=frob_vals, name="Frobenius",
             line={"color": "#b55e5e", "width": 1.5}, yaxis="y2",
         ))
     fig_pf.update_layout(
         title="PAS e Frobenius nel tempo",
+        xaxis_title="data/ora (UTC)",
         yaxis ={"title": "PAS",       "color": "#c4a35a", "side": "left"},
         yaxis2={"title": "Frobenius", "color": "#b55e5e",
                 "overlaying": "y", "side": "right"},

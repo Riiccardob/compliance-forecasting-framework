@@ -268,6 +268,45 @@ def _atg_panel() -> html.Div:
                         "il ground truth del dataset GAMMA/DSB. "
                         "Con molti snapshot il grafico usa un campione rappresentativo."
                     ),
+                    html.Div([
+                        html.Div([
+                            html.Div("Tipo elemento",
+                                     style={**_LABEL, "marginBottom": "2px"}),
+                            dcc.RadioItems(
+                                id="s1-atg-entity-type",
+                                options=[
+                                    {"label": "Media tutti",    "value": "all"},
+                                    {"label": "Nodo specifico", "value": "node"},
+                                    {"label": "Arco specifico", "value": "edge"},
+                                ],
+                                value="all",
+                                inline=True,
+                                inputStyle={"marginRight": "4px"},
+                                labelStyle={"marginRight": "14px",
+                                            "color": "var(--muted)",
+                                            "fontSize": "11px",
+                                            "cursor": "pointer"},
+                            ),
+                        ], style={"flex": "1"}),
+                    ], style={"display": "flex", "alignItems": "flex-start",
+                              "marginBottom": "8px", "gap": "12px"}),
+                    html.Div(
+                        id="s1-atg-entity-dd-wrap",
+                        style={"display": "none", "marginBottom": "8px"},
+                        children=[
+                            dcc.Dropdown(
+                                id="s1-atg-entity-dd",
+                                options=[],
+                                value=None,
+                                clearable=False,
+                                placeholder="Seleziona elemento...",
+                                style={
+                                    "backgroundColor": "var(--surface)",
+                                    "color": "var(--text)",
+                                },
+                            ),
+                        ],
+                    ),
                     html.Div(
                         style={"display": "flex", "alignItems": "center",
                                "gap": "12px", "marginBottom": "8px"},
@@ -325,6 +364,26 @@ def _pbo_panel() -> html.Div:
                     "marginBottom": "12px", "lineHeight": "1.6",
                     "borderLeft": "2px solid var(--border)", "paddingLeft": "8px",
                 },
+            ),
+            html.Div(
+                id="s1-pbo-wgold-graph",
+                style={**_CARD, "marginBottom": "12px"},
+                children=[
+                    html.Div("Distribuzione traffico W_gold (baseline nominale)",
+                             style=_LABEL),
+                    dcc.Graph(
+                        id="s1-pbo-wgold-fig",
+                        config={"displayModeBar": False},
+                        style={"height": "280px"},
+                    ),
+                    html.Div(
+                        "Spessore arco proporzionale al peso W_gold (media sulle finestre "
+                        "nominali). Su DSB tutti i pesi sono ~0.5 per i nodi con 2 uscite "
+                        "(throughput aggregato).",
+                        style={"fontSize": "11px", "color": "var(--muted)",
+                               "marginTop": "4px"},
+                    ),
+                ],
             ),
             html.Div(
                 style={"display": "flex", "gap": "12px", "marginBottom": "12px"},
