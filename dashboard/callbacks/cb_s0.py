@@ -132,10 +132,14 @@ def start_atg_build(n_clicks, paths):
     Output("s0-btn-load",       "disabled"),
     Output("s0-btn-load",       "style"),
     Output("s0-snapshot-table", "children"),
+    Output("s0-btn-run",        "disabled"),
     Output("s0-btn-run",        "style"),
     Input("s0-poll", "n_intervals"),
+    State("s0-pipeline-config", "data"),
+    State("s0-mode",            "value"),
+    State("s0-n-snapshots",     "value"),
 )
-def poll(n):
+def poll(n, pipeline_config, current_mode, current_n):
     _BTN_BASE = {
         "border": "none", "padding": "10px 20px",
         "cursor": "pointer", "fontSize": "13px",
@@ -210,6 +214,15 @@ def poll(n):
         snap_table = html.Div("")
 
     atg_ready = _S["atg_done"] or DataManager().is_data_loaded()
+    config_changed = (
+        pipeline_config is None
+        or pipeline_config.get("mode") != current_mode
+        or (current_mode == "batch"
+            and pipeline_config.get("n_snapshots") != int(current_n or 50))
+    )
+    btn_disabled = not atg_ready or not config_changed
+    btn_opacity  = "1" if (atg_ready and config_changed) else "0.4"
+    btn_cursor   = "pointer" if (atg_ready and config_changed) else "not-allowed"
     btn_run_style = {
         "border": "none",
         "padding": "10px 20px",
@@ -220,14 +233,15 @@ def poll(n):
         "backgroundColor": "var(--crit)",
         "color": "#ffffff",
         "marginTop": "16px",
-        "opacity": "1" if atg_ready else "0.4",
-        "cursor": "pointer" if atg_ready else "not-allowed",
+        "opacity": btn_opacity,
+        "cursor": btn_cursor,
     }
     return (
         atg_pct, atg_msg,
         load_status, load_style,
         btn_load_disabled, btn_load_style,
         snap_table,
+        btn_disabled,
         btn_run_style,
     )
 
