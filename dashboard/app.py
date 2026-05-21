@@ -73,9 +73,19 @@ app.index_string = r"""<!DOCTYPE html>
                 el.style.setProperty("border-radius", "2px", "important");
                 el.style.setProperty("z-index", "99999", "important");
                 el.style.setProperty("box-shadow", "0 4px 16px rgba(0,0,0,0.6)", "important");
+                el.style.setProperty("color", TEXT, "important");
+                if (el.style.backgroundColor === "white" ||
+                    el.style.backgroundColor === "#ffffff" ||
+                    el.style.backgroundColor === "rgb(255, 255, 255)") {
+                    el.style.setProperty("background-color", BG, "important");
+                }
             }
             if (c.indexOf("option") > -1) {
-                el.style.setProperty("background-color", BG, "important");
+                if (el.style.backgroundColor === "white" ||
+                    el.style.backgroundColor === "#ffffff" ||
+                    el.style.backgroundColor === "rgb(255, 255, 255)") {
+                    el.style.setProperty("background-color", BG, "important");
+                }
                 el.style.setProperty("color", TEXT, "important");
                 el.style.setProperty("cursor", "pointer", "important");
             }
@@ -106,6 +116,9 @@ app.index_string = r"""<!DOCTYPE html>
 
         var observer = new MutationObserver(function(mutations) {
             mutations.forEach(function(m) {
+                if (m.type === "attributes" && m.attributeName === "style") {
+                    styleEl(m.target);
+                }
                 m.addedNodes.forEach(function(node) {
                     if (node.nodeType !== 1) return;
                     styleEl(node);
@@ -122,7 +135,7 @@ app.index_string = r"""<!DOCTYPE html>
                 childList: true,
                 subtree: true,
                 attributes: true,
-                attributeFilter: ["class"]
+                attributeFilter: ["class", "style"]
             });
             applyAll(document.body);
         });

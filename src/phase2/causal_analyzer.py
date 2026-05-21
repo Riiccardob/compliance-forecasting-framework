@@ -246,8 +246,13 @@ class CausalAnalyzer:
                 "Pearson screening: meno di 3 campioni comuni - coppia scartata."
             )
             return False
+        import warnings as _warnings
         try:
-            r, _ = pearsonr(s1.values, s2.values)
+            with _warnings.catch_warnings():
+                _warnings.simplefilter("ignore")
+                r, _ = pearsonr(s1.values, s2.values)
+            if not np.isfinite(r):
+                return False
             return bool(abs(r) > threshold)
         except Exception as exc:
             logger.warning("Pearson screening fallito: %s", exc)

@@ -346,16 +346,27 @@ def update_atg_ts(metric, slider_idx):
         snaps_sub  = snaps
         subsampled = False
 
+    # Group consecutive anomalous snapshots into bands — reduces vrects from
+    # O(N_anomalous) to O(N_episodes), typically 10-30 instead of hundreds.
+    anomaly_bands = []
+    in_band = False
+    band_start = None
+    for i, snap in enumerate(snaps_sub):
+        if snap["label"] and not in_band:
+            band_start = x_dt[i]
+            in_band = True
+        elif not snap["label"] and in_band:
+            anomaly_bands.append((band_start, x_dt[i - 1]))
+            in_band = False
+    if in_band and band_start is not None:
+        anomaly_bands.append((band_start, x_dt[-1]))
+
     fig = go.Figure(go.Scatter(
         x=x_dt, y=y, mode="lines",
         line={"color": "#c4a35a", "width": 1.2},
     ))
-    for snap in snaps_sub:
-        if snap["label"]:
-            t0 = pd.to_datetime(snap["timestamp"],             unit="us")
-            t1 = pd.to_datetime(snap["timestamp"] + 5_000_000, unit="us")
-            fig.add_vrect(x0=t0, x1=t1,
-                          fillcolor="#b55e5e", opacity=0.08, line_width=0)
+    for t0, t1 in anomaly_bands:
+        fig.add_vrect(x0=t0, x1=t1, fillcolor="#b55e5e", opacity=0.08, line_width=0)
 
     if slider_idx is not None and 0 <= int(slider_idx) < len(snaps):
         curr_ts = pd.to_datetime(snaps[int(slider_idx)]["timestamp"], unit="us")
@@ -663,10 +674,21 @@ def update_pbo(tab, slider_val):
 clientside_callback(
     """
     function(n_clicks) {
-        if (n_clicks > 0) {
-            var cy = document.getElementById('s1-cytoscape');
-            if (cy && cy._cy) { cy._cy.fit(); cy._cy.center(); }
+        if (!n_clicks || n_clicks < 1) {
+            return window.dash_clientside.no_update;
         }
+        function findCy(el) {
+            if (!el) return null;
+            if (el._cy) return el._cy;
+            for (var i = 0; i < el.children.length; i++) {
+                var found = findCy(el.children[i]);
+                if (found) return found;
+            }
+            return null;
+        }
+        var wrapper = document.getElementById('s1-cytoscape');
+        var cy = findCy(wrapper);
+        if (cy) { cy.fit(); cy.center(); }
         return window.dash_clientside.no_update;
     }
     """,

@@ -223,10 +223,21 @@ def show_edge_detail(edge_data):
 clientside_callback(
     """
     function(n_clicks) {
-        if (n_clicks > 0) {
-            var cy = document.getElementById('s3-cytoscape');
-            if (cy && cy._cy) { cy._cy.fit(); cy._cy.center(); }
+        if (!n_clicks || n_clicks < 1) {
+            return window.dash_clientside.no_update;
         }
+        function findCy(el) {
+            if (!el) return null;
+            if (el._cy) return el._cy;
+            for (var i = 0; i < el.children.length; i++) {
+                var found = findCy(el.children[i]);
+                if (found) return found;
+            }
+            return null;
+        }
+        var wrapper = document.getElementById('s3-cytoscape');
+        var cy = findCy(wrapper);
+        if (cy) { cy.fit(); cy.center(); }
         return window.dash_clientside.no_update;
     }
     """,
