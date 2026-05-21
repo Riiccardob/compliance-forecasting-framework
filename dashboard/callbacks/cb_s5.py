@@ -50,6 +50,15 @@ def _mini_card(label: str, value: int, color: str) -> html.Div:
     })
 
 
+def _fmt_ts(ts_us: int) -> str:
+    if not ts_us:
+        return "N/A"
+    try:
+        return pd.to_datetime(ts_us, unit="us").strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return str(ts_us)
+
+
 _GANTT_COLORS = {
     "yellow": "#c4a35a",
     "orange": "#e07b39",
@@ -159,7 +168,7 @@ def update_table(crit_filter, cs_filter, type_filter):
         return summary_cards, empty, go.Figure(layout={**_DARK_LAYOUT})
 
     header = html.Div([
-        html.Span("Timestamp",    style=_th(120)),
+        html.Span("Timestamp",    style=_th(160)),
         html.Span("CS",           style=_th(80)),
         html.Span("Criticita",    style=_th(80)),
         html.Span("Proprieta",    style=_th(100)),
@@ -177,7 +186,7 @@ def update_table(crit_filter, cs_filter, type_filter):
         color = _CRIT_COLOR.get(crit, "#e2ddd5")
         bg    = _CRIT_BG.get(crit, "rgba(0,0,0,0)")
         rows.append(html.Div([
-            html.Span(str(a.get("timestamp", 0)),           style=_td(120, mono=True)),
+            html.Span(_fmt_ts(a.get("timestamp", 0)),        style=_td(160, mono=True)),
             html.Span(a.get("cs", ""),                      style=_td(80)),
             html.Span(crit.upper(),                         style=_td(80, color=color)),
             html.Span(a.get("property_at_risk", ""),        style=_td(100)),

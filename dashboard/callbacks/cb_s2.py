@@ -1,3 +1,4 @@
+import pandas as pd
 import plotly.graph_objects as go
 from dash import callback, Output, Input, html
 from dashboard.core.data_manager import DataManager
@@ -152,18 +153,22 @@ def update_series(feature_key, cs):
     snaps = dm.get_snapshots()
     ts_to_label = {s["timestamp"]: s["label"] for s in snaps}
 
+    x_dt = pd.to_datetime(df.index, unit="us")
+
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=df.index.tolist(), y=df["value"].tolist(),
+        x=x_dt.tolist(), y=df["value"].tolist(),
         mode="lines", name=feature_key,
         line={"color": "#c4a35a", "width": 1.2},
     ))
     for ts in df.index:
         if ts_to_label.get(ts, 0):
-            fig.add_vrect(x0=ts, x1=ts + 5_000_000,
+            t0 = pd.to_datetime(ts, unit="us")
+            t1 = pd.to_datetime(ts + 5_000_000, unit="us")
+            fig.add_vrect(x0=t0, x1=t1,
                           fillcolor="#b55e5e", opacity=0.07, line_width=0)
     fig.update_layout(
-        title=feature_key, xaxis_title="timestamp (us)",
+        title=feature_key, xaxis_title="data/ora (UTC)",
         yaxis_title="valore", **_DARK_LAYOUT,
     )
     return fig

@@ -196,7 +196,7 @@ def create_s0():
             "Esegui pipeline",
             id="s0-btn-run",
             n_clicks=0,
-            disabled=False,
+            disabled=True,
             style={
                 "border": "none",
                 "padding": "10px 20px",

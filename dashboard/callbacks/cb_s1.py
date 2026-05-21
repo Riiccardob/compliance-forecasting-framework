@@ -1,6 +1,6 @@
 import pandas as pd
 import plotly.graph_objects as go
-from dash import callback, clientside_callback, Output, Input, html, ctx
+from dash import callback, clientside_callback, Output, Input, html, ctx, Patch
 from dashboard.core.data_manager import DataManager
 
 _CS_INFO = {
@@ -310,6 +310,47 @@ def update_atg_heatmaps(idx):
 # ---------------------------------------------------------------------------
 # Callback 5 - serie temporale
 # ---------------------------------------------------------------------------
+def _build_ts_shapes(snaps: list) -> tuple[list, list]:
+    """Return (x_dt_sub, anomaly_bands) for the subsampled snapshot list."""
+    _MAX_PTS = 1500
+    x_dt_all = [pd.to_datetime(s["timestamp"], unit="us") for s in snaps]
+    if len(x_dt_all) > _MAX_PTS:
+        step     = len(x_dt_all) // _MAX_PTS
+        x_dt_sub = x_dt_all[::step]
+        snaps_sub = snaps[::step]
+    else:
+        x_dt_sub  = x_dt_all
+        snaps_sub = snaps
+
+    bands, in_band, band_start = [], False, None
+    for i, snap in enumerate(snaps_sub):
+        if snap["label"] and not in_band:
+            band_start = x_dt_sub[i]
+            in_band = True
+        elif not snap["label"] and in_band:
+            bands.append((band_start, x_dt_sub[i - 1]))
+            in_band = False
+    if in_band and band_start is not None:
+        bands.append((band_start, x_dt_sub[-1]))
+    return x_dt_sub, bands
+
+
+def _vline_shape(x_iso: str) -> dict:
+    return {
+        "type": "line", "x0": x_iso, "x1": x_iso,
+        "y0": 0, "y1": 1, "xref": "x", "yref": "paper",
+        "line": {"color": "#c4a35a", "width": 1.5, "dash": "dot"},
+    }
+
+
+def _vline_annotation(x_iso: str, label: str) -> dict:
+    return {
+        "x": x_iso, "y": 1, "xref": "x", "yref": "paper",
+        "text": label, "showarrow": False,
+        "font": {"color": "#c4a35a", "size": 9}, "yshift": 5,
+    }
+
+
 @callback(
     Output("s1-atg-ts-graph", "figure"),
     Input("s1-atg-metric-dd", "value"),
@@ -318,6 +359,34 @@ def update_atg_heatmaps(idx):
 def update_atg_ts(metric, slider_idx):
     dm    = DataManager()
     snaps = dm.get_snapshots()
+
+    # ── Slider-only trigger: rebuild only shapes/annotations via Patch ──────
+    # Avoids recomputing the full series (up to 41k snapshots).
+    if ctx.triggered_id == "s1-atg-slider" and snaps:
+        if slider_idx is None or not (0 <= int(slider_idx) < len(snaps)):
+            return Patch()
+
+        _, bands = _build_ts_shapes(snaps)
+        curr_ts  = pd.to_datetime(snaps[int(slider_idx)]["timestamp"], unit="us")
+        x_iso    = curr_ts.isoformat()
+
+        shapes = [
+            {
+                "type": "rect", "xref": "x", "yref": "paper",
+                "x0": t0.isoformat(), "x1": t1.isoformat(),
+                "y0": 0, "y1": 1,
+                "fillcolor": "#b55e5e", "opacity": 0.08,
+                "line": {"width": 0}, "layer": "below",
+            }
+            for t0, t1 in bands
+        ] + [_vline_shape(x_iso)]
+
+        patched = Patch()
+        patched["layout"]["shapes"]      = shapes
+        patched["layout"]["annotations"] = [_vline_annotation(x_iso, f"snap {slider_idx}")]
+        return patched
+
+    # ── Full render: metric changed or initial call ──────────────────────────
     if not snaps or not metric:
         return _empty_fig("Serie temporale -- nessun dato")
 
@@ -337,48 +406,48 @@ def update_atg_ts(metric, slider_idx):
 
     _MAX_PTS = 1500
     if len(x_dt) > _MAX_PTS:
-        step      = len(x_dt) // _MAX_PTS
-        x_dt      = x_dt[::step]
-        y         = y[::step]
-        snaps_sub = snaps[::step]
+        step       = len(x_dt) // _MAX_PTS
+        x_dt       = x_dt[::step]
+        y          = y[::step]
+        snaps_sub  = snaps[::step]
         subsampled = True
     else:
         snaps_sub  = snaps
         subsampled = False
 
-    # Group consecutive anomalous snapshots into bands — reduces vrects from
-    # O(N_anomalous) to O(N_episodes), typically 10-30 instead of hundreds.
-    anomaly_bands = []
-    in_band = False
-    band_start = None
+    bands = []
+    in_band, band_start = False, None
     for i, snap in enumerate(snaps_sub):
         if snap["label"] and not in_band:
             band_start = x_dt[i]
             in_band = True
         elif not snap["label"] and in_band:
-            anomaly_bands.append((band_start, x_dt[i - 1]))
+            bands.append((band_start, x_dt[i - 1]))
             in_band = False
     if in_band and band_start is not None:
-        anomaly_bands.append((band_start, x_dt[-1]))
+        bands.append((band_start, x_dt[-1]))
 
     fig = go.Figure(go.Scatter(
         x=x_dt, y=y, mode="lines",
         line={"color": "#c4a35a", "width": 1.2},
     ))
-    for t0, t1 in anomaly_bands:
+    for t0, t1 in bands:
         fig.add_vrect(x0=t0, x1=t1, fillcolor="#b55e5e", opacity=0.08, line_width=0)
 
+    # Vline — always added last so Patch can target shapes[-1] / annotations[0]
     if slider_idx is not None and 0 <= int(slider_idx) < len(snaps):
-        curr_ts = pd.to_datetime(snaps[int(slider_idx)]["timestamp"], unit="us")
-        fig.add_vline(
-            x=curr_ts.timestamp() * 1000,
-            line_color="#c4a35a",
-            line_width=1.5,
-            line_dash="dot",
-            annotation_text=f"snap {slider_idx}",
-            annotation_font_color="#c4a35a",
-            annotation_font_size=9,
-        )
+        curr_ts      = pd.to_datetime(snaps[int(slider_idx)]["timestamp"], unit="us")
+        x_iso        = curr_ts.isoformat()
+        vline_opacity = 1.0
+        anno_text    = f"snap {slider_idx}"
+    else:
+        x_iso        = x_dt[0].isoformat() if x_dt else "1970-01-01"
+        vline_opacity = 0.0
+        anno_text    = ""
+
+    fig.add_shape(**{**_vline_shape(x_iso), "opacity": vline_opacity})
+    fig.update_layout(annotations=[{**_vline_annotation(x_iso, anno_text),
+                                    "opacity": vline_opacity}])
 
     title_suffix = f" (campione 1/{step})" if subsampled else ""
     fig.update_layout(
