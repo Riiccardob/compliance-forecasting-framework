@@ -3,10 +3,7 @@ from dashboard.app import app, background_callback_manager
 
 
 @app.callback(
-    output=[
-        Output("s0-run-log",        "children"),
-        Output("s0-pipeline-config","data"),
-    ],
+    output=Output("s0-run-log", "children"),
     inputs=Input("s0-btn-run", "n_clicks"),
     state=[
         State("s0-mode", "value"),
@@ -15,15 +12,14 @@ from dashboard.app import app, background_callback_manager
     background=True,
     manager=background_callback_manager,
     running=[
+        (Output("s0-btn-run", "disabled"), True, False),
         (Output("s0-progress", "style"),
-         {"display": "block", "marginTop": "8px"}, {"display": "none"}),
-        (Output("s0-progress-label", "style"),
-         {"display": "block", "fontSize": "11px", "color": "var(--muted)", "marginTop": "4px"},
+         {"display": "block", "marginTop": "8px"},
          {"display": "none"}),
-        (Output("s0-run-log", "children"),
-         html.Div("Pipeline in esecuzione...",
-                  style={"color": "var(--accent)", "fontSize": "12px"}),
-         html.Div()),
+        (Output("s0-progress-label", "style"),
+         {"display": "block", "fontSize": "11px",
+          "color": "var(--muted)", "marginTop": "4px"},
+         {"display": "none"}),
     ],
     progress=[
         Output("s0-progress", "value"),
@@ -33,7 +29,7 @@ from dashboard.app import app, background_callback_manager
 )
 def run_pipeline_callback(set_progress, n_clicks, mode, n_snapshots):
     if not n_clicks:
-        return [""], None
+        return ""
 
     MODE_MAP = {"sample": "DEMO", "batch": "BATCH", "full": "FULL", "full_ds": "FULL"}
     mode = MODE_MAP.get(mode, mode) or "DEMO"
@@ -46,7 +42,7 @@ def run_pipeline_callback(set_progress, n_clicks, mode, n_snapshots):
 
     dm = DataManager()
     if not dm.is_data_loaded():
-        return ["Errore: dati non caricati. Caricare i CSV prima."], None
+        return "Errore: dati non caricati. Caricare i CSV prima."
 
     _MODE_MAP = {"sample": "DEMO", "batch": "BATCH", "full": "FULL",
                  "DEMO": "DEMO", "BATCH": "BATCH", "FULL": "FULL"}
@@ -82,7 +78,7 @@ def run_pipeline_callback(set_progress, n_clicks, mode, n_snapshots):
     results = run_pipeline(mode, snapshot_indices, _progress)
 
     if "error" in results:
-        return [f"Errore pipeline: {results['error']}"], None
+        return f"Errore pipeline: {results['error']}"
 
     lines = [f"Pipeline completata - modalita {mode}"]
     lines.append(f"Snapshot processati: {results['n_snapshots']}")
@@ -91,5 +87,4 @@ def run_pipeline_callback(set_progress, n_clicks, mode, n_snapshots):
         n_links  = len(cs_data.get("causal_graph", {}).get("edges", []))
         lines.append(f"{cs}: {n_alerts} alert, {n_links} link causali")
 
-    config_used = {"mode": mode, "n_snapshots": n_snapshots}
-    return [" | ".join(lines)], config_used
+    return " | ".join(lines)

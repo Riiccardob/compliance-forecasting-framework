@@ -25,59 +25,126 @@ app = dash.Dash(
 app.title = "Compliance Forecasting"
 app.server.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
-app.index_string = """<!DOCTYPE html>
+app.index_string = r"""<!DOCTYPE html>
 <html>
 <head>
     {%metas%}
     <title>{%title%}</title>
     {%favicon%}
     {%css%}
-    <style>
-/* ── Override definitivo dcc.Dropdown (React Select / emotion.js) ── */
-[class$="-control"], [class*="-control "], div[class*="control"] {
-    background-color: #1c1c1c !important;
-    border-color: #2a2a2a !important; border-radius: 2px !important;
-    box-shadow: none !important; min-height: 32px !important; cursor: pointer !important;
-}
-div[class*="control"]:hover { border-color: #c4a35a !important; }
-div[class*="singleValue"], div[class*="placeholder"], div[class*="ValueContainer"],
-div[class*="Input"] input, div[class*="input"] input {
-    color: #e2ddd5 !important; background: transparent !important;
-}
-div[class*="menu"] {
-    background-color: #1c1c1c !important; border: 1px solid #2a2a2a !important;
-    border-radius: 2px !important; z-index: 99999 !important;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.6) !important;
-}
-div[class*="MenuList"], div[class*="menu-list"] {
-    background-color: #1c1c1c !important; padding: 0 !important;
-}
-div[class*="option"] {
-    background-color: #1c1c1c !important; color: #e2ddd5 !important;
-    font-size: 13px !important; padding: 8px 12px !important; cursor: pointer !important;
-}
-div[class*="option"]:hover, div[class*="-is-focused"] {
-    background-color: #2a2a2a !important; color: #e2ddd5 !important;
-}
-div[class*="-is-selected"] { background-color: rgba(196,163,90,0.15) !important; color: #c4a35a !important; }
-span[class*="indicatorSeparator"] { background-color: #2a2a2a !important; }
-div[class*="indicatorContainer"] svg { fill: #888888 !important; color: #888888 !important; }
-div[class*="indicatorContainer"]:hover svg { fill: #e2ddd5 !important; }
-div[class*="multiValue"] { background-color: #2a2a2a !important; border-radius: 2px !important; }
-div[class*="multiValueLabel"] { color: #e2ddd5 !important; font-size: 12px !important; }
-div[class*="multiValueRemove"]:hover { background-color: #b55e5e !important; color: #fff !important; }
-input[type="number"], input[type="text"] {
-    background-color: #0e0e0e !important; color: #e2ddd5 !important;
-    border: 1px solid #2a2a2a !important; border-radius: 2px !important;
-}
-input[type="number"]:focus, input[type="text"]:focus {
-    outline: none !important; border-color: #c4a35a !important;
-}
-    </style>
 </head>
 <body>
     {%app_entry%}
-    <footer>{%config%}{%scripts%}{%renderer%}</footer>
+    <footer>
+        {%config%}
+        {%scripts%}
+        {%renderer%}
+    </footer>
+    <script>
+    (function() {
+        var BG   = "#1c1c1c";
+        var BG2  = "#0e0e0e";
+        var BD   = "#2a2a2a";
+        var TEXT = "#e2ddd5";
+        var MUT  = "#888888";
+        var ACC  = "rgba(196,163,90,0.15)";
+        var ACCT = "#c4a35a";
+
+        function styleEl(el) {
+            var c = el.className || "";
+            if (typeof c !== "string") return;
+            if (c.indexOf("control") > -1) {
+                el.style.setProperty("background-color", BG, "important");
+                el.style.setProperty("border-color", BD, "important");
+                el.style.setProperty("border-radius", "2px", "important");
+                el.style.setProperty("box-shadow", "none", "important");
+                el.style.setProperty("min-height", "32px", "important");
+            }
+            if (c.indexOf("ValueContainer") > -1 ||
+                c.indexOf("singleValue") > -1 ||
+                c.indexOf("placeholder") > -1 ||
+                c.indexOf("Input") > -1) {
+                el.style.setProperty("color", TEXT, "important");
+                el.style.setProperty("background-color", "transparent", "important");
+            }
+            if (c.indexOf("-menu") > -1 || c.indexOf("MenuList") > -1) {
+                el.style.setProperty("background-color", BG, "important");
+                el.style.setProperty("border", "1px solid " + BD, "important");
+                el.style.setProperty("border-radius", "2px", "important");
+                el.style.setProperty("z-index", "99999", "important");
+                el.style.setProperty("box-shadow", "0 4px 16px rgba(0,0,0,0.6)", "important");
+            }
+            if (c.indexOf("option") > -1) {
+                el.style.setProperty("background-color", BG, "important");
+                el.style.setProperty("color", TEXT, "important");
+                el.style.setProperty("cursor", "pointer", "important");
+            }
+            if (c.indexOf("indicatorSeparator") > -1) {
+                el.style.setProperty("background-color", BD, "important");
+            }
+            if (c.indexOf("dropdownIndicator") > -1 ||
+                c.indexOf("clearIndicator") > -1) {
+                var svgs = el.querySelectorAll("svg");
+                svgs.forEach(function(s) {
+                    s.style.setProperty("fill", MUT, "important");
+                });
+            }
+            if (c.indexOf("multiValue") > -1 && c.indexOf("Label") < 0
+                    && c.indexOf("Remove") < 0) {
+                el.style.setProperty("background-color", BD, "important");
+                el.style.setProperty("border-radius", "2px", "important");
+            }
+            if (c.indexOf("multiValueLabel") > -1) {
+                el.style.setProperty("color", TEXT, "important");
+            }
+        }
+
+        function applyAll(root) {
+            var all = root.querySelectorAll("*");
+            for (var i = 0; i < all.length; i++) { styleEl(all[i]); }
+        }
+
+        var observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(m) {
+                m.addedNodes.forEach(function(node) {
+                    if (node.nodeType !== 1) return;
+                    styleEl(node);
+                    applyAll(node);
+                });
+                if (m.type === "attributes" && m.attributeName === "class") {
+                    styleEl(m.target);
+                }
+            });
+        });
+
+        document.addEventListener("DOMContentLoaded", function() {
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ["class"]
+            });
+            applyAll(document.body);
+        });
+
+        /* hover effect per le opzioni */
+        document.addEventListener("mouseover", function(e) {
+            var el = e.target;
+            var c = el.className || "";
+            if (typeof c === "string" && c.indexOf("option") > -1) {
+                el.style.setProperty("background-color", BD, "important");
+            }
+        });
+        document.addEventListener("mouseout", function(e) {
+            var el = e.target;
+            var c = el.className || "";
+            if (typeof c === "string" && c.indexOf("option") > -1 &&
+                c.indexOf("selected") < 0) {
+                el.style.setProperty("background-color", BG, "important");
+            }
+        });
+    })();
+    </script>
 </body>
 </html>"""
 
