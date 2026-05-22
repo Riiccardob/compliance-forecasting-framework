@@ -39,13 +39,20 @@ _EDGES = {
 _CYTO_ELEMENTS = [
     {"data": {"id": "H_crit_group",  "label": "H_crit"}},
     {"data": {"id": "H_cache_group", "label": "H_cache"}},
-    {"data": {"id": "nginx-web-server",     "label": "nginx-web-server",     "parent": "H_crit_group"}},
-    {"data": {"id": "nginx-thrift",         "label": "nginx-thrift",         "parent": "H_crit_group"}},
-    {"data": {"id": "post-storage-mongodb", "label": "post-storage-mongodb", "parent": "H_crit_group"}},
-    {"data": {"id": "home-timeline-redis",    "label": "home-timeline-redis",    "parent": "H_cache_group"}},
-    {"data": {"id": "post-storage-memcached", "label": "post-storage-memcached", "parent": "H_cache_group"}},
-    {"data": {"id": "home-timeline-service", "label": "home-timeline-service"}, "classes": "shared"},
-    {"data": {"id": "post-storage-service",  "label": "post-storage-service"},  "classes": "shared"},
+    {"data": {"id": "nginx-web-server",     "label": "nginx-web-server",     "parent": "H_crit_group",
+              "title": "nginx-web-server\nCS: H_crit\nMetriche: cpu, mem, net_rx, net_tx"}},
+    {"data": {"id": "nginx-thrift",         "label": "nginx-thrift",         "parent": "H_crit_group",
+              "title": "nginx-thrift\nCS: H_crit\nMetriche: cpu, mem, net_rx, net_tx\nM_interf: arco e2 verso home-timeline-service"}},
+    {"data": {"id": "post-storage-mongodb", "label": "post-storage-mongodb", "parent": "H_crit_group",
+              "title": "post-storage-mongodb\nCS: H_crit\nMetriche: cpu, mem, net_rx, net_tx"}},
+    {"data": {"id": "home-timeline-redis",    "label": "home-timeline-redis",    "parent": "H_cache_group",
+              "title": "home-timeline-redis\nCS: H_cache\nMetriche: cpu, mem, net_rx, net_tx"}},
+    {"data": {"id": "post-storage-memcached", "label": "post-storage-memcached", "parent": "H_cache_group",
+              "title": "post-storage-memcached\nCS: H_cache\nMetriche: cpu, mem, net_rx, net_tx"}},
+    {"data": {"id": "home-timeline-service", "label": "home-timeline-service",
+              "title": "home-timeline-service\nCS: H_crit + H_cache (condiviso)\nPunto di interferenza strutturale\nMetriche: cpu, mem, net_rx, net_tx"}, "classes": "shared"},
+    {"data": {"id": "post-storage-service",  "label": "post-storage-service",
+              "title": "post-storage-service\nCS: H_crit + H_cache (condiviso)\nPunto di interferenza strutturale\nMetriche: cpu, mem, net_rx, net_tx"},  "classes": "shared"},
     {"data": {"id": "e1", "source": "nginx-web-server",     "target": "nginx-thrift",           "label": "e1"}},
     {"data": {"id": "e2", "source": "nginx-thrift",          "target": "home-timeline-service",  "label": "e2"}, "classes": "interference"},
     {"data": {"id": "e3", "source": "home-timeline-service", "target": "home-timeline-redis",    "label": "e3"}},
@@ -61,6 +68,7 @@ _CYTO_STYLESHEET = [
         "text-halign": "center", "label": "data(label)", "shape": "rectangle",
         "width": "label", "height": "28px", "padding": "6px",
         "text-max-width": "130px", "text-wrap": "wrap",
+        "text-tooltip": "data(title)",
     }},
     {"selector": "node:parent", "style": {
         "border-width": 2, "padding": "24px", "font-size": "11px",
@@ -245,13 +253,14 @@ def update_atg_heatmaps(idx):
                 empty_label)
 
     snap    = snaps[int(idx)]
-    ts_sec  = snap["timestamp"] / 1_000_000
     is_anom = bool(snap["label"])
     label   = "ANOMALO" if is_anom else "nominale"
+    dt_snap = pd.to_datetime(snap["timestamp"], unit="us")
+    dt_str  = dt_snap.strftime("%Y-%m-%d %H:%M:%S")
 
     if not is_anom:
         snap_label = html.Span(
-            f"Snapshot {idx} / {ts_sec:.3f} -- nominale",
+            f"Snapshot {idx}  {dt_str}  nominale",
             style={"color": "var(--muted)"},
         )
     else:
@@ -266,10 +275,10 @@ def update_atg_heatmaps(idx):
             a_nodes = []
         nodes_txt = ", ".join(a_nodes) if a_nodes else "N/A"
         snap_label = html.Span([
-            html.Span(f"Snapshot {idx} / {ts_sec:.3f} -- ",
+            html.Span(f"Snapshot {idx}  {dt_str}  ",
                       style={"color": "var(--muted)"}),
             html.Span("ANOMALO", style={"color": "#b55e5e", "fontWeight": "600"}),
-            html.Span(f"   tipo: {a_type}   nodi: {nodes_txt}",
+            html.Span(f"  tipo: {a_type}   nodi: {nodes_txt}",
                       style={"color": "#e2ddd5"}),
         ])
 

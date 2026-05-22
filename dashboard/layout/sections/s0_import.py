@@ -220,7 +220,7 @@ def create_s0():
                             "color": "var(--muted)",
                             "fontFamily": "JetBrains Mono, monospace"}),
         ]),
-        html.Pre(
+        html.Div(
             id="s0-run-log",
             style={
                 "backgroundColor": "var(--bg)",
@@ -229,7 +229,6 @@ def create_s0():
                 "color": "var(--muted)", "marginTop": "10px",
                 "maxHeight": "140px", "overflowY": "auto",
                 "fontFamily": "JetBrains Mono, monospace",
-                "whiteSpace": "pre-wrap",
             },
         ),
         html.Div(id="s0-snapshot-table", style={"marginTop": "12px"}),

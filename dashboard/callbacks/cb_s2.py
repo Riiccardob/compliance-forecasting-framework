@@ -219,7 +219,19 @@ def update_forecast(feature_key, cs):
     routing   = cs_data.get("routing", {})
 
     if feature_key not in forecasts:
-        return _empty_fig("Previsione non disponibile"), ""
+        note = html.Div(
+            ("Previsione non disponibile per questa feature. "
+             "Cause possibili: (1) pipeline eseguita in modalita DEMO "
+             "su un solo snapshot anomalo - i forecast sono calcolati "
+             "solo per le feature del compliance set di quello snapshot; "
+             "(2) la feature e di tipo M_interf e non ha abbastanza dati "
+             "per il forecasting. Prova la modalita BATCH con piu snapshot."),
+            style={"fontSize": "11px", "color": "var(--muted)",
+                   "lineHeight": "1.5", "padding": "8px",
+                   "backgroundColor": "var(--surface)",
+                   "border": "1px solid var(--border)"},
+        )
+        return _empty_fig("Previsione non disponibile - vedi nota"), note
 
     df    = forecasts[feature_key]
     model = routing.get(feature_key, "unknown")

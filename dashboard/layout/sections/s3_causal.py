@@ -70,10 +70,22 @@ def create_s3() -> html.Div:
 
             html.Div([
                 html.Div("Intensita minima", style=_LABEL_STYLE),
+                html.Div(
+                    "Intensita minima (0.0 = nessun filtro, 1.0 = solo relazioni "
+                    "molto forti). Per Granger: DeltaR^2. Per TE: informazione "
+                    "trasferita normalizzata.",
+                    style={"fontSize": "10px", "color": "var(--muted)",
+                           "lineHeight": "1.4", "marginBottom": "4px",
+                           "marginTop": "8px"},
+                ),
                 dcc.Slider(
                     id="s3-intensity-min",
                     min=0.0, max=1.0, step=0.05, value=0.0,
-                    marks={0: "0", 0.5: "0.5", 1: "1"},
+                    marks={
+                        0:   {"label": "0.0", "style": {"fontSize": "9px", "color": "var(--muted)"}},
+                        0.5: {"label": "0.5", "style": {"fontSize": "9px", "color": "var(--muted)"}},
+                        1:   {"label": "1.0", "style": {"fontSize": "9px", "color": "var(--muted)"}},
+                    },
                     tooltip={"placement": "bottom", "always_visible": False},
                 ),
             ], style={"width": "200px"}),
