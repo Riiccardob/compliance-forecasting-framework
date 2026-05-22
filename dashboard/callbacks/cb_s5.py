@@ -338,24 +338,64 @@ def show_alert_detail(alert_data):
             html.Div("Ground truth vs previsione.",       style={"color": "var(--muted)"}),
         )
     a = alert_data
-    fields = [
-        ("CS",           a.get("cs", "")),
-        ("Criticita",    a.get("criticality", "").upper()),
-        ("Proprieta",    a.get("property_at_risk", "")),
-        ("Lead steps",   str(a.get("lead_time_steps", ""))),
-        ("Lead hours",   f"{a.get('lead_time_hours', 0):.1f} h"),
-        ("SLA thresh.",  str(a.get("sla_threshold", ""))),
-        ("SLA bound",    a.get("sla_bound", "")),
-        ("Arc critico",  str(a.get("critical_arc", ""))),
-        ("Root cause",   str(a.get("root_cause", "N/A"))),
-        ("Cross-prop.",  str(a.get("cross_property_interference", "N/A"))),
-        ("Uncertainty",  "SI" if a.get("model_uncertainty_flag") else "no"),
+    crit       = a.get("criticality", "")
+    crit_color = {"yellow": "#c4a35a", "orange": "#e07b39", "red": "#b55e5e"}.get(crit, "#888")
+    crit_rgb   = {"yellow": "196,163,90", "orange": "224,123,57", "red": "181,94,94"}.get(crit, "88,88,88")
+    lead       = a.get("lead_time_hours", 0) or 0
+    prop       = a.get("property_at_risk", "N/A") or "N/A"
+
+    section1 = html.Div([
+        html.Div(crit.upper() if crit else "N/A", style={
+            "backgroundColor": f"rgba({crit_rgb},0.15)",
+            "color": crit_color,
+            "fontSize": "18px", "fontWeight": "700", "fontFamily": "JetBrains Mono",
+            "padding": "8px 16px", "border": f"1px solid {crit_color}",
+            "display": "inline-block", "marginBottom": "8px",
+        }),
+        html.Div([
+            html.Span("Tempo alla violazione SLA: ",
+                      style={"color": "var(--muted)", "fontSize": "12px"}),
+            html.Span(
+                f"{int(lead)}h ({lead/24:.1f} giorni)" if lead else "N/A",
+                style={"color": "var(--text)", "fontFamily": "JetBrains Mono",
+                       "fontSize": "13px", "fontWeight": "600"},
+            ),
+        ], style={"marginBottom": "6px"}),
+        html.Div([
+            html.Span("Proprieta a rischio: ",
+                      style={"color": "var(--muted)", "fontSize": "12px"}),
+            html.Span(prop, style={"color": "var(--accent)", "fontFamily": "JetBrains Mono",
+                                   "fontSize": "12px", "fontWeight": "600"}),
+        ], style={"marginBottom": "6px"}),
+        html.Div([
+            html.Span("Causa radice: ",
+                      style={"color": "var(--muted)", "fontSize": "12px"}),
+            html.Span(str(a.get("root_cause", "N/A"))[:50],
+                      style={"color": "var(--text)", "fontFamily": "JetBrains Mono",
+                             "fontSize": "12px"}),
+        ]),
+    ], style={"marginBottom": "12px", "paddingBottom": "12px",
+              "borderBottom": "1px solid var(--border)"})
+
+    tech_fields = [
+        ("CS",          a.get("cs", "")),
+        ("Lead steps",  str(a.get("lead_time_steps", ""))),
+        ("Lead hours",  f"{lead:.1f} h"),
+        ("SLA thresh.", str(a.get("sla_threshold", ""))),
+        ("SLA bound",   a.get("sla_bound", "")),
+        ("Arc critico", str(a.get("critical_arc", ""))),
+        ("Cross-prop.", str(a.get("cross_property_interference", "N/A"))),
+        ("Uncertainty", "SI" if a.get("model_uncertainty_flag") else "no"),
     ]
-    detail = html.Div(
-        [html.Div("Alert",
-                  style={"fontWeight": "600", "color": "var(--text)", "marginBottom": "10px"})]
-        + [_row(k, v) for k, v in fields]
-    )
+    section2 = html.Details([
+        html.Summary("Dettagli tecnici",
+                     style={"cursor": "pointer", "color": "var(--muted)",
+                            "fontSize": "11px", "userSelect": "none",
+                            "marginBottom": "6px"}),
+        html.Div([_row(k, v) for k, v in tech_fields], style={"marginTop": "6px"}),
+    ])
+
+    detail = html.Div([section1, section2])
 
     dm    = DataManager()
     snaps = dm.get_snapshots()

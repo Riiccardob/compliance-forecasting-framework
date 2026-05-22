@@ -1,4 +1,4 @@
-from dash import callback, Output, Input, State
+from dash import callback, Output, Input, State, html
 
 
 @callback(
@@ -81,12 +81,41 @@ def run_pipeline_callback(set_progress, n_clicks, mode, n_snapshots):
     if "error" in results:
         return f"Errore pipeline: {results['error']}", None
 
-    lines = [f"Pipeline completata - modalita {mode}"]
-    lines.append(f"Snapshot processati: {results['n_snapshots']}")
+    stato_row = html.Div(
+        f"Pipeline completata — modalita {mode} — "
+        f"{results['n_snapshots']} snapshot processati",
+        style={"color": "#7aaa8f", "fontWeight": "600", "marginBottom": "8px"},
+    )
+
+    cs_rows = []
     for cs, cs_data in results.get("compliance_sets", {}).items():
-        n_alerts = len(cs_data.get("alerts", []))
-        n_links  = len(cs_data.get("causal_graph", {}).get("edges", []))
-        lines.append(f"{cs}: {n_alerts} alert, {n_links} link causali")
+        alerts   = cs_data.get("alerts", [])
+        n_red    = sum(1 for a in alerts if a.get("criticality") == "red")
+        n_orange = sum(1 for a in alerts if a.get("criticality") == "orange")
+        n_yellow = sum(1 for a in alerts if a.get("criticality") == "yellow")
+        n_causal = len(cs_data.get("causal_graph", {}).get("edges", []))
+        cs_rows.append(html.Div([
+            html.Span(cs, style={"color": "var(--text)", "fontWeight": "600",
+                                 "minWidth": "80px", "display": "inline-block"}),
+            html.Span(f"{n_red} red",
+                      style={"color": "#b55e5e", "marginRight": "10px",
+                             "fontFamily": "JetBrains Mono", "fontSize": "11px"}),
+            html.Span(f"{n_orange} orange",
+                      style={"color": "#e07b39", "marginRight": "10px",
+                             "fontFamily": "JetBrains Mono", "fontSize": "11px"}),
+            html.Span(f"{n_yellow} yellow",
+                      style={"color": "#c4a35a", "marginRight": "16px",
+                             "fontFamily": "JetBrains Mono", "fontSize": "11px"}),
+            html.Span(f"{n_causal} link causali",
+                      style={"color": "var(--muted)", "fontFamily": "JetBrains Mono",
+                             "fontSize": "11px"}),
+        ], style={"display": "flex", "alignItems": "center", "gap": "4px",
+                  "padding": "4px 0", "borderBottom": "1px solid var(--border)"}))
+
+    nav_hint = html.Div(
+        "Vai su S5 per gli alert dettagliati.",
+        style={"color": "var(--muted)", "fontSize": "11px", "marginTop": "8px"},
+    )
 
     config_saved = {"mode": mode, "n_snapshots": n_snapshots}
-    return " | ".join(lines), config_saved
+    return html.Div([stato_row, *cs_rows, nav_hint]), config_saved

@@ -38,10 +38,10 @@ _FIELD_LABELS = {
                         "||W_t - W_gold||_F. Su DSB = 0 sempre"),
     "pas_value":       ("PAS corrente",
                         "Path Adherence Score sul percorso critico H_crit"),
-    "threshold_viol":  ("Feature fuori SLA",
-                        "Numero di metriche che superano la soglia certificata"),
-    "zscore_viol":     ("Feature anomale (z-score)",
-                        "Numero di metriche con |z| > 3.0 rispetto al nominale"),
+    "threshold_viol":  ("Soglie SLA violate",
+                        "Feature le cui metriche superano la soglia SLA certificata"),
+    "zscore_viol":     ("Anomalie z-score",
+                        "Feature con |z| > 3.0 rispetto al comportamento nominale"),
 }
 
 
@@ -240,6 +240,34 @@ def update_result_card(cs, snap_idx):
         return html.Span("SI" if v else "no",
                          style={"color": color, "fontFamily": "JetBrains Mono"})
 
+    thresh_list = m.get("threshold_violations", [])
+    zscore_list = m.get("zscore_violations", [])
+
+    def _feat_chips(feat_items):
+        if not feat_items:
+            return html.Span("nessuna", style={"color": "#7aaa8f",
+                                               "fontFamily": "JetBrains Mono",
+                                               "fontSize": "10px"})
+        chips = []
+        for feat in feat_items[:5]:
+            if isinstance(feat, (list, tuple)):
+                feat_name = str(feat[0])
+            else:
+                feat_name = str(feat)
+            short = ":".join(feat_name.split(":")[-2:]) if ":" in feat_name else feat_name
+            chips.append(html.Span(short, style={
+                "backgroundColor": "rgba(181,94,94,0.15)",
+                "color": "#b55e5e",
+                "fontFamily": "JetBrains Mono", "fontSize": "9px",
+                "padding": "1px 5px", "marginRight": "3px", "marginBottom": "2px",
+                "display": "inline-block",
+            }))
+        if len(feat_items) > 5:
+            chips.append(html.Span(f"+{len(feat_items)-5} altre",
+                                   style={"color": "var(--muted)", "fontSize": "9px"}))
+        return html.Div(chips, style={"display": "flex", "flexWrap": "wrap",
+                                      "alignItems": "center"})
+
     rows = [
         ("base_signal",     _bool_span(m.get("base_signal"))),
         ("if_signal",       _bool_span(m.get("if_signal"))),
@@ -248,14 +276,19 @@ def update_result_card(cs, snap_idx):
         ("cusum_stat",      f"{m.get('cusum_stat', 0):.4f}"),
         ("frobenius",       f"{m.get('frobenius_distance') or 0:.4f}"),
         ("pas_value",       str(m.get("pas_value", "N/A"))),
-        ("threshold_viol",  str(len(m.get("threshold_violations", [])))),
-        ("zscore_viol",     str(len(m.get("zscore_violations", [])))),
+        ("threshold_viol",  None),
+        ("zscore_viol",     None),
     ]
     items = []
     for key, value in rows:
         label_text, tooltip_text = _FIELD_LABELS.get(key, (key, ""))
-        val_el = value if isinstance(value, html.Span) else html.Span(
-            value, style={"color": "var(--text)", "fontFamily": "JetBrains Mono"})
+        if key == "threshold_viol":
+            val_el = _feat_chips(thresh_list)
+        elif key == "zscore_viol":
+            val_el = _feat_chips(zscore_list)
+        else:
+            val_el = value if isinstance(value, html.Span) else html.Span(
+                value, style={"color": "var(--text)", "fontFamily": "JetBrains Mono"})
         items.append(html.Div([
             html.Div([
                 html.Span(label_text,

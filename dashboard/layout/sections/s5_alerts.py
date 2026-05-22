@@ -62,6 +62,12 @@ def create_s5() -> html.Div:
             "fontSize": "11px",
         }),
 
+        html.Div(
+            "Tutti i tipi selezionati = mostra tutto. Deseleziona un tipo per escluderlo.",
+            style={"fontSize": "10px", "color": "var(--muted)",
+                   "marginBottom": "6px", "fontStyle": "italic"},
+        ),
+
         html.Div([
             help_icon(
                 "Filtri per navigare gli alert generati dalla pipeline. "

@@ -95,6 +95,21 @@ def update_nav_styles(active: str) -> list[dict]:
     return styles
 
 
+_STEP_DONE = {
+    "display": "inline-flex", "alignItems": "center", "justifyContent": "center",
+    "width": "16px", "height": "16px", "borderRadius": "50%", "fontSize": "9px",
+    "marginRight": "6px", "flexShrink": "0",
+    "border": "1px solid #7aaa8f", "backgroundColor": "rgba(122,170,143,0.15)",
+    "color": "#7aaa8f",
+}
+_STEP_TODO = {
+    "display": "inline-flex", "alignItems": "center", "justifyContent": "center",
+    "width": "16px", "height": "16px", "borderRadius": "50%", "fontSize": "9px",
+    "marginRight": "6px", "flexShrink": "0",
+    "border": "1px solid var(--muted)", "color": "var(--muted)",
+}
+
+
 def _dot(color: str) -> html.Div:
     return html.Div(style={
         "width": "6px", "height": "6px",
@@ -114,6 +129,10 @@ def _status_row(color: str, text: str) -> html.Div:
 
 @callback(
     Output("sidebar-status", "children"),
+    Output("sidebar-step1-icon", "style"),
+    Output("sidebar-step1-icon", "children"),
+    Output("sidebar-step2-icon", "style"),
+    Output("sidebar-step2-icon", "children"),
     Input("active-section", "data"),
 )
 def update_sidebar_status(section):
@@ -131,4 +150,10 @@ def update_sidebar_status(section):
         "#c4a35a" if pipeline else "#5a5a5a",
         "Pipeline completata" if pipeline else "Pipeline inattiva",
     )
-    return [riga_dati, riga_pipeline]
+
+    step1_style    = _STEP_DONE if loaded   else _STEP_TODO
+    step1_children = "V"        if loaded   else "1"
+    step2_style    = _STEP_DONE if pipeline else _STEP_TODO
+    step2_children = "V"        if pipeline else "2"
+
+    return [riga_dati, riga_pipeline], step1_style, step1_children, step2_style, step2_children
