@@ -139,7 +139,35 @@ def update_causal_graph(cs, types, min_intensity):
             "intensity": float(e.get("intensity") or 0),
         }, "classes": cls.strip()})
 
-    return elements, _CAUSAL_STYLESHEET, _render_chains(chains)
+    edges_in_graph = filtered
+
+    if not edges_in_graph:
+        empty_msg = html.Div([
+            html.Div("Nessuna relazione causale trovata.", style={
+                "color": "var(--muted)", "fontSize": "13px", "fontWeight": "600",
+                "marginBottom": "8px",
+            }),
+            html.Div(
+                "Le possibili cause sono: (1) pipeline eseguita in modalita "
+                "DEMO su un solo snapshot, che fornisce serie troppo corte "
+                "per i test statistici (Granger richiede almeno max_lag+2 = 7 "
+                "campioni per compliance set); (2) le serie temporali delle "
+                "feature sono costanti (es. error_rate=0 su tutto il dataset "
+                "nominale); (3) nessuna coppia supera la soglia Pearson |r|>0.7. "
+                "Per ottenere risultati causali, eseguire la pipeline in modalita "
+                "BATCH con almeno 30-50 snapshot.",
+                style={"color": "var(--muted)", "fontSize": "11px", "lineHeight": "1.6"},
+            ),
+        ], style={
+            "backgroundColor": "var(--surface)",
+            "border": "1px solid var(--border)",
+            "borderLeft": "2px solid var(--border)",
+            "padding": "12px 16px",
+            "marginTop": "12px",
+        })
+        return [], _CAUSAL_STYLESHEET, empty_msg
+
+    return elements, _CAUSAL_STYLESHEET, html.Div(_render_chains(chains))
 
 
 _ROW  = {"display": "flex", "justifyContent": "space-between",

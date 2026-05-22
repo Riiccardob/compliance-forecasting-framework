@@ -23,6 +23,46 @@ def create_s5() -> html.Div:
         html.Div("Alert", style=_TITLE_STYLE),
 
         html.Div([
+            html.Div([
+                html.Div(style={"width":"10px","height":"10px",
+                                "backgroundColor":"#c4a35a","flexShrink":"0"}),
+                html.Div([
+                    html.Span("Yellow", style={"color":"#c4a35a","fontWeight":"600",
+                                               "marginRight":"6px","fontSize":"12px"}),
+                    html.Span("lead time >= 7 giorni prima della violazione SLA",
+                              style={"color":"var(--muted)","fontSize":"11px"}),
+                ]),
+            ], style={"display":"flex","alignItems":"center","gap":"8px","marginBottom":"4px"}),
+            html.Div([
+                html.Div(style={"width":"10px","height":"10px",
+                                "backgroundColor":"#e07b39","flexShrink":"0"}),
+                html.Div([
+                    html.Span("Orange", style={"color":"#e07b39","fontWeight":"600",
+                                               "marginRight":"6px","fontSize":"12px"}),
+                    html.Span("2-7 giorni, oppure segnale Isolation Forest o CUSUM attivo",
+                              style={"color":"var(--muted)","fontSize":"11px"}),
+                ]),
+            ], style={"display":"flex","alignItems":"center","gap":"8px","marginBottom":"4px"}),
+            html.Div([
+                html.Div(style={"width":"10px","height":"10px",
+                                "backgroundColor":"#b55e5e","flexShrink":"0"}),
+                html.Div([
+                    html.Span("Red", style={"color":"#b55e5e","fontWeight":"600",
+                                            "marginRight":"6px","fontSize":"12px"}),
+                    html.Span("< 2 giorni, oppure IF + structural validator entrambi attivi",
+                              style={"color":"var(--muted)","fontSize":"11px"}),
+                ]),
+            ], style={"display":"flex","alignItems":"center","gap":"8px"}),
+        ], style={
+            "backgroundColor": "var(--surface)",
+            "border": "1px solid var(--border)",
+            "padding": "10px 14px",
+            "marginBottom": "16px",
+            "borderLeft": "2px solid var(--border)",
+            "fontSize": "11px",
+        }),
+
+        html.Div([
             help_icon(
                 "Filtri per navigare gli alert generati dalla pipeline. "
                 "Criticita: Yellow = lead time > 7 giorni (preavviso lungo). "

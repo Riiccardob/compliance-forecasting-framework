@@ -1,7 +1,29 @@
+from pathlib import Path as _Path
+import sys as _sys
+_sys.path.insert(0, str(_Path(__file__).parent.parent.parent))
+
 import pandas as pd
 import plotly.graph_objects as go
 from dash import callback, Output, Input, html
 from dashboard.core.data_manager import DataManager
+from src.utils.config_loader import ConfigLoader
+
+_ROOT_CFG = _Path(__file__).parent.parent.parent
+try:
+    _cfg = ConfigLoader(
+        _ROOT_CFG / "config" / "topology.yaml",
+        _ROOT_CFG / "config" / "pipeline_params.yaml",
+    )
+    _step_h = float(_cfg.load_pipeline_params()
+                    .get("forecasting", {})
+                    .get("step_duration_hours", 24.0))
+except Exception:
+    _step_h = 24.0
+
+_SLA_MAP = {
+    "H_crit": {"latency_ms": 100.0, "error_rate": 0.05},
+    "H_cache": {"latency_ms": 20.0,  "error_rate": 0.10},
+}
 
 _MODEL_COLORS = {
     "prophet": "#c4a35a",
@@ -220,12 +242,39 @@ def update_forecast(feature_key, cs):
         mode="lines", name=model,
         line={"color": color, "width": 1.5},
     ))
+    x_labels = []
+    for i, _ in enumerate(df.index, start=1):
+        h = i * _step_h
+        if h < 24:
+            x_labels.append(f"+{h:.0f}h")
+        elif h % 24 == 0:
+            x_labels.append(f"+{int(h/24)}g")
+        else:
+            x_labels.append(f"+{h/24:.1f}g")
+
     fig.update_layout(
         title=f"Forecast -- {model}",
-        xaxis_title="step", yaxis_title="yhat",
+        xaxis={"tickvals": df.index.tolist(), "ticktext": x_labels,
+               "title": "orizzonte previsionale"},
+        yaxis_title="yhat",
         legend={"bgcolor": "rgba(0,0,0,0)"},
         **_DARK_LAYOUT,
     )
+
+    metric_name = feature_key.split(":")[-1]
+    sla_val = _SLA_MAP.get(cs, {}).get(metric_name)
+    if sla_val is not None:
+        fig.add_hline(
+            y=sla_val,
+            line_dash="dash",
+            line_color="#b55e5e",
+            line_width=1.5,
+            annotation_text=f"SLA max: {sla_val}",
+            annotation_font_color="#b55e5e",
+            annotation_font_size=9,
+            annotation_position="top right",
+        )
+
     reason = _MODEL_REASONS.get(model, "routing automatico")
     tag = html.Div([
         html.Span(model, style={

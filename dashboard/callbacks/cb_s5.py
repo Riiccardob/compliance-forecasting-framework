@@ -6,12 +6,12 @@ from dashboard.core.data_manager import DataManager
 
 _CRIT_COLOR = {
     "yellow": "#c4a35a",
-    "orange": "#c4a35a",
+    "orange": "#e07b39",
     "red":    "#b55e5e",
 }
 _CRIT_BG = {
-    "yellow": "rgba(196,163,90,0.12)",
-    "orange": "rgba(196,163,90,0.22)",
+    "yellow": "rgba(196,163,90,0.10)",
+    "orange": "rgba(224,123,57,0.15)",
     "red":    "rgba(181,94,94,0.18)",
 }
 _DARK_LAYOUT = {

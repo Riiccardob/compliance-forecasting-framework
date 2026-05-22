@@ -23,6 +23,27 @@ _LEVEL_KEYS = {
     "cusum":     lambda r: bool(r.get("cusum_signal")),
 }
 
+_FIELD_LABELS = {
+    "base_signal":     ("Anomalia rilevata",
+                        "True se almeno Threshold o Z-score hanno segnalato"),
+    "if_signal":       ("Isolation Forest",
+                        "ML multivariato (attivo solo se anomalia rilevata)"),
+    "cusum_signal":    ("CUSUM accumulato",
+                        "Degrado comportamentale nel tempo (S_t > 5.0)"),
+    "structural_conf": ("Conferma strutturale",
+                        "Tutti i livelli attivi + Frobenius > soglia x 3 finestre"),
+    "cusum_stat":      ("Valore CUSUM (S_t)",
+                        "Accumulatore CUSUM. Su DSB rimane 0 (dataset limit.)"),
+    "frobenius":       ("Distanza Frobenius",
+                        "||W_t - W_gold||_F. Su DSB = 0 sempre"),
+    "pas_value":       ("PAS corrente",
+                        "Path Adherence Score sul percorso critico H_crit"),
+    "threshold_viol":  ("Feature fuori SLA",
+                        "Numero di metriche che superano la soglia certificata"),
+    "zscore_viol":     ("Feature anomale (z-score)",
+                        "Numero di metriche con |z| > 3.0 rispetto al nominale"),
+}
+
 
 def _gauge_style(active: bool) -> dict:
     return {
@@ -220,27 +241,33 @@ def update_result_card(cs, snap_idx):
                          style={"color": color, "fontFamily": "JetBrains Mono"})
 
     rows = [
-        ("base_signal",      _bool_span(m.get("base_signal"))),
-        ("if_signal",        _bool_span(m.get("if_signal"))),
-        ("cusum_signal",     _bool_span(m.get("cusum_signal"))),
-        ("structural_conf.", _bool_span(m.get("structural_confirmed"))),
-        ("cusum_stat",       f"{m.get('cusum_stat', 0):.4f}"),
-        ("frobenius",        f"{m.get('frobenius_distance') or 0:.4f}"),
-        ("pas_value",        str(m.get("pas_value", "N/A"))),
-        ("threshold_viol.",  str(len(m.get("threshold_violations", [])))),
-        ("zscore_viol.",     str(len(m.get("zscore_violations", [])))),
+        ("base_signal",     _bool_span(m.get("base_signal"))),
+        ("if_signal",       _bool_span(m.get("if_signal"))),
+        ("cusum_signal",    _bool_span(m.get("cusum_signal"))),
+        ("structural_conf", _bool_span(m.get("structural_confirmed"))),
+        ("cusum_stat",      f"{m.get('cusum_stat', 0):.4f}"),
+        ("frobenius",       f"{m.get('frobenius_distance') or 0:.4f}"),
+        ("pas_value",       str(m.get("pas_value", "N/A"))),
+        ("threshold_viol",  str(len(m.get("threshold_violations", [])))),
+        ("zscore_viol",     str(len(m.get("zscore_violations", [])))),
     ]
     items = []
-    for label, value in rows:
+    for key, value in rows:
+        label_text, tooltip_text = _FIELD_LABELS.get(key, (key, ""))
         val_el = value if isinstance(value, html.Span) else html.Span(
             value, style={"color": "var(--text)", "fontFamily": "JetBrains Mono"})
         items.append(html.Div([
-            html.Span(label, style={"color": "var(--muted)"}),
+            html.Div([
+                html.Span(label_text,
+                          style={"color": "var(--muted)", "fontSize": "11px"}),
+                html.Span(" (?)",
+                          title=tooltip_text,
+                          style={"color": "var(--border)", "fontSize": "9px",
+                                 "cursor": "help", "marginLeft": "3px"}) if tooltip_text else None,
+            ], style={"display": "flex", "alignItems": "center"}),
             val_el,
-        ], style={
-            "display": "flex", "justifyContent": "space-between",
-            "padding": "4px 0", "borderBottom": "1px solid var(--border)",
-        }))
+        ], style={"display": "flex", "justifyContent": "space-between",
+                  "padding": "4px 0", "borderBottom": "1px solid var(--border)"}))
 
     header_block = html.Div([
         html.Div(

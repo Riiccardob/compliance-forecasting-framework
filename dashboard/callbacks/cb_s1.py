@@ -107,6 +107,11 @@ _NODE_IDS = ["nginx-web-server", "nginx-thrift", "home-timeline-service",
              "post-storage-memcached", "post-storage-mongodb"]
 _EDGE_IDS = ["e1", "e2", "e3", "e4", "e5", "e6"]
 
+_EDGE_SLA = {
+    "latency_ms": 100.0,
+    "error_rate": 0.05,
+}
+
 
 def _detail_rows(title: str, rows: list[tuple[str, str]]) -> html.Div:
     return html.Div([
@@ -209,7 +214,14 @@ def init_atg_slider(tab):
     n     = len(snaps)
     if n == 0:
         return 0, {0: "0"}
-    marks = {0: "0", n // 2: str(n // 2), n - 1: str(n - 1)}
+    t_start = pd.to_datetime(snaps[0]["timestamp"],    unit="us").strftime("%d/%m/%y")
+    t_mid   = pd.to_datetime(snaps[n // 2]["timestamp"], unit="us").strftime("%d/%m/%y")
+    t_end   = pd.to_datetime(snaps[-1]["timestamp"],   unit="us").strftime("%d/%m/%y")
+    marks = {
+        0:      {"label": f"0 ({t_start})",     "style": {"fontSize": "9px", "color": "var(--muted)"}},
+        n // 2: {"label": f"{n//2} ({t_mid})",  "style": {"fontSize": "9px", "color": "var(--muted)"}},
+        n - 1:  {"label": f"{n-1} ({t_end})",   "style": {"fontSize": "9px", "color": "var(--muted)"}},
+    }
     return n - 1, marks
 
 
@@ -314,6 +326,21 @@ def update_atg_heatmaps(idx):
         title=f"Archi -- snap {idx} ({label})", **_DARK_LAYOUT,
         yaxis={"tickfont": {"size": 9}}, xaxis={"tickfont": {"size": 9}},
     )
+    for row_idx, metric in enumerate(_EDGE_METRICS):
+        sla_val = _EDGE_SLA.get(metric)
+        if sla_val is None:
+            continue
+        for col_idx, eid in enumerate(_EDGE_IDS):
+            val = snap["edges"].get(eid, {}).get(metric)
+            if val is not None and float(val) > sla_val:
+                fig_edge.add_shape(
+                    type="rect",
+                    x0=col_idx - 0.5, x1=col_idx + 0.5,
+                    y0=row_idx - 0.5, y1=row_idx + 0.5,
+                    line={"color": "#b55e5e", "width": 2},
+                    fillcolor="rgba(0,0,0,0)",
+                    layer="above",
+                )
     return fig_node, fig_edge, snap_label
 
 
@@ -749,6 +776,21 @@ def update_pbo(tab, slider_val):
             text=f"w={w:.3f}", showarrow=False,
             font={"size": 9, "color": "#e2ddd5"},
             bgcolor="rgba(28,28,28,0.8)",
+        )
+    for eid, (src, tgt) in _EDGE_ENDPOINTS.items():
+        x0, y0 = _NODE_POS[src]
+        x1, y1 = _NODE_POS[tgt]
+        w = wg.get(eid, 0.0)
+        ax    = x0 + (x1 - x0) * 0.3
+        ay    = y0 + (y1 - y0) * 0.3
+        x_arr = x0 + (x1 - x0) * 0.7
+        y_arr = y0 + (y1 - y0) * 0.7
+        fig_wg.add_annotation(
+            x=x_arr, y=y_arr, ax=ax, ay=ay,
+            xref="x", yref="y", axref="x", ayref="y",
+            arrowhead=2, arrowwidth=max(1, int(w * 4)),
+            arrowcolor="#c4a35a",
+            showarrow=True, text="",
         )
     for nid, (x, y) in _NODE_POS.items():
         node_color = "#8957e5" if nid in _SHARED else "#e2ddd5"
