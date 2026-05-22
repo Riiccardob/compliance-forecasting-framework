@@ -185,12 +185,8 @@ venv/
 docs/paper
 # docs/modules
 framework.zip
-data/raw
 docs/TODO.md
-eval_framework.py
-eval_run_rolling_single_experiment.py
 last_run.txt
-runner.py
 test.txt
 dashboard/cache/
 dashboard/cache/dashdisk_cache/
@@ -206,3 +202,5 @@ data/converted/*
 
 # tieni un placeholder
 !data/converted/.gitkeep
+
+results/

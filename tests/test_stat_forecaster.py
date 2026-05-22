@@ -383,3 +383,9 @@ def test_arima_ljungbox_warning_on_correlated_residuals(
         if "Ljung-Box" in str(call)
     ]
     assert warning_calls, "logger.warning Ljung-Box non emesso per residui autocorrelati"
+
+
+def test_prophet_changepoint_prior_scale_from_yaml(config: ConfigLoader) -> None:
+    """Verifica che changepoint_prior_scale sia letto da pipeline_params.yaml."""
+    forecaster = StatForecaster(config)
+    assert forecaster._prophet_changepoint_prior_scale == 0.05
