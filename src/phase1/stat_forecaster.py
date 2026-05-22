@@ -52,6 +52,11 @@ class StatForecaster:
         self._arima_max_d: int = arima_cfg.get("max_d", 1)
         self._arima_max_q: int = arima_cfg.get("max_q", 2)
 
+        prophet_cfg = fc.get("prophet", {})
+        self._prophet_changepoint_prior_scale = float(
+            prophet_cfg.get("changepoint_prior_scale", 0.05)
+        )
+
         self._models: dict[str, Any] = {}
         self._routing: dict[str, str] = {}
         self._train_data: dict[str, pd.DataFrame] = {}
@@ -228,7 +233,7 @@ class StatForecaster:
             "ds": pd.to_datetime(df.index, unit="us"),
             "y": df["value"].values.astype(float),
         })
-        model = Prophet(changepoint_prior_scale=0.05)
+        model = Prophet(changepoint_prior_scale=self._prophet_changepoint_prior_scale)
         model.fit(prophet_df)
         return model
 

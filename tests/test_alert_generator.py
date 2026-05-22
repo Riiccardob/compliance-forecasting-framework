@@ -950,42 +950,17 @@ def test_aggregation_reliability_nan_yhat_is_conservative(
     )
 
 
-def test_orange_min_days_less_than_yellow_min_days_or_raises(
+def test_orange_min_days_less_than_yellow_min_days_raises(
     config: ConfigLoader,
     topology_builder: TopologyBuilder,
 ) -> None:
-    """orange_min_days deve essere < yellow_min_days. Se invertiti
-    (orange=7, yellow=2), la classificazione produce risultati errati
-    senza errori. Verifica che il costruttore validi questa relazione."""
-    import copy
-    from unittest.mock import patch
-
+    """Costruttore solleva ValueError se orange_min_days >= yellow_min_days."""
     bad_params = copy.deepcopy(config.load_pipeline_params())
     bad_params["alert_generation"]["orange_min_days"] = 7
     bad_params["alert_generation"]["yellow_min_days"] = 2
 
-    # Il costruttore dovrebbe sollevare ValueError se orange >= yellow.
-    # Se non lo fa, il test documenta il comportamento attuale e serve
-    # come guard per una futura validazione.
-    try:
-        with patch.object(
-            type(config), "load_pipeline_params", return_value=bad_params
-        ):
-            ag = AlertGenerator(config, topology_builder)
-        # Se il costruttore NON valida: documentiamo che la classificazione
-        # produce YELLOW al posto di ORANGE per lead_time=5 giorni
-        forecasts = {k: _make_forecast_df([10.0] * 4 + [200.0] + [200.0])
-                     for k in _H_CRIT_LATENCY_KEYS}
-        alert = ag.generate(
-            "H_crit", forecasts, _make_causal_graph_empty(),
-            _make_monitor_nominal(), _T0,
-        )
-        # Con orange=7, yellow=2, lead_time=5:
-        # 5 < 7=orange_min_days → RED (errato, dovrebbe essere ORANGE)
-        # Questo test documenta il comportamento attuale senza asserire
-        # su quale sia il valore corretto - è un punto di attenzione
-        # per chi configura il YAML.
-        assert alert is not None, "Violazione attesa con yhat=200 su H_crit"
-    except (ValueError, KeyError):
-        # Il costruttore valida correttamente la relazione orange < yellow
-        pass
+    with patch.object(
+        type(config), "load_pipeline_params", return_value=bad_params
+    ):
+        with pytest.raises(ValueError, match="orange_min_days"):
+            AlertGenerator(config, topology_builder)

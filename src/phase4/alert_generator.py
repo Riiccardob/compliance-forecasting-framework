@@ -59,6 +59,13 @@ class AlertGenerator:
         self._yellow_min_days: float = float(ag["yellow_min_days"])
         self._orange_min_days: float = float(ag["orange_min_days"])
 
+        if self._orange_min_days >= self._yellow_min_days:
+            raise ValueError(
+                f"orange_min_days ({self._orange_min_days}) deve essere "
+                f"strettamente inferiore a yellow_min_days ({self._yellow_min_days}). "
+                f"Verifica alert_generation in pipeline_params.yaml."
+            )
+
         fc = pipeline["forecasting"]
         self._horizon_steps: int = int(fc.get("horizon_steps", 12))
         if "step_duration_hours" in fc:

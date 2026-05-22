@@ -9,6 +9,8 @@ pbo:
 
 forecasting:
   horizon_steps: 12
+  prophet:
+    changepoint_prior_scale: 0.05
   baseline_model: linear_regression
   default_model: prophet
   statistical_model: arima
