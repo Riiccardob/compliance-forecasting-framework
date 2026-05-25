@@ -202,3 +202,5 @@ data/converted/*
 
 # tieni un placeholder
 !data/converted/.gitkeep
+
+results/
