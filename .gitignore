@@ -204,3 +204,4 @@ data/converted/*
 !data/converted/.gitkeep
 
 results/
+trash/
