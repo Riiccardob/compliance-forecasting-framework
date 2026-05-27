@@ -31,6 +31,9 @@ forecasting:
     learning_rate: 0.001
     nonlinear_metrics:
       - mem_mb
+  adaptive:
+    ewma_alpha: 0.3
+    lookback_windows: 8
 
 causal_analysis:
   pearson_threshold: 0.7
@@ -48,8 +51,9 @@ anomaly_detection:
   cusum:
     ewma_alpha: 0.3  # smoothing factor per il filtro EWMA applicato
                      # al PAS prima del CUSUM (v. methodology.tex §3.2.3)
-    tolerance_factor: 0.0  # k=0: CUSUM accumula per qualsiasi deviazione da reference
-    alert_threshold: 5.0
+    alert_threshold: 0.5
+    tolerance_factor: 0.0
+    auto_calibrate_tolerance: true
   structural_validator:
     trend_intervals: 3
     distance_threshold: 0.15
