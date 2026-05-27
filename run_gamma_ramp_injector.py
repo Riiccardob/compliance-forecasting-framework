@@ -17,7 +17,7 @@ from src.ingestion.gamma_ramp_injector import (
     EXCLUDE_PREFIX,
     H_CACHE_EDGES,
     H_CRIT_EDGES,
-    RAMP_SCALE_FACTOR,
+    MAX_GLOBAL_SCALE,
     SLA_H_CACHE_MS,
     SLA_H_CRIT_MS,
     GammaRampInjector,
@@ -70,6 +70,7 @@ def _report_sample(
     sf: str,
     out_df: pd.DataFrame,
     gt: pd.DataFrame,
+    injector: "GammaRampInjector",
 ) -> None:
     """Stampa le stats di un singolo source_file campione."""
     sf_out = out_df[out_df["source_file"] == sf].copy()
@@ -81,8 +82,8 @@ def _report_sample(
     anomal_ts = sf_gt.loc[sf_gt["label_trace"] == 1, "timestamp"].unique()
     n_nominal = len(nominal_ts)
 
-    if n_nominal < 10:
-        print(f"  {sf}: saltato (n_nominal={n_nominal} < 10)")
+    if n_nominal < 5:
+        print(f"  {sf}: saltato (n_nominal={n_nominal} < 5)")
         return
 
     n_ramp = compute_n_ramp(n_nominal)
@@ -96,7 +97,7 @@ def _report_sample(
     h_crit_end = _mean_lat(sf_out, last_ramp_ts, H_CRIT_EDGES)
     h_cache_end = _mean_lat(sf_out, last_ramp_ts, H_CACHE_EDGES)
 
-    scale_eff = 1.0 + (RAMP_SCALE_FACTOR - 1.0) * ((n_ramp - 1) / (n_ramp - 1))
+    scale_eff = injector.exp_scale_factors.get(sf, MAX_GLOBAL_SCALE)
 
     print(f"  {sf}:")
     print(f"    Latenza nominale pre-rampa (last 5 finestre prima della rampa): mean={lat_pre:.1f}ms")
@@ -115,25 +116,29 @@ def _report_sample(
     )
 
 
-def _fp_check(out_df: pd.DataFrame, gt: pd.DataFrame) -> None:
+def _fp_check(out_df: pd.DataFrame, in_df: pd.DataFrame, gt: pd.DataFrame) -> None:
     """Controlla falsi positivi su tutte le finestre nominali dell'output."""
     nominal_ts = set(gt.loc[gt["label_trace"] == 0, "timestamp"].unique())
-    nominal_rows = out_df[out_df["timestamp"].isin(nominal_ts)]
 
-    # Aggrega per (source_file, timestamp): media latenza per compliance set
-    def _agg_mean(edge_set: frozenset[str]) -> pd.Series:
-        sub = nominal_rows[nominal_rows["edge_id"].isin(edge_set)]
+    def _agg_mean_df(df: pd.DataFrame, edge_set: frozenset[str]) -> pd.Series:
+        sub = df[df["timestamp"].isin(nominal_ts) & df["edge_id"].isin(edge_set)]
         return sub.groupby(["source_file", "timestamp"])["latency_ms"].mean()
 
-    h_crit_mean = _agg_mean(H_CRIT_EDGES)
-    h_cache_mean = _agg_mean(H_CACHE_EDGES)
+    h_crit_out = _agg_mean_df(out_df, H_CRIT_EDGES)
+    h_cache_out = _agg_mean_df(out_df, H_CACHE_EDGES)
+    h_crit_in  = _agg_mean_df(in_df,  H_CRIT_EDGES)
 
-    n_tot_crit = len(h_crit_mean)
-    n_tot_cache = len(h_cache_mean)
-    n_viol_crit = (h_crit_mean > SLA_H_CRIT_MS).sum()
-    n_viol_cache = (h_cache_mean > SLA_H_CACHE_MS).sum()
+    n_tot_crit  = len(h_crit_out)
+    n_tot_cache = len(h_cache_out)
+    n_viol_crit  = (h_crit_out  > SLA_H_CRIT_MS).sum()
+    n_viol_cache = (h_cache_out > SLA_H_CACHE_MS).sum()
 
-    pct_crit = 100.0 * n_viol_crit / n_tot_crit if n_tot_crit else 0.0
+    # Violazioni introdotte dal ramp (non preesistenti nell'input)
+    viol_out_mask = h_crit_out > SLA_H_CRIT_MS
+    viol_in_mask  = h_crit_in.reindex(h_crit_out.index).fillna(0.0) > SLA_H_CRIT_MS
+    n_new_fp = (viol_out_mask & ~viol_in_mask).sum()
+
+    pct_crit  = 100.0 * n_viol_crit  / n_tot_crit  if n_tot_crit  else 0.0
     pct_cache = 100.0 * n_viol_cache / n_tot_cache if n_tot_cache else 0.0
 
     print("Controllo FP su nominali:")
@@ -145,12 +150,42 @@ def _fp_check(out_df: pd.DataFrame, gt: pd.DataFrame) -> None:
         f"  Finestre nominali con latenza H_cache > SLA_H_CACHE: "
         f"{n_viol_cache} / {n_tot_cache} ({pct_cache:.1f}%)"
     )
-    print("  (ATTESO: 0% -- se > 0% ridurre RAMP_SCALE_FACTOR)")
+    print(f"  Nuovi FP introdotti dal ramp: {n_new_fp}")
+    print("  (ATTESO: 0% -- se > 0% ridurre MAX_GLOBAL_SCALE)")
+
+
+def _scale_factor_report(injector: GammaRampInjector, gt: pd.DataFrame) -> None:
+    """Stampa statistiche sui scale factor per-esperimento."""
+    scales = list(injector.exp_scale_factors.values())
+    if not scales:
+        print("Scale factor per-esperimento: nessun esperimento rampato.")
+        return
+
+    scales_arr = np.array(scales)
+    n_low  = int((scales_arr < 1.5).sum())
+    n_max  = int(np.isclose(scales_arr, MAX_GLOBAL_SCALE).sum())
+
+    print("Scale factor per-esperimento:")
+    print(f"  min = {scales_arr.min():.2f}  max = {scales_arr.max():.2f}  "
+          f"mean = {scales_arr.mean():.2f}")
+    print(f"  Esperimenti con scale < 1.5 (latenza nominale alta): {n_low}")
+    print(f"  Esperimenti con scale == MAX ({MAX_GLOBAL_SCALE:.2f}):                 {n_max}")
+    print()
+
+    # Esperimenti con n_nominal 5-9 (precedentemente saltati con soglia 10)
+    n_newly = sum(
+        1 for sf in injector.exp_scale_factors
+        if 5 <= gt[gt["source_file"] == sf]["label_trace"].eq(0).sum() <= 9
+    )
+    print(f"Esperimenti precedentemente skippati ora inclusi: {n_newly}")
+    print("  (erano n_nominal 5-9, ora processati)")
+    print()
 
 
 def _print_verification_report(
     injector: GammaRampInjector,
     out_df: pd.DataFrame,
+    in_df: pd.DataFrame,
 ) -> None:
     gt = pd.read_csv(GT_CSV)
     all_sf = out_df["source_file"].unique()
@@ -158,7 +193,7 @@ def _print_verification_report(
     print("\n=== VERIFICA RAMP INJECTOR ===\n")
     print(f"Esperimenti esclusi ({EXCLUDE_PREFIX}*): {injector.n_excluded}")
     print(f"Esperimenti con rampa applicata: {injector.n_ramped}")
-    print(f"Esperimenti copiati invariati (n_nominal < 10): {injector.n_skipped}")
+    print(f"Esperimenti copiati invariati (n_nominal < 5 o lat. alta): {injector.n_skipped}")
     print()
 
     # Seleziona 3 campioni: uno per fault_type (cpu non-escluso, mem, net)
@@ -167,16 +202,17 @@ def _print_verification_report(
         for sf in all_sf:
             if sf.startswith(prefix) and not sf.startswith(EXCLUDE_PREFIX):
                 n_nom = (gt[(gt["source_file"] == sf) & (gt["label_trace"] == 0)]).shape[0]
-                if n_nom >= 10:
+                if n_nom >= 5:
                     sample_files.append(sf)
                     break
 
     print("Campione 3 source_file (uno cpu, uno mem, uno net):")
     for sf in sample_files[:3]:
-        _report_sample(sf, out_df, gt)
+        _report_sample(sf, out_df, gt, injector)
         print()
 
-    _fp_check(out_df, gt)
+    _scale_factor_report(injector, gt)
+    _fp_check(out_df, in_df, gt)
 
 
 # ---------------------------------------------------------------------------
@@ -186,9 +222,8 @@ def _print_verification_report(
 def main() -> None:
     injector = GammaRampInjector()
 
-    edges_in = pd.read_csv(EDGE_AUG_IN)
-    n_total = edges_in["source_file"].nunique()
-    del edges_in
+    in_df = pd.read_csv(EDGE_AUG_IN)
+    n_total = in_df["source_file"].nunique()
 
     print(f"GammaRampInjector — {n_total} esperimenti da elaborare")
 
@@ -200,7 +235,7 @@ def main() -> None:
 
     print(f"\nScritto: {EDGE_AUG_OUT} ({len(out_df)} righe)")
 
-    _print_verification_report(injector, out_df)
+    _print_verification_report(injector, out_df, in_df)
 
 
 if __name__ == "__main__":
