@@ -18,6 +18,7 @@ from src.ingestion.gamma_ramp_injector import (
     H_CACHE_EDGES,
     H_CRIT_EDGES,
     MAX_GLOBAL_SCALE,
+    MIN_NOMINAL_FOR_RAMP,
     SLA_H_CACHE_MS,
     SLA_H_CRIT_MS,
     GammaRampInjector,
@@ -116,42 +117,31 @@ def _report_sample(
     )
 
 
-def _fp_check(out_df: pd.DataFrame, in_df: pd.DataFrame, gt: pd.DataFrame) -> None:
-    """Controlla falsi positivi su tutte le finestre nominali dell'output."""
-    nominal_ts = set(gt.loc[gt["label_trace"] == 0, "timestamp"].unique())
+def _fp_check(out_df: pd.DataFrame, in_df: pd.DataFrame, gt: pd.DataFrame, injector: "GammaRampInjector") -> None:
+    """Verifica FP usando count_fp con logica identica al check script esterno."""
 
-    def _agg_mean_df(df: pd.DataFrame, edge_set: frozenset[str]) -> pd.Series:
-        sub = df[df["timestamp"].isin(nominal_ts) & df["edge_id"].isin(edge_set)]
-        return sub.groupby(["source_file", "timestamp"])["latency_ms"].mean()
+    def count_fp(df: pd.DataFrame, sla: float, arcs: frozenset[str]):
+        merged = df.merge(gt[["timestamp", "label_trace"]], on="timestamp", how="left")
+        nom = merged[merged["label_trace"] == 0]
+        agg = nom[nom["edge_id"].isin(arcs)].groupby("timestamp")["latency_ms"].sum()
+        return int((agg > sla).sum()), len(agg)
 
-    h_crit_out = _agg_mean_df(out_df, H_CRIT_EDGES)
-    h_cache_out = _agg_mean_df(out_df, H_CACHE_EDGES)
-    h_crit_in  = _agg_mean_df(in_df,  H_CRIT_EDGES)
+    fp_crit_pre,  n_pre  = count_fp(in_df,  SLA_H_CRIT_MS,  H_CRIT_EDGES)
+    fp_crit_post, n_post = count_fp(out_df, SLA_H_CRIT_MS,  H_CRIT_EDGES)
+    fp_cache_pre,  _     = count_fp(in_df,  SLA_H_CACHE_MS, H_CACHE_EDGES)
+    fp_cache_post, _     = count_fp(out_df, SLA_H_CACHE_MS, H_CACHE_EDGES)
 
-    n_tot_crit  = len(h_crit_out)
-    n_tot_cache = len(h_cache_out)
-    n_viol_crit  = (h_crit_out  > SLA_H_CRIT_MS).sum()
-    n_viol_cache = (h_cache_out > SLA_H_CACHE_MS).sum()
-
-    # Violazioni introdotte dal ramp (non preesistenti nell'input)
-    viol_out_mask = h_crit_out > SLA_H_CRIT_MS
-    viol_in_mask  = h_crit_in.reindex(h_crit_out.index).fillna(0.0) > SLA_H_CRIT_MS
-    n_new_fp = (viol_out_mask & ~viol_in_mask).sum()
-
-    pct_crit  = 100.0 * n_viol_crit  / n_tot_crit  if n_tot_crit  else 0.0
-    pct_cache = 100.0 * n_viol_cache / n_tot_cache if n_tot_cache else 0.0
-
-    print("Controllo FP su nominali:")
-    print(
-        f"  Finestre nominali con latenza H_crit > SLA_H_CRIT: "
-        f"{n_viol_crit} / {n_tot_crit} ({pct_crit:.1f}%)"
-    )
-    print(
-        f"  Finestre nominali con latenza H_cache > SLA_H_CACHE: "
-        f"{n_viol_cache} / {n_tot_cache} ({pct_cache:.1f}%)"
-    )
-    print(f"  Nuovi FP introdotti dal ramp: {n_new_fp}")
-    print("  (ATTESO: 0% -- se > 0% ridurre MAX_GLOBAL_SCALE)")
+    print(f"FP H_crit  PRIMA del ramp: {fp_crit_pre}")
+    print(f"FP H_crit  DOPO  del ramp: {fp_crit_post}")
+    print(f"Nuovi FP H_crit introdotti: {fp_crit_post - fp_crit_pre}  (ATTESO: 0)")
+    print(f"FP H_cache PRIMA del ramp: {fp_cache_pre}")
+    print(f"FP H_cache DOPO  del ramp: {fp_cache_post}")
+    print(f"Nuovi FP H_cache introdotti: {fp_cache_post - fp_cache_pre}  (ATTESO: 0)")
+    print()
+    print(f"Esperimenti rampati: {injector.n_ramped}")
+    print(f"Esperimenti skippati (n_nominal < {MIN_NOMINAL_FOR_RAMP}): {injector.n_skipped}")
+    print(f"Esperimenti esclusi (cpu_aug12_25min_200_*): {injector.n_excluded}")
+    print(f"Righe modificate: {injector.n_modified}")
 
 
 def _scale_factor_report(injector: GammaRampInjector, gt: pd.DataFrame) -> None:
@@ -212,7 +202,7 @@ def _print_verification_report(
         print()
 
     _scale_factor_report(injector, gt)
-    _fp_check(out_df, in_df, gt)
+    _fp_check(out_df, in_df, gt, injector)
 
 
 # ---------------------------------------------------------------------------

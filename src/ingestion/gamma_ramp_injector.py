@@ -20,7 +20,9 @@ EXCLUDE_PREFIX: str = "cpu_aug12_25min_200_"
 SLA_H_CRIT_MS: float = 284.4
 SLA_H_CACHE_MS: float = 45.0
 MAX_GLOBAL_SCALE: float = 3.82
-SLA_H_CRIT_RAMP_TARGET: float = SLA_H_CRIT_MS * 0.90  # 255.96ms
+SLA_H_CRIT_RAMP_TARGET: float = SLA_H_CRIT_MS * 0.90   # 255.96ms
+SLA_H_CACHE_RAMP_TARGET: float = SLA_H_CACHE_MS * 0.90  # 40.5ms
+MIN_NOMINAL_FOR_RAMP: int = 5
 
 # Archi per compliance set (source e target entrambi nel set)
 H_CRIT_EDGES: frozenset[str] = frozenset({"e1", "e2", "e4", "e6"})
@@ -41,6 +43,35 @@ def compute_n_ramp(n_nominal_windows: int) -> int:
         Valore in [5, 30].
     """
     return max(5, min(30, n_nominal_windows // 3))
+
+
+def apply_hard_cap(df_window: pd.DataFrame) -> pd.DataFrame:
+    """Scala indietro le latenze se il SUM per compliance set supera il target.
+
+    Chiamata dopo ogni step della rampa lineare, garantisce che nessuna
+    finestra nominale rampata superi mai la soglia SLA_*_RAMP_TARGET.
+
+    Parameters
+    ----------
+    df_window:
+        Tutte le righe di una singola finestra (stesso timestamp, stesso
+        source_file). Modificato in-place.
+
+    Returns
+    -------
+    pd.DataFrame
+        df_window modificato in-place.
+    """
+    for edges_set, target in [
+        (H_CRIT_EDGES, SLA_H_CRIT_RAMP_TARGET),
+        (H_CACHE_EDGES, SLA_H_CACHE_RAMP_TARGET),
+    ]:
+        mask = df_window["edge_id"].isin(edges_set)
+        agg = df_window.loc[mask, "latency_ms"].sum()
+        if agg > target:
+            factor = target / agg
+            df_window.loc[mask, "latency_ms"] *= factor
+    return df_window
 
 
 class GammaRampInjector:
@@ -66,7 +97,7 @@ class GammaRampInjector:
         edge_aug_out: Path = EDGE_AUG_OUT,
         max_scale: float = MAX_GLOBAL_SCALE,
         exclude_prefix: str = EXCLUDE_PREFIX,
-        min_nominal_windows: int = 5,
+        min_nominal_windows: int = MIN_NOMINAL_FOR_RAMP,
     ) -> None:
         """Inizializza il ramp injector.
 
@@ -96,6 +127,7 @@ class GammaRampInjector:
         self.n_excluded: int = 0
         self.n_ramped: int = 0
         self.n_skipped: int = 0
+        self.n_modified: int = 0
         self.exp_scale_factors: dict[str, float] = {}
 
     def inject(
@@ -125,7 +157,7 @@ class GammaRampInjector:
 
         source_files = edges["source_file"].unique()
         n_total = len(source_files)
-        self.n_excluded = self.n_ramped = self.n_skipped = 0
+        self.n_excluded = self.n_ramped = self.n_skipped = self.n_modified = 0
         self.exp_scale_factors = {}
 
         augmented_frames: list[pd.DataFrame] = []
@@ -175,10 +207,17 @@ class GammaRampInjector:
             result = sf_df.copy()
             for j, ts in enumerate(ramp_ts):
                 scale = 1.0 + (exp_scale - 1.0) * (j / (n_ramp - 1))
-                mask = result["timestamp"] == ts
-                result.loc[mask, "latency_ms"] *= scale
+                ts_mask = result["timestamp"] == ts
+                result.loc[ts_mask, "latency_ms"] *= scale
+                # Fix 1: hard cap post-ramp — garantisce zero nuovi FP
+                w = result.loc[ts_mask].copy()
+                apply_hard_cap(w)
+                result.loc[ts_mask, "latency_ms"] = w["latency_ms"].values
 
             self.n_ramped += 1
+            sf_orig = sf_df["latency_ms"].values
+            sf_new = result["latency_ms"].values
+            self.n_modified += int((sf_orig != sf_new).sum())
             augmented_frames.append(result.drop(columns=["label_trace"]))
 
             logger.debug(
