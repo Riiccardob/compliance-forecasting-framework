@@ -91,6 +91,7 @@ class StructuralMonitor:
         self._ewma_alpha: float = float(cusum_cfg["ewma_alpha"])
         self._cusum_threshold: float = float(cusum_cfg["alert_threshold"])
         self._cusum_k: float = float(cusum_cfg.get("tolerance_factor", 0.0))
+        self._cusum_cfg: dict = cusum_cfg
 
         sv_cfg = ad["structural_validator"]
         self._frobenius_threshold: float = float(sv_cfg["distance_threshold"])
@@ -235,6 +236,36 @@ class StructuralMonitor:
         else:
             self._pas_gold = None
             self._reference = 0.0  # Frobenius_gold = 0 per costruzione
+
+        # Per topologia parallela, il tolerance_factor fisso da YAML causa
+        # accumulo del CUSUM anche in fase nominale per rumore stocastico
+        # del throughput. Se auto_calibrate_tolerance=True, il tolerance_factor
+        # viene calibrato sulla media della Frobenius nominale.
+        auto_cal = self._cusum_cfg.get("auto_calibrate_tolerance", False)
+        if auto_cal and self._topology_type == "parallel":
+            frob_series = self._pbo.compute_frobenius_distance(
+                weight_series, gold_standard
+            )
+            nominal_ts = {s["timestamp"] for s in nominal_snapshots}
+            frob_nominal = [
+                entry["frobenius"]
+                for entry in frob_series
+                if entry["timestamp"] in nominal_ts
+            ]
+            if frob_nominal:
+                calibrated_k = float(np.mean(frob_nominal))
+                self._logger.info(
+                    "[%s] CUSUM tolerance_factor auto-calibrato: %.6f "
+                    "(mean Frobenius nominale su %d finestre)",
+                    compliance_set_name, calibrated_k, len(frob_nominal),
+                )
+                self._cusum_k = calibrated_k
+            else:
+                self._logger.warning(
+                    "[%s] auto_calibrate_tolerance=True ma nessuna finestra "
+                    "nominale nel weight_series. Uso tolerance_factor da YAML.",
+                    compliance_set_name,
+                )
 
         # Reset stato CUSUM / EWMA
         self.reset_cusum()

@@ -964,3 +964,151 @@ def test_monitor_with_empty_weight_series_does_not_crash(
     assert result["frobenius_distance"] is None or isinstance(
         result["frobenius_distance"], float
     )
+
+
+#  Auto-calibrazione CUSUM parallelo (2) 
+
+# Nodi H_cache in ordine sorted (home-timeline-redis < home-timeline-service <
+# post-storage-memcached < post-storage-service)
+_H_CACHE_NODES_SORTED = [
+    "home-timeline-redis",
+    "home-timeline-service",
+    "post-storage-memcached",
+    "post-storage-service",
+]
+
+
+def _make_h_cache_weight_series_noisy(
+    n: int, noise_eps: float, ts_start: int = _T0
+) -> list[dict]:
+    """Weight series DSB con oscillazione alternata ±eps in e3/e4 e e5/e6.
+
+    Con n pari il gold standard risultante è W_nominal esatto (media = 0.5).
+    Frobenius di ogni entry da W_nominal = sqrt(4 × eps²) = 2 × eps.
+    """
+    result = []
+    for i in range(n):
+        ts = ts_start + i * _STEP_US
+        sign = 1.0 if i % 2 == 0 else -1.0
+        result.append({
+            "timestamp": ts,
+            "weights": {
+                "e1": 1.0,
+                "e2": 1.0,
+                "e3": 0.5 + sign * noise_eps,
+                "e4": 0.5 - sign * noise_eps,
+                "e5": 0.5 + sign * noise_eps,
+                "e6": 0.5 - sign * noise_eps,
+            },
+        })
+    return result
+
+
+def _make_features_h_cache(n: int = 1, ts_start: int = _T0) -> dict[str, pd.DataFrame]:
+    """Feature dict per H_cache - n finestre a partire da ts_start."""
+    ts_list = [ts_start + i * _STEP_US for i in range(n)]
+    feats: dict[str, pd.DataFrame] = {}
+    for node in _H_CACHE_NODES_SORTED:
+        feats[f"node:{node}:cpu_percent"] = pd.DataFrame(
+            {"value": [5.0] * n}, index=pd.Index(ts_list, name="timestamp")
+        )
+        feats[f"node:{node}:mem_mb"] = pd.DataFrame(
+            {"value": [512.0] * n}, index=pd.Index(ts_list, name="timestamp")
+        )
+        feats[f"node:{node}:net_rx_mb"] = pd.DataFrame(
+            {"value": [1.0] * n}, index=pd.Index(ts_list, name="timestamp")
+        )
+        feats[f"node:{node}:net_tx_mb"] = pd.DataFrame(
+            {"value": [0.5] * n}, index=pd.Index(ts_list, name="timestamp")
+        )
+    return feats
+
+
+def test_cusum_parallel_auto_calibrate_suppresses_nominal_accumulation(
+    config: ConfigLoader,
+    topology_builder: TopologyBuilder,
+    pbo_builder: PBOBuilder,
+) -> None:
+    """Auto-calibrazione su H_cache (parallelo): k = mean(Frobenius_nom) ≈ 0.02.
+
+    Con tolerance_factor calibrato al livello nominale, il CUSUM non accumula
+    sulle finestre nominali (increment ≈ 0 per ogni finestra).
+    Verifica: cusum_stat < alert_threshold dopo 5 finestre nominali.
+    """
+    n_nom = 20
+    noise_eps = 0.01  # Frobenius_nom = 2 × 0.01 = 0.02 per finestra
+
+    nominal_snaps = [_make_snap(_T0 + i * _STEP_US, label=0) for i in range(n_nom)]
+    nom_ws = _make_h_cache_weight_series_noisy(n_nom, noise_eps)
+    gold = pbo_builder.compute_gold_standard(nom_ws, nominal_snaps)
+    nom_features = _make_features_h_cache(n_nom)
+
+    mon = StructuralMonitor(config, topology_builder, pbo_builder)
+    mon.fit("H_cache", nom_features, nominal_snaps, nom_ws, gold)
+
+    # Il tolerance_factor auto-calibrato deve essere ≈ 2 × noise_eps = 0.02
+    expected_k = 2.0 * noise_eps
+    assert abs(mon._cusum_k - expected_k) < 0.005, (
+        f"tolerance_factor auto-calibrato atteso ≈ {expected_k:.4f}, "
+        f"ottenuto {mon._cusum_k:.6f}"
+    )
+
+    # monitor() su 5 finestre nominali: cusum_stat deve restare < alert_threshold
+    result = None
+    for i in range(5):
+        ts = _T0 + (n_nom + i) * _STEP_US
+        ws_single = _make_h_cache_weight_series_noisy(1, noise_eps, ts_start=ts)
+        feat = _make_features_h_cache(1, ts_start=ts)
+        result = mon.monitor("H_cache", feat, ws_single, ts)
+
+    assert result is not None
+    assert result["cusum_signal"] is False, (
+        f"cusum_signal atteso False su finestre nominali con "
+        f"k_calibrated={mon._cusum_k:.4f}. "
+        f"cusum_stat={result['cusum_stat']:.6f} vs threshold={mon._cusum_threshold}"
+    )
+    assert result["cusum_stat"] < mon._cusum_threshold, (
+        f"cusum_stat={result['cusum_stat']:.6f} deve essere < "
+        f"alert_threshold={mon._cusum_threshold}"
+    )
+
+
+def test_cusum_parallel_auto_calibrate_detects_genuine_drift(
+    config: ConfigLoader,
+    topology_builder: TopologyBuilder,
+    pbo_builder: PBOBuilder,
+) -> None:
+    """Auto-calibrazione su H_cache (parallelo): Frobenius_anomal >> k_calibrated.
+
+    Con Frobenius_anomal ≈ 0.10 (5× il livello nominale ≈ 0.02), il CUSUM
+    accumula genuinamente e supera alert_threshold entro 20 finestre.
+    Verifica: cusum_signal=True entro 20 finestre anomale.
+    """
+    n_nom = 20
+    noise_eps = 0.01   # Frobenius_nom ≈ 0.02
+    drift_eps = 0.05   # Frobenius_anomal ≈ 0.10 (5× nominale)
+
+    nominal_snaps = [_make_snap(_T0 + i * _STEP_US, label=0) for i in range(n_nom)]
+    nom_ws = _make_h_cache_weight_series_noisy(n_nom, noise_eps)
+    gold = pbo_builder.compute_gold_standard(nom_ws, nominal_snaps)
+    nom_features = _make_features_h_cache(n_nom)
+
+    mon = StructuralMonitor(config, topology_builder, pbo_builder)
+    mon.fit("H_cache", nom_features, nominal_snaps, nom_ws, gold)
+
+    # monitor() su 20 finestre anomale con routing drift (Frobenius ≈ 0.10)
+    result = None
+    for i in range(20):
+        ts = _T0 + (n_nom + i) * _STEP_US
+        ws_anomal = _make_h_cache_weight_series_noisy(1, drift_eps, ts_start=ts)
+        feat = _make_features_h_cache(1, ts_start=ts)
+        result = mon.monitor("H_cache", feat, ws_anomal, ts)
+        if result["cusum_signal"]:
+            break
+
+    assert result is not None
+    assert result["cusum_signal"] is True, (
+        f"cusum_signal atteso True con Frobenius_anomal ≈ {2*drift_eps:.2f} >> "
+        f"k_calibrated={mon._cusum_k:.4f}. "
+        f"cusum_stat={result['cusum_stat']:.6f} vs threshold={mon._cusum_threshold}"
+    )

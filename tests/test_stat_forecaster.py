@@ -389,3 +389,114 @@ def test_prophet_changepoint_prior_scale_from_yaml(config: ConfigLoader) -> None
     """Verifica che changepoint_prior_scale sia letto da pipeline_params.yaml."""
     forecaster = StatForecaster(config)
     assert forecaster._prophet_changepoint_prior_scale == 0.05
+
+
+# ------------------------------------------------------------------ #
+# predict_adaptive - 7 test                                            #
+# ------------------------------------------------------------------ #
+
+def test_predict_adaptive_raises_before_fit(forecaster: StatForecaster) -> None:
+    """predict_adaptive({}) prima di fit() solleva RuntimeError."""
+    with pytest.raises(RuntimeError):
+        forecaster.predict_adaptive({})
+
+
+def test_predict_adaptive_returns_same_keys_as_predict(
+    forecaster: StatForecaster, mock_features: dict[str, pd.DataFrame]
+) -> None:
+    """predict_adaptive restituisce le stesse chiavi di predict()."""
+    forecaster.fit(mock_features)
+    recent_obs = {
+        "node:nginx-web-server:cpu_percent": pd.DataFrame(
+            {"value": [10.0, 12.0, 14.0, 16.0, 18.0]},
+            index=[1000, 2000, 3000, 4000, 5000],
+        )
+    }
+    assert set(forecaster.predict_adaptive(recent_obs).keys()) == set(forecaster.predict().keys())
+
+
+def test_predict_adaptive_columns_yhat_lower_upper(
+    forecaster: StatForecaster, mock_features: dict[str, pd.DataFrame]
+) -> None:
+    """Ogni DataFrame di predict_adaptive ha colonne ['yhat', 'yhat_lower', 'yhat_upper']."""
+    forecaster.fit(mock_features)
+    recent_obs = {
+        "node:nginx-web-server:cpu_percent": pd.DataFrame(
+            {"value": [10.0, 12.0, 14.0, 16.0, 18.0]},
+            index=[1000, 2000, 3000, 4000, 5000],
+        )
+    }
+    for key, df in forecaster.predict_adaptive(recent_obs).items():
+        assert list(df.columns) == ["yhat", "yhat_lower", "yhat_upper"], (
+            f"Colonne errate per '{key}': {list(df.columns)}"
+        )
+
+
+def test_predict_adaptive_horizon_matches_predict(
+    forecaster: StatForecaster, mock_features: dict[str, pd.DataFrame]
+) -> None:
+    """Il numero di righe di predict_adaptive è uguale a predict() per ogni feature."""
+    forecaster.fit(mock_features)
+    recent_obs = {
+        "node:nginx-web-server:cpu_percent": pd.DataFrame(
+            {"value": [10.0, 12.0, 14.0, 16.0, 18.0]},
+            index=[1000, 2000, 3000, 4000, 5000],
+        )
+    }
+    nominal = forecaster.predict()
+    adaptive = forecaster.predict_adaptive(recent_obs)
+    for key in nominal:
+        assert len(adaptive[key]) == len(nominal[key])
+
+
+def test_predict_adaptive_with_positive_trend_increases_forecast(
+    forecaster: StatForecaster, mock_features: dict[str, pd.DataFrame]
+) -> None:
+    """Con osservazioni molto superiori al nominal mean, il forecast adattivo
+    dell'ultimo step è maggiore del forecast nominale per cpu_percent (Prophet)."""
+    forecaster.fit(mock_features)
+    key = "node:nginx-web-server:cpu_percent"
+    recent_obs = {
+        key: pd.DataFrame(
+            {"value": [100.0, 100.0, 100.0, 100.0, 100.0]},
+            index=[1000, 2000, 3000, 4000, 5000],
+        )
+    }
+    nominal = forecaster.predict()
+    adaptive = forecaster.predict_adaptive(recent_obs)
+    assert adaptive[key]["yhat"].iloc[-1] > nominal[key]["yhat"].iloc[-1]
+
+
+def test_predict_adaptive_warmup_falls_back_to_nominal(
+    forecaster: StatForecaster, mock_features: dict[str, pd.DataFrame]
+) -> None:
+    """Con un solo punto osservato per una feature, il forecast adattivo è
+    identico al nominale (entro 1e-9)."""
+    forecaster.fit(mock_features)
+    key = "node:nginx-web-server:cpu_percent"
+    recent_obs = {
+        key: pd.DataFrame(
+            {"value": [15.0]},
+            index=[1000],
+        )
+    }
+    nominal = forecaster.predict()
+    adaptive = forecaster.predict_adaptive(recent_obs)
+    diff = (adaptive[key]["yhat"] - nominal[key]["yhat"]).abs().max()
+    assert diff < 1e-9
+
+
+def test_predict_adaptive_clamping_no_negative_yhat(
+    forecaster: StatForecaster, mock_features: dict[str, pd.DataFrame]
+) -> None:
+    """Con trend fortemente negativo (osservazioni ≈ 0), yhat non scende mai sotto 0."""
+    forecaster.fit(mock_features)
+    key = "node:nginx-web-server:cpu_percent"
+    recent_obs = {
+        key: pd.DataFrame(
+            {"value": [0.0] * 8},
+            index=list(range(1000, 9000, 1000)),
+        )
+    }
+    adaptive = forecaster.predict_adaptive(recent_obs)
+    assert (adaptive[key]["yhat"] >= 0).all()

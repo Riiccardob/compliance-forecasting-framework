@@ -177,6 +177,130 @@ class StatForecaster:
 
         return result
 
+    def predict_adaptive(
+        self,
+        recent_observations: dict[str, pd.DataFrame],
+        ewma_alpha: float | None = None,
+        lookback_windows: int | None = None,
+        horizon_steps: int | None = None,
+    ) -> dict[str, pd.DataFrame]:
+        """Genera previsioni adattive applicando EWMA Trend Correction al forecast nominale.
+
+        Il forecast nominale (da predict()) non viene modificato. Per ogni feature,
+        stima il trend di deviazione dalle ultime osservazioni reali e corregge
+        il forecast nominale proporzionalmente al passo di orizzonte τ.
+
+        Parameters
+        ----------
+        recent_observations:
+            Dizionario {feature_key: DataFrame}. Ogni DataFrame ha index di
+            timestamp (int µs) e colonna ``value`` con il valore osservato.
+            Se la colonna ``value`` non è presente usa la prima colonna numerica.
+        ewma_alpha:
+            Peso EWMA ∈ (0, 1]. None legge da ``forecasting.adaptive.ewma_alpha``
+            in pipeline_params.yaml; default 0.3 se la chiave è assente.
+        lookback_windows:
+            Numero massimo di finestre recenti per la stima del trend. None legge
+            da ``forecasting.adaptive.lookback_windows``; default 8 se assente.
+        horizon_steps:
+            Numero di passi da prevedere. None usa ``forecasting.horizon_steps``.
+
+        Returns
+        -------
+        dict[str, pd.DataFrame]
+            Index: timestamp futuro (int µs). Colonne: yhat, yhat_lower, yhat_upper.
+
+        Raises
+        ------
+        RuntimeError
+            Se chiamato prima di fit().
+        """
+        if not self._is_fitted:
+            raise RuntimeError("predict_adaptive chiamato prima di fit()")
+
+        adaptive_cfg = self._params["forecasting"].get("adaptive", {})
+        if ewma_alpha is None:
+            ewma_alpha = float(adaptive_cfg.get("ewma_alpha", 0.3))
+        if lookback_windows is None:
+            lookback_windows = int(adaptive_cfg.get("lookback_windows", 8))
+
+        if not (0 < ewma_alpha <= 1):
+            logger.warning(
+                "predict_adaptive: ewma_alpha=%s fuori dall'intervallo (0, 1].",
+                ewma_alpha,
+            )
+
+        nominal_fc = self.predict(horizon_steps=horizon_steps)
+        result: dict[str, pd.DataFrame] = {}
+
+        for feature, nominal_df in nominal_fc.items():
+            nominal_yhat = nominal_df["yhat"].values.astype(float)
+            nominal_lower = nominal_df["yhat_lower"].values.astype(float)
+            nominal_upper = nominal_df["yhat_upper"].values.astype(float)
+
+            if feature not in recent_observations:
+                result[feature] = nominal_df.copy()
+                continue
+
+            obs_df = recent_observations[feature]
+            if "value" in obs_df.columns:
+                obs_values = obs_df["value"].values.astype(float)
+            else:
+                numeric_cols = obs_df.select_dtypes(include=[np.number]).columns
+                if len(numeric_cols) == 0:
+                    result[feature] = nominal_df.copy()
+                    continue
+                obs_values = obs_df[numeric_cols[0]].values.astype(float)
+
+            if len(obs_values) < 2:
+                logger.debug(
+                    "predict_adaptive: warmup per %s, uso forecast nominale", feature
+                )
+                result[feature] = nominal_df.copy()
+                continue
+
+            nominal_yhat_mean = float(nominal_df["yhat"].mean())
+            deltas = [float(v) - nominal_yhat_mean for v in obs_values]
+            k = min(lookback_windows, len(deltas))
+            deltas = deltas[-k:]
+
+            trend_estimate = 0.0
+            for delta in deltas:
+                trend_estimate = ewma_alpha * delta + (1 - ewma_alpha) * trend_estimate
+
+            n = len(nominal_yhat)
+            adaptive_yhat = np.empty(n)
+            adaptive_lower = np.empty(n)
+            adaptive_upper = np.empty(n)
+
+            for i in range(n):
+                tau = i + 1
+                y = nominal_yhat[i] + trend_estimate * tau
+                lo = nominal_lower[i] + trend_estimate * tau
+                hi = nominal_upper[i] + trend_estimate * tau
+
+                y = max(y, 0.0)
+                if trend_estimate >= 0.0:
+                    y = max(y, float(nominal_yhat[i]))
+
+                lo = min(lo, y)
+                hi = max(hi, y)
+
+                adaptive_yhat[i] = y
+                adaptive_lower[i] = lo
+                adaptive_upper[i] = hi
+
+            result[feature] = pd.DataFrame(
+                {
+                    "yhat": adaptive_yhat,
+                    "yhat_lower": adaptive_lower,
+                    "yhat_upper": adaptive_upper,
+                },
+                index=nominal_df.index,
+            )
+
+        return result
+
     def get_model_routing(self) -> dict[str, str]:
         """Restituisce il routing modello per ogni feature.
 

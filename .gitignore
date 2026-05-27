@@ -204,12 +204,3 @@ data/converted/*
 !data/converted/.gitkeep
 
 results/
-img1.py
-img2.py
-images/
-pipeline_results_PREDSB.json
-RISULTATIPOST.txt
-RISULTATO.txt
-scripts/
-docs/
-dashboard_OLD/
