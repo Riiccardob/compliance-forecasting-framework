@@ -486,7 +486,6 @@ def run(
     # Reset CUSUM e buffer per il FP pass
     for cs in cs_names:
         per_cs[cs]["mon"].reset_cusum()
-    fp_buffers: dict[str, dict[str, pd.DataFrame]] = {cs: {} for cs in cs_names}
     fp_alerts:  dict[str, list[dict]]              = {cs: [] for cs in cs_names}
 
     t0 = time.time()
@@ -498,12 +497,10 @@ def run(
                 w_curr = pbo.compute_transition_weights([snap])
                 m_res  = per_cs[cs]["mon"].monitor(cs, feats, w_curr, ts)
 
-                buf = fp_buffers[cs]
-                recent_obs = {k: df for k, df in buf.items() if len(df) >= 1}
-                if recent_obs and all(len(df) >= 2 for df in recent_obs.values()):
-                    forecasts = per_cs[cs]["fc"].predict_adaptive(recent_obs)
-                else:
-                    forecasts = per_cs[cs]["fc"].predict()
+                # Nel FP pass si usa sempre il forecast nominale fisso.
+                # predict_adaptive() accumulerebbe un trend EWMA artificiale
+                # scorrendo i nominali in sequenza, sovrastimando i FP.
+                forecasts = per_cs[cs]["fc"].predict()
 
                 alert = per_cs[cs]["ag"].generate(
                     cs, forecasts, per_cs[cs]["causal_graph"], m_res, ts
@@ -511,7 +508,6 @@ def run(
                 if alert is not None:
                     fp_alerts[cs].append(alert)
 
-                _update_buffer(fp_buffers[cs], feats)
             except Exception as exc:
                 logger.warning("FP pass errore cs=%s ts=%d: %s", cs, ts, exc)
 
