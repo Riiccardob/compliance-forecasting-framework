@@ -1,0 +1,99 @@
+# topology.yaml - Struttura del grafo certificato
+# Solo topologia e definizioni statiche. Parametri algoritmici in pipeline_params.yaml.
+
+metadata:
+  system_name: "DeathStarBench Social Network"
+  flow: "read-home-timeline"
+  graph_id: "graph_2"
+  dataset: "GAMMA"
+  window_duration_seconds: 5.0
+
+nodes:
+  - id: nginx-web-server        # index 0 - entry point HTTP
+  - id: nginx-thrift            # index 1
+  - id: home-timeline-service   # index 2
+  - id: home-timeline-redis     # index 3
+  - id: post-storage-service    # index 4
+  - id: post-storage-memcached  # index 5
+  - id: post-storage-mongodb    # index 6
+
+edges:
+  - id: e1
+    source: nginx-web-server
+    target: nginx-thrift
+  - id: e2
+    source: nginx-thrift
+    target: home-timeline-service
+  - id: e3
+    source: home-timeline-service
+    target: home-timeline-redis
+  - id: e4
+    source: home-timeline-service
+    target: post-storage-service
+  - id: e5
+    source: post-storage-service
+    target: post-storage-memcached
+  - id: e6
+    source: post-storage-service
+    target: post-storage-mongodb
+
+node_metrics:
+  - cpu_percent
+  - mem_mb
+  - net_rx_mb
+  - net_tx_mb
+
+edge_metrics:
+  - latency_ms
+  - error_rate
+  - throughput_rps
+
+compliance_sets:
+  H_crit:
+    description: "Real-time Dependability - percorso critico di latenza"
+    topology_type: linear
+    # Percorso certificato lineare: PAS applicabile.
+    nodes:
+      - nginx-web-server
+      - nginx-thrift
+      - home-timeline-service
+      - post-storage-service
+      - post-storage-mongodb
+    sla:
+      latency_ms:
+        bound: upper
+        threshold: 284.4
+      error_rate:
+        bound: upper
+        threshold: 0.05
+    critical_path:
+      sequence:
+        - nginx-web-server
+        - nginx-thrift
+        - home-timeline-service
+        - post-storage-service
+        - post-storage-mongodb
+
+  H_cache:
+    description: "Cache Efficiency - monitoraggio layer di caching"
+    topology_type: parallel
+    # Topologia con rami paralleli: PAS non applicabile.
+    # Il monitoraggio strutturale usa la norma di Frobenius come fallback.
+    nodes:
+      - home-timeline-service
+      - home-timeline-redis
+      - post-storage-service
+      - post-storage-memcached
+    sla:
+      latency_ms:
+        bound: upper
+        threshold: 45.0
+      error_rate:
+        bound: upper
+        threshold: 0.10
+
+data_paths:
+  raw_dir: "DATASET/processed_dataset/home/multi-modal-data-separate" 
+  node_metrics_csv: "data/converted/node_metrics.csv"
+  edge_metrics_csv: "data/converted/edge_metrics_aug_ramp.csv"
+  ground_truth_csv: "data/converted/ground_truth.csv"
