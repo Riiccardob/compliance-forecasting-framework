@@ -454,7 +454,7 @@ def run(
         sf_result: dict[str, Any] = {
             "source_file": sf,
             "fault_type":  fault_type,
-            "date":        sf_to_fault.get(sf, ""),  # fault_type già estratto
+            "fault_type": sf_to_fault.get(sf, ""),  # fault_type già estratto
         }
         for cs in cs_names:
             sf_result[cs] = _build_cs_result(
