@@ -3,6 +3,7 @@ import json
 import re
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from src.utils.config_loader import ConfigLoader
@@ -29,6 +30,17 @@ class DSBConverter:
     Strategia di scrittura in ``convert_all``: **sovrascrittura completa**.
     I file di destinazione vengono ricreati ad ogni esecuzione; l'append non
     è supportato per evitare duplicati da esecuzioni parziali o ripetute.
+
+    Throughput per-arco (R1):
+        Se ``topology.yaml`` assegna a ciascun arco il campo
+        ``rps_path_type`` (valori: ``"all"``, ``"graph_1"``, ``"graph_2"``)
+        e il file sorgente ha le corrispondenti directory
+        ``{exp_name}/home_rps_start_time_{1,2}.csv`` accanto al CSV raw,
+        il converter legge i timestamp delle tracce per tipo di percorso e
+        calcola il throughput per-arco tramite ``numpy.searchsorted``,
+        soddisfacendo il requisito R1 senza alcun elemento sintetico.
+        In assenza dei file rps (o dell'annotazione in topologia), il
+        comportamento degrada automaticamente al throughput uniforme.
     """
 
     def __init__(self, config: ConfigLoader) -> None:
@@ -61,7 +73,20 @@ class DSBConverter:
             for edge in self._edges
         }
 
+        # Tipo di percorso per il calcolo del throughput per-arco.
+        # Legge il campo opzionale ``rps_path_type`` da ogni arco in topology.yaml.
+        # Valori ammessi: "all" (N1+N2), "graph_1" (N1), "graph_2" (N2).
+        # Default "all" se il campo è assente → retrocompatibilità garantita.
+        self._edge_rps_type: dict[str, str] = {
+            edge["id"]: edge.get("rps_path_type", "all")
+            for edge in self._edges
+        }
+
         self._data_paths: dict = topology["data_paths"]
+        # Path alla radice del raw dataset GAMMA (per i file home_rps_start_time_*.csv).
+        # Se non configurato in topology.yaml, il throughput per-arco è disabilitato.
+        _raw = self._data_paths.get("dataset_raw_dir")
+        self._dataset_raw: Path | None = Path(_raw) if _raw else None
         self._window_duration_s: float = float(
             topology["metadata"]["window_duration_seconds"]
         )
@@ -155,7 +180,8 @@ class DSBConverter:
         )
         agg = self._aggregate_window_metrics(df)
         node_df = self._compute_node_metrics(agg, filepath.name)
-        edge_df = self._compute_edge_metrics(agg, filepath.name)
+        # Passa filepath per abilitare il calcolo del throughput per-arco.
+        edge_df = self._compute_edge_metrics(agg, filepath.name, filepath)
         gt_df = self._compute_ground_truth(agg, metadata, filepath.name)
         return node_df, edge_df, gt_df
 
@@ -263,6 +289,87 @@ class DSBConverter:
 
         return agg.sort_values("timestamp").reset_index(drop=True)
 
+    def _load_per_arc_rps(
+        self, filepath: Path
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Carica home_rps_start_time_1.csv e _2.csv per il throughput per-arco.
+
+        I file sono in:
+            {dataset_raw_dir}/{exp_name}/processed_traces/home_rps_start_time_{1,2}.csv
+        dove exp_name = filename senza suffisso graph_2.
+
+        Returns (empty, empty) se dataset_raw_dir non è configurato o i file
+        non esistono - fallback al throughput uniforme nella funzione chiamante.
+        """
+        if self._dataset_raw is None:
+            logger.debug("dataset_raw_dir non configurato - throughput uniforme.")
+            return np.empty(0, dtype=np.int64), np.empty(0, dtype=np.int64)
+
+        graph_stem_suffix = self._graph_suffix[:-4]  # "_graph_2"
+        stem = filepath.stem
+        exp_name = (
+            stem[: -len(graph_stem_suffix)]
+            if stem.endswith(graph_stem_suffix)
+            else stem
+        )
+
+        # Stesso path usato da GammaPerArcConverter nello Scenario B
+        rps_dir = self._dataset_raw / exp_name / "processed_traces"
+        rps1_path = rps_dir / "home_rps_start_time_1.csv"
+        rps2_path = rps_dir / "home_rps_start_time_2.csv"
+
+        if not rps1_path.exists() or not rps2_path.exists():
+            logger.warning(
+                "[%s] File home_rps_start_time_*.csv non trovati in %s - "
+                "throughput per-arco non disponibile, uso throughput uniforme.",
+                filepath.name,
+                rps_dir,
+            )
+            return np.empty(0, dtype=np.int64), np.empty(0, dtype=np.int64)
+
+        ts1 = np.sort(
+            pd.read_csv(rps1_path, header=None).iloc[:, 0].values.astype(np.int64)
+        )
+        ts2 = np.sort(
+            pd.read_csv(rps2_path, header=None).iloc[:, 0].values.astype(np.int64)
+        )
+        logger.debug(
+            "[%s] RPS disaggregati: N1=%d (graph_1), N2=%d (graph_2)",
+            filepath.name, len(ts1), len(ts2),
+        )
+        return ts1, ts2
+
+    def _count_traces_per_window(
+        self,
+        sorted_ts: np.ndarray,
+        window_starts_us: np.ndarray,
+        window_ends_us: np.ndarray,
+    ) -> np.ndarray:
+        """Conta le trace in ciascuna finestra con ``numpy.searchsorted``.
+
+        Complessità O(n log n) dove n = len(sorted_ts).
+
+        Parameters
+        ----------
+        sorted_ts:
+            Array ordinato di timestamp delle trace in microsecondi.
+        window_starts_us:
+            Array di timestamp di inizio finestra (incluso) in µs.
+        window_ends_us:
+            Array di timestamp di fine finestra (escluso) in µs.
+
+        Returns
+        -------
+        np.ndarray
+            Conteggio delle trace per ciascuna finestra.
+        """
+        if len(sorted_ts) == 0:
+            return np.zeros(len(window_starts_us), dtype=np.int64)
+        return (
+            np.searchsorted(sorted_ts, window_ends_us, side="left")
+            - np.searchsorted(sorted_ts, window_starts_us, side="left")
+        )
+
     def _compute_node_metrics(
         self,
         agg: pd.DataFrame,
@@ -353,13 +460,20 @@ class DSBConverter:
         self,
         agg: pd.DataFrame,
         source_file: str,
+        filepath: Path | None = None,
     ) -> pd.DataFrame:
         """Calcola ``latency_ms``, ``error_rate``, ``throughput_rps``.
 
-        ``throughput_rps`` = ``n_traces`` / T_w dove T_w è l'intervallo
-        verso la finestra successiva (``diff().shift(-1)``). Se delta_t
-        è NaN o zero (caso single-window), si usa ``self._window_duration_s``
-        (``metadata.window_duration_seconds`` da topology.yaml).
+        Se ``filepath`` è fornito e i file ``home_rps_start_time_{1,2}.csv``
+        esistono nella directory esperimento corrispondente, il throughput
+        viene calcolato per-arco in base al campo ``rps_path_type`` del
+        topology.yaml (soddisfacendo il requisito R1 senza elementi sintetici).
+        Se i file non esistono o ``filepath`` è None, il comportamento
+        degrada al throughput uniforme originale: ``n_traces / T_w``.
+
+        ``T_w`` = intervallo verso la finestra successiva
+        (``diff().shift(-1)``). Fallback a ``self._window_duration_s``
+        se ``delta_t`` è NaN o zero (caso single-window).
 
         Parameters
         ----------
@@ -367,6 +481,9 @@ class DSBConverter:
             DataFrame aggregato da ``_aggregate_window_metrics``.
         source_file:
             Nome del file sorgente (usato nel logging).
+        filepath:
+            Path completo al file sorgente. Se fornito, abilita il
+            throughput per-arco tramite i file rps.
 
         Returns
         -------
@@ -381,13 +498,53 @@ class DSBConverter:
         # T_w[i] = t[i+1] - t[i]
         t_w: pd.Series = t_sec.diff().shift(-1)
 
-        error_rate: pd.Series = (agg["n_anomalous_traces"] / agg["n_traces"]).fillna(0.0)
+        error_rate: pd.Series = (
+            agg["n_anomalous_traces"] / agg["n_traces"]
+        ).fillna(0.0)
         fallback_duration = self._window_duration_s
 
+        # --- Setup throughput per-arco ---
+        # Attivato solo se:
+        #   1. filepath è fornito
+        #   2. almeno un arco ha rps_path_type != "all"
+        #   3. i file home_rps_start_time_*.csv esistono
+        use_per_arc = False
+        n1_per_window: np.ndarray | None = None
+        n2_per_window: np.ndarray | None = None
+
+        needs_per_arc = any(v != "all" for v in self._edge_rps_type.values())
+        if filepath is not None and needs_per_arc:
+            ts1, ts2 = self._load_per_arc_rps(filepath)
+            if len(ts1) > 0 or len(ts2) > 0:
+                timestamps_us = agg["timestamp"].values.astype(np.int64)
+                # Finestra [start, end): start = timestamp[i], end = timestamp[i+1].
+                # Ultima finestra: end = timestamp[-1] + window_duration_s * 1e6.
+                window_ends = np.empty(len(timestamps_us), dtype=np.int64)
+                window_ends[:-1] = timestamps_us[1:]
+                window_ends[-1] = (
+                    timestamps_us[-1] + int(self._window_duration_s * 1_000_000)
+                )
+                n1_per_window = self._count_traces_per_window(
+                    ts1, timestamps_us, window_ends
+                )
+                n2_per_window = self._count_traces_per_window(
+                    ts2, timestamps_us, window_ends
+                )
+                use_per_arc = True
+                logger.debug(
+                    "[%s] Throughput per-arco attivo: "
+                    "N1_medio=%.1f, N2_medio=%.1f trace/finestra",
+                    source_file,
+                    n1_per_window.mean(),
+                    n2_per_window.mean(),
+                )
+
+        # --- Calcolo record per arco ---
         records: list[dict] = []
         for edge in self._edges:
             dest_idx = self._edge_dest_idx[edge["id"]]
             lat_col = f"{dest_idx}_latency"
+            rps_type = self._edge_rps_type.get(edge["id"], "all")
 
             if lat_col not in agg.columns:
                 logger.warning(
@@ -412,6 +569,18 @@ class DSBConverter:
                 if pd.isna(delta_t_seconds) or delta_t_seconds <= 0:
                     delta_t_seconds = fallback_duration
 
+                # Throughput per-arco se disponibile, altrimenti uniforme.
+                if use_per_arc:
+                    if rps_type == "graph_1":
+                        n_edge = int(n1_per_window[i])
+                    elif rps_type == "graph_2":
+                        n_edge = int(n2_per_window[i])
+                    else:  # "all"
+                        n_edge = int(n1_per_window[i]) + int(n2_per_window[i])
+                    throughput = n_edge / delta_t_seconds
+                else:
+                    throughput = agg.iloc[i]["n_traces"] / delta_t_seconds
+
                 records.append(
                     {
                         "timestamp": agg.iloc[i]["timestamp"],
@@ -421,7 +590,7 @@ class DSBConverter:
                         "target": edge["target"],
                         "latency_ms": latency_ms.iloc[i],
                         "error_rate": error_rate.iloc[i],
-                        "throughput_rps": agg.iloc[i]["n_traces"] / delta_t_seconds,
+                        "throughput_rps": throughput,
                         "source_file": source_file,
                     }
                 )
