@@ -1,12 +1,13 @@
 """Test per StatForecaster - mock leggeri, nessun CSV reale."""
+
 import warnings
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from src.utils.config_loader import ConfigLoader
 from src.phase1.stat_forecaster import StatForecaster
+from src.utils.config_loader import ConfigLoader
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -14,9 +15,9 @@ _ROOT = Path(__file__).parent.parent
 _TOPOLOGY_PATH = _ROOT / "config" / "topology.yaml"
 _PIPELINE_PATH = _ROOT / "config" / "pipeline_params.yaml"
 
-_T0 = 1_000_000_000      # µs - punto di partenza lontano dall'origine
-_STEP_US = 5_000_000     # 5 s in µs
-_N = 50                  # ≥ input_window × 2 = 24 × 2 = 48 → LSTM routing attivo
+_T0 = 1_000_000_000  # µs - punto di partenza lontano dall'origine
+_STEP_US = 5_000_000  # 5 s in µs
+_N = 50  # ≥ input_window × 2 = 24 × 2 = 48 → LSTM routing attivo
 
 
 def _make_series(
@@ -33,7 +34,8 @@ def _make_series(
     )
 
 
-#FIXTURE
+# FIXTURE
+
 
 @pytest.fixture
 def config() -> ConfigLoader:
@@ -53,7 +55,8 @@ def mock_features() -> dict[str, pd.DataFrame]:
     }
 
 
-#TEST
+# TEST
+
 
 def test_get_model_routing_before_fit_raises(
     forecaster: StatForecaster,
@@ -68,7 +71,9 @@ def test_routing_cpu_percent_is_prophet(
 ) -> None:
     """cpu_percent non è in nonlinear_metrics → Prophet."""
     forecaster.fit(mock_features)
-    assert forecaster.get_model_routing()["node:nginx-web-server:cpu_percent"] == "prophet"
+    assert (
+        forecaster.get_model_routing()["node:nginx-web-server:cpu_percent"] == "prophet"
+    )
 
 
 def test_routing_mem_mb_is_lstm(
@@ -170,7 +175,9 @@ def test_fallback_to_prophet_on_short_series(
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         forecaster.fit(short_features)
-    assert forecaster.get_model_routing()["node:home-timeline-service:mem_mb"] == "prophet"
+    assert (
+        forecaster.get_model_routing()["node:home-timeline-service:mem_mb"] == "prophet"
+    )
 
 
 def test_fit_ignores_anomalous_snapshots(
@@ -190,7 +197,6 @@ def test_fit_handles_nan_in_training_series(
 ) -> None:
     """fit() non solleva eccezioni quando il training set contiene NaN.
     Il dropna() in fit() scarta silenziosamente i NaN prima del fitting."""
-    import numpy as np
 
     n = 50
     timestamps = [i * 5_000_000 for i in range(n)]
@@ -353,8 +359,9 @@ def test_arima_ljungbox_warning_on_correlated_residuals(
     tutti i multipli di lag 5, struttura non catturabile da ARIMA(p,d,q) con
     max_p=2, max_d=1, max_q=2. Il warning viene emesso via module-level logger.
     """
-    import numpy as np
     from unittest.mock import patch
+
+    import numpy as np
 
     rng = np.random.default_rng(42)
     n = 200
@@ -379,10 +386,11 @@ def test_arima_ljungbox_warning_on_correlated_residuals(
             model_override={"node:nginx-web-server:cpu_percent": "arima"},
         )
     warning_calls = [
-        call for call in mock_logger.warning.call_args_list
-        if "Ljung-Box" in str(call)
+        call for call in mock_logger.warning.call_args_list if "Ljung-Box" in str(call)
     ]
-    assert warning_calls, "logger.warning Ljung-Box non emesso per residui autocorrelati"
+    assert warning_calls, (
+        "logger.warning Ljung-Box non emesso per residui autocorrelati"
+    )
 
 
 def test_prophet_changepoint_prior_scale_from_yaml(config: ConfigLoader) -> None:
@@ -394,6 +402,7 @@ def test_prophet_changepoint_prior_scale_from_yaml(config: ConfigLoader) -> None
 # ------------------------------------------------------------------ #
 # predict_adaptive - 7 test                                            #
 # ------------------------------------------------------------------ #
+
 
 def test_predict_adaptive_raises_before_fit(forecaster: StatForecaster) -> None:
     """predict_adaptive({}) prima di fit() solleva RuntimeError."""
@@ -412,7 +421,9 @@ def test_predict_adaptive_returns_same_keys_as_predict(
             index=[1000, 2000, 3000, 4000, 5000],
         )
     }
-    assert set(forecaster.predict_adaptive(recent_obs).keys()) == set(forecaster.predict().keys())
+    assert set(forecaster.predict_adaptive(recent_obs).keys()) == set(
+        forecaster.predict().keys()
+    )
 
 
 def test_predict_adaptive_columns_yhat_lower_upper(

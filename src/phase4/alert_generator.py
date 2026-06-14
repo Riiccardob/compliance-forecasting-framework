@@ -1,4 +1,5 @@
 """Fase IV - Generatore di alert strutturati con lead time e causa radice."""
+
 from typing import Any
 
 import numpy as np
@@ -77,14 +78,11 @@ class AlertGenerator:
                 "pipeline_params.yaml - uso default 24.0 ore per step."
             )
 
-        self._divergence_threshold: float = float(
-            fc.get("divergence_threshold", 0.2)
-        )
+        self._divergence_threshold: float = float(fc.get("divergence_threshold", 0.2))
 
         # Lookup (source, target) → edge_id per la query topologica
         self._edge_id_lookup: dict[tuple[str, str], str] = {
-            (e["source"], e["target"]): e["id"]
-            for e in self._topology["edges"]
+            (e["source"], e["target"]): e["id"] for e in self._topology["edges"]
         }
 
         self._logger.info(
@@ -134,23 +132,29 @@ class AlertGenerator:
             Se ``compliance_set_name`` non esiste in topology.yaml.
         """
         if compliance_set_name not in self._topology["compliance_sets"]:
-            raise KeyError(
-                f"Compliance set non trovato: '{compliance_set_name}'"
-            )
+            raise KeyError(f"Compliance set non trovato: '{compliance_set_name}'")
 
         # 1. Proprietà monitorata e SLA
         # check_threshold/check_bound: soglia interna per violation check.
         # display_threshold/display_bound: valori originali del certificato SLA
         # (uguali a check per latency/capacity; convertiti per reliability).
-        property_at_risk, check_threshold, check_bound, agg_func, \
-            display_threshold, display_bound = (
-                self._detect_property(compliance_set_name)
-            )
+        (
+            property_at_risk,
+            check_threshold,
+            check_bound,
+            agg_func,
+            display_threshold,
+            display_bound,
+        ) = self._detect_property(compliance_set_name)
 
         # 2. Aggregazione previsioni
         aggregated = self._aggregate_forecasts(
-            forecasts, compliance_set_name, agg_func,
-            property_at_risk, display_threshold, check_bound,
+            forecasts,
+            compliance_set_name,
+            agg_func,
+            property_at_risk,
+            display_threshold,
+            check_bound,
             display_bound,
         )
 
@@ -173,8 +177,11 @@ class AlertGenerator:
         # 6. Causa radice
         root_cause, cross_interference, causal_chain, critical_arc = (
             self._extract_root_cause(
-                causal_graph, property_at_risk, forecasts,
-                compliance_set_name, lead_time_steps,
+                causal_graph,
+                property_at_risk,
+                forecasts,
+                compliance_set_name,
+                lead_time_steps,
             )
         )
 
@@ -292,8 +299,12 @@ class AlertGenerator:
                 check_threshold = raw_threshold
                 check_bound = raw_bound
             return (
-                "reliability", check_threshold, check_bound,
-                "product_complement", raw_threshold, raw_bound,
+                "reliability",
+                check_threshold,
+                check_bound,
+                "product_complement",
+                raw_threshold,
+                raw_bound,
             )
 
         throughput_key = next((k for k in sla if "throughput" in k), None)
@@ -349,7 +360,9 @@ class AlertGenerator:
             self._logger.warning(
                 "[%s] Forecasts contengono %d step < horizon_steps=%d - "
                 "lead time stimato su orizzonte ridotto.",
-                compliance_set_name, n_steps, self._horizon_steps,
+                compliance_set_name,
+                n_steps,
+                self._horizon_steps,
             )
         result: list[float] = []
 
@@ -376,7 +389,10 @@ class AlertGenerator:
                     self._logger.warning(
                         "yhat=NaN per feature '%s' step %d - "
                         "uso fallback conservativo %.4f (display_bound=%s).",
-                        key, step, conservative_fallback, display_bound,
+                        key,
+                        step,
+                        conservative_fallback,
+                        display_bound,
                     )
                     yhat = conservative_fallback
                 values.append(yhat)
@@ -492,16 +508,16 @@ class AlertGenerator:
 
         # Cerca prima gli edge il cui target termina con la metrica di interesse
         relevant_edges = [
-            e for e in edges
-            if str(e.get("target", "")).endswith(f":{metric_suffix}")
+            e for e in edges if str(e.get("target", "")).endswith(f":{metric_suffix}")
         ]
         # Se non ci sono edge specifici della metrica, restringere comunque
         # ai soli edge con target "edge:..." per evitare di estrarre node_id
         # da target del tipo "node:v:metric".
-        candidate_edges = relevant_edges if relevant_edges else [
-            e for e in edges
-            if str(e.get("target", "")).startswith("edge:")
-        ]
+        candidate_edges = (
+            relevant_edges
+            if relevant_edges
+            else [e for e in edges if str(e.get("target", "")).startswith("edge:")]
+        )
 
         if candidate_edges:
             best = max(candidate_edges, key=lambda e: float(e.get("intensity", 0.0)))
@@ -515,8 +531,10 @@ class AlertGenerator:
                 # coppie node→edge rilevanti per questa proprietà.
                 # Ricorrere al fallback basato sul forecast.
                 critical_arc = self._find_critical_arc_from_forecast(
-                    forecasts, compliance_set_name,
-                    property_at_risk, lead_time_steps,
+                    forecasts,
+                    compliance_set_name,
+                    property_at_risk,
+                    lead_time_steps,
                 )
             root_cause: str | None = str(best.get("source"))
         else:
@@ -527,9 +545,7 @@ class AlertGenerator:
             root_cause = None
 
         # Interferenza cross-property
-        confirmed_chain = next(
-            (c for c in chains if c.get("confirmed", False)), None
-        )
+        confirmed_chain = next((c for c in chains if c.get("confirmed", False)), None)
         if confirmed_chain:
             cross_interference: str | None = str(confirmed_chain.get("source_cs"))
             causal_chain: list[str] = list(confirmed_chain.get("chain", []))
@@ -552,7 +568,9 @@ class AlertGenerator:
         step_idx = lead_time_steps - 1
 
         best_eid: str | None = None
-        best_val: float = float("-inf") if property_at_risk != "capacity" else float("inf")
+        best_val: float = (
+            float("-inf") if property_at_risk != "capacity" else float("inf")
+        )
 
         for src, tgt in edges_for_cs:
             eid = self._edge_id_lookup.get((src, tgt))
@@ -576,15 +594,13 @@ class AlertGenerator:
 
         return best_eid
 
-    def _check_model_uncertainty(
-        self, forecasts: dict[str, pd.DataFrame]
-    ) -> bool:
+    def _check_model_uncertainty(self, forecasts: dict[str, pd.DataFrame]) -> bool:
         """Ritorna True se almeno una feature ha divergenza > threshold.
 
         La divergenza è calcolata come MAD dalla baseline lineare,
         normalizzata per il range del segnale.
         """
-        for key, df in forecasts.items():
+        for _key, df in forecasts.items():
             if len(df) < 2:
                 continue
             yhats = df["yhat"].values.astype(float)

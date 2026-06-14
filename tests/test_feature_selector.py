@@ -1,4 +1,5 @@
 """Test per FeatureSelector - mock in memoria, nessun CSV reale."""
+
 from pathlib import Path
 from typing import Any
 
@@ -27,12 +28,12 @@ _NODES = [
 ]
 
 _EDGES = [
-    ("e1", "nginx-web-server",      "nginx-thrift"),
-    ("e2", "nginx-thrift",          "home-timeline-service"),
+    ("e1", "nginx-web-server", "nginx-thrift"),
+    ("e2", "nginx-thrift", "home-timeline-service"),
     ("e3", "home-timeline-service", "home-timeline-redis"),
     ("e4", "home-timeline-service", "post-storage-service"),
-    ("e5", "post-storage-service",  "post-storage-memcached"),
-    ("e6", "post-storage-service",  "post-storage-mongodb"),
+    ("e5", "post-storage-service", "post-storage-memcached"),
+    ("e6", "post-storage-service", "post-storage-mongodb"),
 ]
 
 _TP = {"e1": 5.0, "e2": 5.0, "e3": 10.0, "e4": 10.0, "e5": 8.0, "e6": 12.0}
@@ -61,7 +62,8 @@ def _make_snapshot(ts: int, label: int) -> dict[str, Any]:
     }
 
 
-#FIXTURE
+# FIXTURE
+
 
 @pytest.fixture
 def config() -> ConfigLoader:
@@ -89,7 +91,8 @@ def mock_snapshots() -> list[dict]:
     ]
 
 
-#TEST
+# TEST
+
 
 def test_select_returns_dict(
     feature_selector: FeatureSelector, mock_snapshots: list[dict]
@@ -106,9 +109,8 @@ def test_h_crit_direct_node_count(
 ) -> None:
     """M_direct(H_crit): n_nodi × n_node_metrics chiavi 'node:'."""
     topo = config.load_topology()
-    expected = (
-        len(topology_builder.get_compliance_set_nodes("H_crit"))
-        * len(topo["node_metrics"])
+    expected = len(topology_builder.get_compliance_set_nodes("H_crit")) * len(
+        topo["node_metrics"]
     )
     result = feature_selector.select_features("H_crit", mock_snapshots)
     node_keys = [k for k in result if k.startswith("node:")]
@@ -123,9 +125,8 @@ def test_h_crit_direct_edge_count(
 ) -> None:
     """M_direct(H_crit): |A(H_crit)| × n_edge_metrics chiavi 'edge:'."""
     topo = config.load_topology()
-    expected = (
-        len(topology_builder.get_edges_for_compliance_set("H_crit"))
-        * len(topo["edge_metrics"])
+    expected = len(topology_builder.get_edges_for_compliance_set("H_crit")) * len(
+        topo["edge_metrics"]
     )
     result = feature_selector.select_features("H_crit", mock_snapshots)
     edge_keys = [k for k in result if k.startswith("edge:")]
@@ -159,9 +160,8 @@ def test_h_cache_direct_node_count(
 ) -> None:
     """M_direct(H_cache): n_nodi × n_node_metrics chiavi 'node:'."""
     topo = config.load_topology()
-    expected = (
-        len(topology_builder.get_compliance_set_nodes("H_cache"))
-        * len(topo["node_metrics"])
+    expected = len(topology_builder.get_compliance_set_nodes("H_cache")) * len(
+        topo["node_metrics"]
     )
     result = feature_selector.select_features("H_cache", mock_snapshots)
     node_keys = [k for k in result if k.startswith("node:")]
@@ -176,9 +176,8 @@ def test_h_cache_direct_edge_count(
 ) -> None:
     """M_direct(H_cache): |A(H_cache)| × n_edge_metrics chiavi 'edge:'."""
     topo = config.load_topology()
-    expected = (
-        len(topology_builder.get_edges_for_compliance_set("H_cache"))
-        * len(topo["edge_metrics"])
+    expected = len(topology_builder.get_edges_for_compliance_set("H_cache")) * len(
+        topo["edge_metrics"]
     )
     result = feature_selector.select_features("H_cache", mock_snapshots)
     edge_keys = [k for k in result if k.startswith("edge:")]
@@ -283,11 +282,10 @@ def test_get_feature_names_direct_count_h_crit(
 ) -> None:
     """get_feature_names('H_crit')['direct'] = n_nodi×n_node_m + n_archi×n_edge_m."""
     topo = config.load_topology()
-    expected = (
-        len(topology_builder.get_compliance_set_nodes("H_crit"))
-        * len(topo["node_metrics"])
-        + len(topology_builder.get_edges_for_compliance_set("H_crit"))
-        * len(topo["edge_metrics"])
+    expected = len(topology_builder.get_compliance_set_nodes("H_crit")) * len(
+        topo["node_metrics"]
+    ) + len(topology_builder.get_edges_for_compliance_set("H_crit")) * len(
+        topo["edge_metrics"]
     )
     names = feature_selector.get_feature_names("H_crit")
     assert len(names["direct"]) == expected
@@ -344,17 +342,22 @@ def test_missing_node_series_has_float_nan_dtype(
     """Snapshot privo di un nodo: la serie restituisce float64
     con float('nan'), non dtype=object con pd.NA."""
     import math
+
     snap = {
         "timestamp": _T0,
         "nodes": {
-            n: {"cpu_percent": 5.0, "mem_mb": 100.0,
-                "net_rx_mb": 1.0, "net_tx_mb": 0.5}
-            for n in _NODES if n != "nginx-web-server"
+            n: {"cpu_percent": 5.0, "mem_mb": 100.0, "net_rx_mb": 1.0, "net_tx_mb": 0.5}
+            for n in _NODES
+            if n != "nginx-web-server"
         },
         "edges": {
-            eid: {"source": src, "target": tgt,
-                  "latency_ms": 10.0, "error_rate": 0.0,
-                  "throughput_rps": _TP[eid]}
+            eid: {
+                "source": src,
+                "target": tgt,
+                "latency_ms": 10.0,
+                "error_rate": 0.0,
+                "throughput_rps": _TP[eid],
+            }
             for eid, src, tgt in _EDGES
         },
         "label": 0,
@@ -418,9 +421,7 @@ def test_missing_interf_metric_produces_warning_not_error(
         with patch("src.layer3.feature_selector.logger") as mock_logger:
             fs = FeatureSelector(config, topology_builder)
     assert mock_logger.warning.called
-    warning_text = " ".join(
-        str(c) for c in mock_logger.warning.call_args_list
-    )
+    warning_text = " ".join(str(c) for c in mock_logger.warning.call_args_list)
     assert "throughput_rps" in warning_text or "interferenza" in warning_text
     result = fs.select_features("H_cache", [])
     interf_keys = [k for k in result if k.startswith("interf:")]
@@ -462,9 +463,7 @@ def test_interf_key_order_matches_get_feature_names(
     result = feature_selector.select_features("H_cache", mock_snapshots)
     names = feature_selector.get_feature_names("H_cache")
 
-    interf_keys_from_result = [
-        k for k in result if k.startswith("interf:")
-    ]
+    interf_keys_from_result = [k for k in result if k.startswith("interf:")]
     interf_keys_from_names = names["interference"]
 
     assert interf_keys_from_result == interf_keys_from_names, (
@@ -481,6 +480,7 @@ def test_node_partial_presence_produces_float_nan(
     """Nodo presente in alcuni snapshot e assente in altri: la serie
     prodotta ha dtype=float64 con valori validi e float('nan') misti."""
     import math
+
     # Costruisci snapshot in cui nginx-web-server è assente solo al primo ts
     snap_missing = {
         "timestamp": mock_snapshots[0]["timestamp"],
@@ -494,7 +494,7 @@ def test_node_partial_presence_produces_float_nan(
         "anomaly_type": None,
         "anomaly_node_ids": [],
     }
-    mixed_snapshots = [snap_missing] + mock_snapshots[1:]
+    mixed_snapshots = [snap_missing, *mock_snapshots[1:]]
     result = feature_selector.select_features("H_crit", mixed_snapshots)
     key = "node:nginx-web-server:cpu_percent"
     assert key in result
@@ -522,16 +522,21 @@ def test_edge_metric_key_absent_produces_float_nan(
     snap = {
         "timestamp": _T0,
         "nodes": {
-            n: {"cpu_percent": 5.0, "mem_mb": 512.0,
-                "net_rx_mb": 1.0, "net_tx_mb": 0.5}
+            n: {"cpu_percent": 5.0, "mem_mb": 512.0, "net_rx_mb": 1.0, "net_tx_mb": 0.5}
             for n in _NODES
         },
         "edges": {
-            "e1": {"source": "nginx-web-server", "target": "nginx-thrift",
-                   "latency_ms": 10.0, "error_rate": 0.0}
+            "e1": {
+                "source": "nginx-web-server",
+                "target": "nginx-thrift",
+                "latency_ms": 10.0,
+                "error_rate": 0.0,
+            }
             # throughput_rps assente intenzionalmente
         },
-        "label": 0, "anomaly_type": None, "anomaly_node_ids": [],
+        "label": 0,
+        "anomaly_type": None,
+        "anomaly_node_ids": [],
     }
     result = feature_selector.select_features("H_crit", [snap])
     key = "edge:e1:throughput_rps"

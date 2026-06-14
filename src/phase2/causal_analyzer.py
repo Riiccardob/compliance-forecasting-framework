@@ -1,4 +1,5 @@
 """Fase II - Analisi causale guidata dalla topologia su M_Φi."""
+
 import contextlib
 import io
 from typing import Any
@@ -74,15 +75,13 @@ class CausalAnalyzer:
 
         # Pre-calculate edge lookups for topology queries
         self._edge_endpoints: dict[str, tuple[str, str]] = {
-            e["id"]: (e["source"], e["target"])
-            for e in self._topology["edges"]
+            e["id"]: (e["source"], e["target"]) for e in self._topology["edges"]
         }
         self._edge_target: dict[str, str] = {
             e["id"]: e["target"] for e in self._topology["edges"]
         }
         self._edge_id_pair: dict[tuple[str, str], str] = {
-            (e["source"], e["target"]): e["id"]
-            for e in self._topology["edges"]
+            (e["source"], e["target"]): e["id"] for e in self._topology["edges"]
         }
 
         logger.info(
@@ -125,9 +124,7 @@ class CausalAnalyzer:
             Se ``compliance_set_name`` non esiste in topology.yaml.
         """
         if compliance_set_name not in self._topology["compliance_sets"]:
-            raise KeyError(
-                f"Compliance set non trovato: '{compliance_set_name}'"
-            )
+            raise KeyError(f"Compliance set non trovato: '{compliance_set_name}'")
 
         candidates = self._build_candidate_pairs(
             compliance_set_name, list(features.keys())
@@ -144,9 +141,7 @@ class CausalAnalyzer:
             if source_key not in features or target_key not in features:
                 continue
             try:
-                s1, s2 = self._align_series(
-                    features[source_key], features[target_key]
-                )
+                s1, s2 = self._align_series(features[source_key], features[target_key])
                 if len(s1) < 3:
                     logger.warning(
                         "Coppia (%s, %s) saltata: intersezione con meno "
@@ -157,13 +152,9 @@ class CausalAnalyzer:
                     continue
 
                 if category in ("inter", "inter2"):
-                    edge = self._test_pair_no_pearson(
-                        source_key, target_key, s1, s2
-                    )
+                    edge = self._test_pair_no_pearson(source_key, target_key, s1, s2)
                 else:
-                    edge = self._test_pair_with_pearson(
-                        source_key, target_key, s1, s2
-                    )
+                    edge = self._test_pair_with_pearson(source_key, target_key, s1, s2)
 
                 if edge is not None:
                     edges.append(edge)
@@ -212,12 +203,8 @@ class CausalAnalyzer:
             ``category ∈ {"intra", "inter", "inter2", "node_arc"}``.
         """
         if compliance_set_name not in self._topology["compliance_sets"]:
-            raise KeyError(
-                f"Compliance set non trovato: '{compliance_set_name}'"
-            )
-        return self._build_candidate_pairs(
-            compliance_set_name, list(features.keys())
-        )
+            raise KeyError(f"Compliance set non trovato: '{compliance_set_name}'")
+        return self._build_candidate_pairs(compliance_set_name, list(features.keys()))
 
     # ------------------------------------------------------------------
     # Metodi privati - analisi statistica
@@ -234,9 +221,7 @@ class CausalAnalyzer:
         ).dropna()
         return both["s1"], both["s2"]
 
-    def _pearson_screen(
-        self, s1: pd.Series, s2: pd.Series, threshold: float
-    ) -> bool:
+    def _pearson_screen(self, s1: pd.Series, s2: pd.Series, threshold: float) -> bool:
         """Ritorna True se |r_Pearson| > threshold.
 
         Ritorna False con warning se l'intersezione ha meno di 3 punti.
@@ -247,6 +232,7 @@ class CausalAnalyzer:
             )
             return False
         import warnings as _warnings
+
         try:
             with _warnings.catch_warnings():
                 _warnings.simplefilter("ignore")
@@ -325,7 +311,7 @@ class CausalAnalyzer:
         try:
             ols_models = results[best_lag][1]
             r2_restr = float(ols_models[0].rsquared)
-            r2_full  = float(ols_models[1].rsquared)
+            r2_full = float(ols_models[1].rsquared)
             delta_r2 = max(0.0, r2_full - r2_restr)
         except (IndexError, AttributeError, TypeError):
             delta_r2 = 0.0
@@ -382,9 +368,7 @@ class CausalAnalyzer:
 
         p_yt = p_yt_ytm1.sum(axis=1)
         with np.errstate(divide="ignore", invalid="ignore"):
-            h_y = float(
-                -np.nansum(np.where(p_yt > 0, p_yt * np.log2(p_yt), 0.0))
-            )
+            h_y = float(-np.nansum(np.where(p_yt > 0, p_yt * np.log2(p_yt), 0.0)))
 
         if h_y <= 0.0:
             return 0.0
@@ -496,29 +480,23 @@ class CausalAnalyzer:
             if other == compliance_set_name:
                 continue
             try:
-                shared_nodes = self._tb.get_shared_nodes(
-                    compliance_set_name, other
-                )
-                cs_edges = self._tb.get_edges_for_compliance_set(
-                    compliance_set_name
-                )
+                shared_nodes = self._tb.get_shared_nodes(compliance_set_name, other)
+                cs_edges = self._tb.get_edges_for_compliance_set(compliance_set_name)
             except KeyError:
                 continue
 
             for v in shared_nodes:
                 fa_candidates = [
-                    k for k in features
+                    k
+                    for k in features
                     if k.startswith("interf:")
                     and self._edge_target.get(k.split(":")[1]) == v
                 ]
-                v_node_keys = [
-                    k for k in features if k.startswith(f"node:{v}:")
-                ]
+                v_node_keys = [k for k in features if k.startswith(f"node:{v}:")]
                 fb_candidates = [
                     f"edge:{self._edge_id_pair[(src, tgt)]}:{m}"
                     for src, tgt in cs_edges
-                    if v in (src, tgt)
-                    and (src, tgt) in self._edge_id_pair
+                    if v in (src, tgt) and (src, tgt) in self._edge_id_pair
                     for m in edge_metrics
                     if f"edge:{self._edge_id_pair[(src, tgt)]}:{m}" in features
                 ]
@@ -529,21 +507,18 @@ class CausalAnalyzer:
                             if fa == vk or vk == fb or fa == fb:
                                 continue
                             try:
-                                sa, sv1 = self._align_series(
-                                    features[fa], features[vk]
-                                )
-                                sv2, sb = self._align_series(
-                                    features[vk], features[fb]
-                                )
+                                sa, sv1 = self._align_series(features[fa], features[vk])
+                                sv2, sb = self._align_series(features[vk], features[fb])
                                 min_n = self._granger_max_lag + 2
                                 interf_edge_id = fa.split(":")[1]
                                 fb_edge_id = fb.split(":")[1]
                                 if fb_edge_id == interf_edge_id:
                                     continue  # catena auto-referenziale: interf e internal arc
-                                                # sono lo stesso arco, skip semantico
+                                    # sono lo stesso arco, skip semantico
                                 r1 = (
                                     self._granger_test(
-                                        sa, sv1,
+                                        sa,
+                                        sv1,
                                         self._granger_max_lag,
                                         self._granger_significance,
                                     )
@@ -552,23 +527,26 @@ class CausalAnalyzer:
                                 )
                                 r2 = (
                                     self._granger_test(
-                                        sv2, sb,
+                                        sv2,
+                                        sb,
                                         self._granger_max_lag,
                                         self._granger_significance,
                                     )
                                     if len(sv2) >= min_n
                                     else None
                                 )
-                                chains.append({
-                                    "source_cs": other,
-                                    "target_cs": compliance_set_name,
-                                    "chain": [fa, vk, fb],
-                                    "confirmed": (r1 is not None and r2 is not None),
-                                })
-                            except Exception as exc:
-                                logger.warning(
-                                    "Cross-property chain skipped: %s", exc
+                                chains.append(
+                                    {
+                                        "source_cs": other,
+                                        "target_cs": compliance_set_name,
+                                        "chain": [fa, vk, fb],
+                                        "confirmed": (
+                                            r1 is not None and r2 is not None
+                                        ),
+                                    }
                                 )
+                            except Exception as exc:
+                                logger.warning("Cross-property chain skipped: %s", exc)
 
         return chains
 
@@ -639,6 +617,7 @@ class CausalAnalyzer:
     ) -> tuple[np.ndarray, np.ndarray, int]:
         """Applica differenziazioni fino a stazionarietà ADF su
         entrambe le serie, usando il massimo tra i diff necessari."""
+
         def _diffs_needed(arr: np.ndarray) -> int:
             n = 0
             for _ in range(2):
@@ -653,12 +632,12 @@ class CausalAnalyzer:
             return n
 
         n_effect = _diffs_needed(effect_vals)
-        n_cause  = _diffs_needed(cause_vals)
-        n_diff   = max(n_effect, n_cause)
+        n_cause = _diffs_needed(cause_vals)
+        n_diff = max(n_effect, n_cause)
 
         for _ in range(n_diff):
             effect_vals = np.diff(effect_vals)
-            cause_vals  = np.diff(cause_vals)
+            cause_vals = np.diff(cause_vals)
 
         if n_diff == 2:
             for arr, name in [(effect_vals, "effect"), (cause_vals, "cause")]:
@@ -669,7 +648,8 @@ class CausalAnalyzer:
                             "Serie '%s' ancora non stazionaria "
                             "(p=%.3f) dopo 2 differenziazioni - "
                             "si procede comunque.",
-                            name, p_final,
+                            name,
+                            p_final,
                         )
                 except Exception:
                     logger.warning(

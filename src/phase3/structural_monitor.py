@@ -1,6 +1,9 @@
 """Fase III - Monitoraggio strutturale gerarchico su M_Φi."""
+
+from __future__ import annotations
+
 from collections import deque
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from sklearn.ensemble import IsolationForest
@@ -9,6 +12,9 @@ from src.layer1.topology_builder import TopologyBuilder
 from src.layer2.pbo_builder import PBOBuilder
 from src.utils.config_loader import ConfigLoader
 from src.utils.logging_setup import LoggingSetup
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 class StructuralMonitor:
@@ -55,7 +61,12 @@ class StructuralMonitor:
         ad = config.load_pipeline_params()["anomaly_detection"]
 
         # --- Validazione chiavi obbligatorie ---
-        for key in ("zscore_threshold", "isolation_forest", "cusum", "structural_validator"):
+        for key in (
+            "zscore_threshold",
+            "isolation_forest",
+            "cusum",
+            "structural_validator",
+        ):
             if key not in ad:
                 raise ValueError(
                     f"Chiave obbligatoria mancante in "
@@ -134,7 +145,7 @@ class StructuralMonitor:
     def fit(
         self,
         compliance_set_name: str,
-        features: dict[str, "pd.DataFrame"],
+        features: dict[str, pd.DataFrame],
         nominal_snapshots: list[dict],
         weight_series: list[dict],
         gold_standard: dict[str, float],
@@ -177,9 +188,7 @@ class StructuralMonitor:
         cs_nodes = sorted(self._tb.get_compliance_set_nodes(compliance_set_name))
         node_metrics = sorted(self._node_metrics)
         self._node_feature_order = [
-            (node_id, metric)
-            for node_id in cs_nodes
-            for metric in node_metrics
+            (node_id, metric) for node_id in cs_nodes for metric in node_metrics
         ]
 
         # --- 1. Costruzione matrice X per Isolation Forest (solo feature nodo) ---
@@ -257,7 +266,9 @@ class StructuralMonitor:
                 self._logger.info(
                     "[%s] CUSUM tolerance_factor auto-calibrato: %.6f "
                     "(mean Frobenius nominale su %d finestre)",
-                    compliance_set_name, calibrated_k, len(frob_nominal),
+                    compliance_set_name,
+                    calibrated_k,
+                    len(frob_nominal),
                 )
                 self._cusum_k = calibrated_k
             else:
@@ -282,7 +293,7 @@ class StructuralMonitor:
     def monitor(
         self,
         compliance_set_name: str,
-        features: dict[str, "pd.DataFrame"],
+        features: dict[str, pd.DataFrame],
         weight_series: list[dict],
         timestamp: int,
     ) -> dict[str, Any]:
@@ -313,13 +324,15 @@ class StructuralMonitor:
         """
         if not self._is_fitted:
             raise RuntimeError(
-                "monitor() chiamato prima di fit(). "
-                "Chiamare fit() prima di monitorare."
+                "monitor() chiamato prima di fit(). Chiamare fit() prima di monitorare."
             )
         if compliance_set_name not in self._topology["compliance_sets"]:
             raise KeyError(f"Compliance set non trovato: '{compliance_set_name}'")
 
-        if self._compliance_set_name and compliance_set_name != self._compliance_set_name:
+        if (
+            self._compliance_set_name
+            and compliance_set_name != self._compliance_set_name
+        ):
             self._logger.warning(
                 "monitor() chiamato con compliance set '%s', ma fit() "
                 "è stato eseguito su '%s'. I parametri interni "
@@ -401,7 +414,7 @@ class StructuralMonitor:
     def _check_threshold(
         self,
         compliance_set_name: str,
-        features: dict[str, "pd.DataFrame"],
+        features: dict[str, pd.DataFrame],
         timestamp: int,
     ) -> list[str]:
         """Verifica violazioni delle soglie SLA statiche."""
@@ -428,13 +441,17 @@ class StructuralMonitor:
             if bound == "upper" and val > threshold:
                 self._logger.warning(
                     "Threshold violation: %s = %.4f > %.4f (SLA upper)",
-                    feature_key, val, threshold,
+                    feature_key,
+                    val,
+                    threshold,
                 )
                 violations.append(feature_key)
             elif bound == "lower" and val < threshold:
                 self._logger.warning(
                     "Threshold violation: %s = %.4f < %.4f (SLA lower)",
-                    feature_key, val, threshold,
+                    feature_key,
+                    val,
+                    threshold,
                 )
                 violations.append(feature_key)
 
@@ -442,7 +459,7 @@ class StructuralMonitor:
 
     def _check_zscore(
         self,
-        features: dict[str, "pd.DataFrame"],
+        features: dict[str, pd.DataFrame],
         timestamp: int,
     ) -> list[str]:
         """Verifica violazioni dello z-score adattivo."""
@@ -469,7 +486,7 @@ class StructuralMonitor:
 
     def _check_isolation_forest(
         self,
-        features: dict[str, "pd.DataFrame"],
+        features: dict[str, pd.DataFrame],
         timestamp: int,
     ) -> bool:
         """Predice anomalia multivariata con Isolation Forest."""
@@ -587,11 +604,13 @@ class StructuralMonitor:
     ) -> bool:
         """Verifica derivata EWMA persistente e soglia distanza."""
         # Soglia distanza
-        if self._topology_type == "linear" and \
-                pas_value is not None and self._pas_gold is not None:
+        if (
+            self._topology_type == "linear"
+            and pas_value is not None
+            and self._pas_gold is not None
+        ):
             # Per topologie lineari: PAS-gap come da methodology.tex §3.2.3
-            distance_ok = abs(pas_value - self._pas_gold) > \
-                          self._frobenius_threshold
+            distance_ok = abs(pas_value - self._pas_gold) > self._frobenius_threshold
         elif frobenius_distance is not None:
             # Per topologie parallele: norma di Frobenius
             distance_ok = frobenius_distance > self._frobenius_threshold
@@ -607,7 +626,7 @@ class StructuralMonitor:
 
         hist = list(self._ewma_history)
         diffs = [hist[i] - hist[i - 1] for i in range(1, len(hist))]
-        last_diffs = diffs[-self._consecutive_windows:]
+        last_diffs = diffs[-self._consecutive_windows :]
 
         if self._topology_type == "linear":
             # Degrado PAS = decremento → diffs negativi
@@ -622,11 +641,9 @@ class StructuralMonitor:
     # Utilità
     # ------------------------------------------------------------------
 
-    def _get_current_value(
-        self, df: "pd.DataFrame", timestamp: int
-    ) -> float | None:
+    def _get_current_value(self, df: pd.DataFrame, timestamp: int) -> float | None:
         """Restituisce il valore al timestamp dato, o l'ultimo se assente."""
-        import pandas as pd
+
         if len(df) == 0:
             return None
         if timestamp in df.index:
@@ -634,7 +651,7 @@ class StructuralMonitor:
         # Fallback: ultimo valore disponibile
         return float(df["value"].iloc[-1])
 
-    def _build_node_vector(self, snap: dict) -> "np.ndarray":
+    def _build_node_vector(self, snap: dict) -> np.ndarray:
         """Costruisce il vettore aggregato X_{H_Φi} da un snapshot."""
         row: list[float] = []
         for node_id, metric in self._node_feature_order:
@@ -648,11 +665,11 @@ class StructuralMonitor:
 
     def _features_to_snapshot(
         self,
-        features: dict[str, "pd.DataFrame"],
+        features: dict[str, pd.DataFrame],
         timestamp: int,
     ) -> dict:
         """Converte il dict di feature in formato snapshot per _build_node_vector."""
-        import pandas as pd
+
         nodes: dict[str, dict[str, float]] = {}
         for key, df in features.items():
             parts = key.split(":", 2)
@@ -660,7 +677,5 @@ class StructuralMonitor:
                 continue
             node_id, metric = parts[1], parts[2]
             val = self._get_current_value(df, timestamp)
-            nodes.setdefault(node_id, {})[metric] = (
-                float("nan") if val is None else val
-            )
+            nodes.setdefault(node_id, {})[metric] = float("nan") if val is None else val
         return {"timestamp": timestamp, "nodes": nodes, "edges": {}}

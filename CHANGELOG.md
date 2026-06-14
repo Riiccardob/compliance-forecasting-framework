@@ -15,7 +15,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - ruff.toml linter configuration
 - Issue templates and PR template
 
+<<<<<<< HEAD
 ## [1.0.0] - 2026-06-01
+=======
+## [1.0.0] — 2026-06-01
+>>>>>>> 5f90656 (add CI workflow, ruff confing, CHANGELOG)
 
 ### Added
 - Complete 4-phase pipeline: Layer 1 (topology), Layer 2 (ATG + PBO), 

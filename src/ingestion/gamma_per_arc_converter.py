@@ -1,6 +1,7 @@
 """Augmenta edge_metrics.csv con throughput per-arco reale da trace graph_1/graph_2."""
+
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import numpy as np
 import pandas as pd
@@ -15,8 +16,8 @@ EDGE_CSV_OUT: Path = Path("data/converted/edge_metrics_aug.csv")
 WINDOW_DUR_S: float = 5.0
 
 # Mapping arco → quale contatore di trace usa
-_EDGES_ALL: frozenset[str] = frozenset({"e1", "e2"})   # N1 + N2
-_EDGES_N1: frozenset[str] = frozenset({"e3"})           # solo graph_1
+_EDGES_ALL: frozenset[str] = frozenset({"e1", "e2"})  # N1 + N2
+_EDGES_N1: frozenset[str] = frozenset({"e3"})  # solo graph_1
 _EDGES_N2: frozenset[str] = frozenset({"e4", "e5", "e6"})  # solo graph_2
 
 
@@ -155,17 +156,19 @@ class GammaPerArcConverter:
             w_ends[:-1] = window_ts[1:]
         w_ends[-1] = window_ts[-1] + self._window_dur_us
 
-        n1_arr = (
-            np.searchsorted(ts1, w_ends, side="left")
-            - np.searchsorted(ts1, w_starts, side="left")
+        n1_arr = np.searchsorted(ts1, w_ends, side="left") - np.searchsorted(
+            ts1, w_starts, side="left"
         )
-        n2_arr = (
-            np.searchsorted(ts2, w_ends, side="left")
-            - np.searchsorted(ts2, w_starts, side="left")
+        n2_arr = np.searchsorted(ts2, w_ends, side="left") - np.searchsorted(
+            ts2, w_starts, side="left"
         )
 
-        ts_to_n1: dict[int, int] = dict(zip(window_ts.tolist(), n1_arr.tolist()))
-        ts_to_n2: dict[int, int] = dict(zip(window_ts.tolist(), n2_arr.tolist()))
+        ts_to_n1: dict[int, int] = dict(
+            zip(window_ts.tolist(), n1_arr.tolist(), strict=True)
+        )
+        ts_to_n2: dict[int, int] = dict(
+            zip(window_ts.tolist(), n2_arr.tolist(), strict=True)
+        )
 
         result = edge_df.copy()
         ts_col = result["timestamp"].values.astype(np.int64)

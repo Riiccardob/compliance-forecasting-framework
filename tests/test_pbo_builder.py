@@ -1,21 +1,22 @@
 """Test per PBOBuilder - Probabilistic Behavioral Overlay."""
-import math
+
 import logging
+import math
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from src.utils.config_loader import ConfigLoader
 from src.layer1.topology_builder import TopologyBuilder
 from src.layer2.pbo_builder import PBOBuilder
+from src.utils.config_loader import ConfigLoader
 
 _ROOT = Path(__file__).parent.parent
 _TOPOLOGY_PATH = _ROOT / "config" / "topology.yaml"
 _PIPELINE_PATH = _ROOT / "config" / "pipeline_params.yaml"
 
-_T0 = 1_000_000   # nominale
-_T1 = 6_000_000   # nominale
+_T0 = 1_000_000  # nominale
+_T1 = 6_000_000  # nominale
 _T2 = 11_000_000  # anomalo cpu
 
 _NODES = [
@@ -29,16 +30,16 @@ _NODES = [
 ]
 
 _EDGES = [
-    ("e1", "nginx-web-server",      "nginx-thrift"),
-    ("e2", "nginx-thrift",          "home-timeline-service"),
+    ("e1", "nginx-web-server", "nginx-thrift"),
+    ("e2", "nginx-thrift", "home-timeline-service"),
     ("e3", "home-timeline-service", "home-timeline-redis"),
     ("e4", "home-timeline-service", "post-storage-service"),
-    ("e5", "post-storage-service",  "post-storage-memcached"),
-    ("e6", "post-storage-service",  "post-storage-mongodb"),
+    ("e5", "post-storage-service", "post-storage-memcached"),
+    ("e6", "post-storage-service", "post-storage-mongodb"),
 ]
 
 _TP_NOMINAL = {"e1": 5.0, "e2": 5.0, "e3": 10.0, "e4": 10.0, "e5": 8.0, "e6": 12.0}
-_TP_ANOMALY = {"e1": 5.0, "e2": 5.0, "e3": 2.0,  "e4": 18.0, "e5": 8.0, "e6": 12.0}
+_TP_ANOMALY = {"e1": 5.0, "e2": 5.0, "e3": 2.0, "e4": 18.0, "e5": 8.0, "e6": 12.0}
 
 
 def _make_snapshot(
@@ -66,7 +67,8 @@ def _make_snapshot(
     }
 
 
-#FIXTURE
+# FIXTURE
+
 
 @pytest.fixture
 def config() -> ConfigLoader:
@@ -106,7 +108,8 @@ def gold_standard(
     return pbo.compute_gold_standard(weight_series, mock_snapshots)
 
 
-#TEST
+# TEST
+
 
 def test_weight_series_length(weight_series: list[dict]) -> None:
     assert len(weight_series) == 3
@@ -161,26 +164,20 @@ def test_gold_standard_no_nominal_raises(
         pbo.compute_gold_standard(ws_anomalous, all_anomalous)
 
 
-def test_pas_h_crit_in_range(
-    pbo: PBOBuilder, weight_series: list[dict]
-) -> None:
+def test_pas_h_crit_in_range(pbo: PBOBuilder, weight_series: list[dict]) -> None:
     """PA(H_crit, t) ∈ [0.0, 1.0] per tutti i timestamp."""
     pas_series = pbo.compute_path_adherence(weight_series, "H_crit")
     for entry in pas_series:
         assert 0.0 <= entry["pas"] <= 1.0, f"PAS={entry['pas']} fuori range"
 
 
-def test_pas_h_crit_length(
-    pbo: PBOBuilder, weight_series: list[dict]
-) -> None:
+def test_pas_h_crit_length(pbo: PBOBuilder, weight_series: list[dict]) -> None:
     """Lista PAS ha 3 elementi (uno per snapshot)."""
     pas_series = pbo.compute_path_adherence(weight_series, "H_crit")
     assert len(pas_series) == 3
 
 
-def test_pas_parallel_raises(
-    pbo: PBOBuilder, weight_series: list[dict]
-) -> None:
+def test_pas_parallel_raises(pbo: PBOBuilder, weight_series: list[dict]) -> None:
     """compute_path_adherence su H_cache (parallel) solleva ValueError."""
     with pytest.raises(ValueError):
         pbo.compute_path_adherence(weight_series, "H_cache")
@@ -238,9 +235,10 @@ def test_weight_fallback_uniform_on_zero_throughput(
     """Se throughput totale uscente da un nodo è zero, i pesi
     sono uniformi (1/n) e la somma rimane 1.0."""
     snap_zero_tp = _make_snapshot(
-        _T0, 0, "cpu",
-        {"e1": 5.0, "e2": 5.0, "e3": 0.0, "e4": 0.0,
-         "e5": 8.0, "e6": 12.0},
+        _T0,
+        0,
+        "cpu",
+        {"e1": 5.0, "e2": 5.0, "e3": 0.0, "e4": 0.0, "e5": 8.0, "e6": 12.0},
     )
     ws = pbo.compute_transition_weights([snap_zero_tp])
     weights = ws[0]["weights"]
@@ -255,14 +253,16 @@ def test_gold_standard_covers_all_topology_edges(
     """W_gold include tutti gli archi della topologia (E_all),
     anche quelli assenti nel primo snapshot nominale."""
     snap_no_e6 = _make_snapshot(
-        _T0, 0, "cpu",
-        {"e1": 5.0, "e2": 5.0, "e3": 10.0, "e4": 10.0,
-         "e5": 8.0, "e6": 0.0},
+        _T0,
+        0,
+        "cpu",
+        {"e1": 5.0, "e2": 5.0, "e3": 10.0, "e4": 10.0, "e5": 8.0, "e6": 0.0},
     )
     snap_with_e6 = _make_snapshot(
-        _T1, 0, "cpu",
-        {"e1": 5.0, "e2": 5.0, "e3": 10.0, "e4": 10.0,
-         "e5": 8.0, "e6": 12.0},
+        _T1,
+        0,
+        "cpu",
+        {"e1": 5.0, "e2": 5.0, "e3": 10.0, "e4": 10.0, "e5": 8.0, "e6": 12.0},
     )
     ws = pbo.compute_transition_weights([snap_no_e6, snap_with_e6])
     snaps = [snap_no_e6, snap_with_e6]
@@ -320,9 +320,10 @@ def test_weight_negative_throughput_uses_uniform_fallback(
     """Throughput negativo su un arco attiva fallback uniforme.
     Il peso negativo viola la proprietà stocastica."""
     snap = _make_snapshot(
-        _T0, 0, "cpu",
-        {"e1": 5.0, "e2": 5.0, "e3": -1.0, "e4": 10.0,
-         "e5": 8.0, "e6": 12.0},
+        _T0,
+        0,
+        "cpu",
+        {"e1": 5.0, "e2": 5.0, "e3": -1.0, "e4": 10.0, "e5": 8.0, "e6": 12.0},
     )
     ws = pbo.compute_transition_weights([snap])
     w = ws[0]["weights"]
@@ -336,13 +337,13 @@ def test_weight_invalid_metric_raises_at_init(
     topology_builder: TopologyBuilder,
 ) -> None:
     """weight_metric non in edge_metrics solleva ValueError in __init__."""
-    from unittest.mock import patch
     import copy
+    from unittest.mock import patch
+
     pipeline = config.load_pipeline_params()
     bad_pipeline = copy.deepcopy(pipeline)
     bad_pipeline["pbo"]["weight_metric"] = "nonexistent_metric"
-    with patch.object(type(config), "load_pipeline_params",
-                      return_value=bad_pipeline):
+    with patch.object(type(config), "load_pipeline_params", return_value=bad_pipeline):
         with pytest.raises(ValueError, match="weight_metric"):
             PBOBuilder(config, topology_builder)
 
@@ -353,9 +354,8 @@ def test_path_adherence_missing_arc_raises(
     """compute_path_adherence con critical_path che contiene
     un arco mancante solleva ValueError descrittivo."""
     from unittest.mock import patch
-    bad_path = [
-        "nginx-web-server", "post-storage-service", "post-storage-mongodb"
-    ]
+
+    bad_path = ["nginx-web-server", "post-storage-service", "post-storage-mongodb"]
     with patch.object(
         pbo._topology_builder, "get_critical_path", return_value=bad_path
     ):
@@ -371,6 +371,7 @@ def test_gold_standard_covers_absent_edge(
     """W_gold include e6 anche se e6 è assente da uno snapshot
     nominale - viene trattato come peso 0.0 per quel timestamp."""
     import copy
+
     ws_mod = copy.deepcopy(weight_series)
     ws_mod[0]["weights"].pop("e6", None)
     gold = pbo.compute_gold_standard(ws_mod, mock_snapshots)
@@ -386,12 +387,18 @@ def test_weight_nan_throughput_uses_uniform_fallback(
     """NaN in throughput_rps attiva il fallback uniforme
     senza propagare NaN nella matrice stocastica."""
     import math
+
     snap = _make_snapshot(
-        _T0, 0, "cpu",
+        _T0,
+        0,
+        "cpu",
         {
-            "e1": 5.0, "e2": 5.0,
-            "e3": float("nan"), "e4": 10.0,
-            "e5": 8.0, "e6": 12.0,
+            "e1": 5.0,
+            "e2": 5.0,
+            "e3": float("nan"),
+            "e4": 10.0,
+            "e5": 8.0,
+            "e6": 12.0,
         },
     )
     ws = pbo.compute_transition_weights([snap])
@@ -409,6 +416,7 @@ def test_gold_standard_warns_on_misaligned_series(
     """compute_gold_standard emette warning quando alcuni timestamp
     nominali di snapshots non hanno corrispondenza in weight_series."""
     from unittest.mock import patch
+
     # 3 snapshot nominali, ma weight_series ha solo 2 dei 3 timestamp
     snap0 = _make_snapshot(_T0, 0, "cpu", _TP_NOMINAL)
     snap1 = _make_snapshot(_T1, 0, "cpu", _TP_NOMINAL)
@@ -416,15 +424,32 @@ def test_gold_standard_warns_on_misaligned_series(
     all_snaps = [snap0, snap1, snap2]
     # weight_series ha solo T0 e T1, non T2
     ws_partial = [
-        {"timestamp": _T0, "weights": {"e1": 1.0, "e2": 1.0,
-                                        "e3": 0.5, "e4": 0.5,
-                                        "e5": 0.4, "e6": 0.6}},
-        {"timestamp": _T1, "weights": {"e1": 1.0, "e2": 1.0,
-                                        "e3": 0.5, "e4": 0.5,
-                                        "e5": 0.4, "e6": 0.6}},
+        {
+            "timestamp": _T0,
+            "weights": {
+                "e1": 1.0,
+                "e2": 1.0,
+                "e3": 0.5,
+                "e4": 0.5,
+                "e5": 0.4,
+                "e6": 0.6,
+            },
+        },
+        {
+            "timestamp": _T1,
+            "weights": {
+                "e1": 1.0,
+                "e2": 1.0,
+                "e3": 0.5,
+                "e4": 0.5,
+                "e5": 0.4,
+                "e6": 0.6,
+            },
+        },
     ]
-    with patch.object(logging.getLogger("src.layer2.pbo_builder"),
-                      "warning") as mock_warn:
+    with patch.object(
+        logging.getLogger("src.layer2.pbo_builder"), "warning"
+    ) as mock_warn:
         gold = pbo.compute_gold_standard(ws_partial, all_snaps)
     # Il warning deve essere emesso (T2 mancante in weight_series)
     assert mock_warn.called
@@ -439,14 +464,16 @@ def test_frobenius_explicit_zero_weight_contributes(
     """Un arco con peso esplicitamente 0.0 nel dict (non assente)
     contribuisce correttamente alla distanza di Frobenius.
     Verifica che il codice non distingua tra assente e 0.0 esplicito."""
-    import math
+
     # weight_series con e3 = 0.0 esplicito (non assente dal dict)
     # W_gold ha e3 = 0.5, quindi contributo = (0.0 - 0.5)^2 = 0.25
     weights_with_explicit_zero = {
-        "e1": 1.0, "e2": 1.0,
+        "e1": 1.0,
+        "e2": 1.0,
         "e3": 0.0,  # esplicito nel dict
         "e4": 1.0,
-        "e5": 0.4, "e6": 0.6,
+        "e5": 0.4,
+        "e6": 0.6,
     }
     ws = [{"timestamp": _T0, "weights": weights_with_explicit_zero}]
     frob = pbo.compute_frobenius_distance(ws, gold_standard)
@@ -454,8 +481,9 @@ def test_frobenius_explicit_zero_weight_contributes(
     # e3: (0.0 - 0.5)^2 = 0.25 contribuisce alla somma
     assert frob[0]["frobenius"] > 0.0
     # Il valore deve essere lo stesso che si ottiene se e3 fosse assente
-    weights_with_absent = {k: v for k, v in weights_with_explicit_zero.items()
-                           if k != "e3"}
+    weights_with_absent = {
+        k: v for k, v in weights_with_explicit_zero.items() if k != "e3"
+    }
     ws_absent = [{"timestamp": _T0, "weights": weights_with_absent}]
     frob_absent = pbo.compute_frobenius_distance(ws_absent, gold_standard)
     assert abs(frob[0]["frobenius"] - frob_absent[0]["frobenius"]) < 1e-9
@@ -467,14 +495,23 @@ def test_zero_total_throughput_emits_warning(
     """compute_transition_weights emette warning quando il throughput
     totale uscente da un nodo è zero (valori validi ma somma zero)."""
     from unittest.mock import patch
+
     snap = _make_snapshot(
-        _T0, 0, "cpu",
-        {"e1": 5.0, "e2": 5.0,
-         "e3": 0.0, "e4": 0.0,   # home-timeline-service: totale zero
-         "e5": 8.0, "e6": 12.0},
+        _T0,
+        0,
+        "cpu",
+        {
+            "e1": 5.0,
+            "e2": 5.0,
+            "e3": 0.0,
+            "e4": 0.0,  # home-timeline-service: totale zero
+            "e5": 8.0,
+            "e6": 12.0,
+        },
     )
-    with patch.object(logging.getLogger("src.layer2.pbo_builder"),
-                      "warning") as mock_warn:
+    with patch.object(
+        logging.getLogger("src.layer2.pbo_builder"), "warning"
+    ) as mock_warn:
         pbo.compute_transition_weights([snap])
     # Il warning deve essere emesso per home-timeline-service
     # (e3=0, e4=0, somma=0)

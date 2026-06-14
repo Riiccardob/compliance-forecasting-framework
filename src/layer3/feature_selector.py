@@ -1,4 +1,5 @@
 """Fase I - Mapping M: feature selection topologica per compliance set."""
+
 import pandas as pd
 
 from src.layer1.topology_builder import TopologyBuilder
@@ -54,14 +55,11 @@ class FeatureSelector:
             self._interf_available: bool = False
         else:
             self._interf_available = True
-        self._all_cs_names: list[str] = list(
-            topology["compliance_sets"].keys()
-        )
+        self._all_cs_names: list[str] = list(topology["compliance_sets"].keys())
         # Lookup (source, target) → edge_id per tradurre le tuple
         # restituite da TopologyBuilder nelle chiavi degli snapshot.
         self._edge_id_lookup: dict[tuple[str, str], str] = {
-            (e["source"], e["target"]): e["id"]
-            for e in topology["edges"]
+            (e["source"], e["target"]): e["id"] for e in topology["edges"]
         }
 
     # ------------------------------------------------------------------
@@ -99,9 +97,7 @@ class FeatureSelector:
             Se ``compliance_set_name`` non esiste in topology.yaml.
         """
         cs_nodes = self._tb.get_compliance_set_nodes(compliance_set_name)
-        internal_edges = self._tb.get_edges_for_compliance_set(
-            compliance_set_name
-        )
+        internal_edges = self._tb.get_edges_for_compliance_set(compliance_set_name)
         interf_edges = self._collect_interference_edges(compliance_set_name)
 
         result: dict[str, pd.DataFrame] = {}
@@ -110,9 +106,7 @@ class FeatureSelector:
         for node_id in sorted(cs_nodes):
             for metric in self._node_metrics:
                 key = f"node:{node_id}:{metric}"
-                result[key] = self._build_node_series(
-                    node_id, metric, snapshots
-                )
+                result[key] = self._build_node_series(node_id, metric, snapshots)
 
         # M_direct - feature di arco
         for src, tgt in internal_edges:
@@ -121,9 +115,7 @@ class FeatureSelector:
                 continue
             for metric in self._edge_metrics:
                 key = f"edge:{edge_id}:{metric}"
-                result[key] = self._build_edge_series(
-                    edge_id, metric, snapshots
-                )
+                result[key] = self._build_edge_series(edge_id, metric, snapshots)
 
         # M_interf - solo throughput_rps
         for src, tgt in interf_edges:
@@ -167,9 +159,7 @@ class FeatureSelector:
             Se ``compliance_set_name`` non esiste in topology.yaml.
         """
         cs_nodes = self._tb.get_compliance_set_nodes(compliance_set_name)
-        internal_edges = self._tb.get_edges_for_compliance_set(
-            compliance_set_name
-        )
+        internal_edges = self._tb.get_edges_for_compliance_set(compliance_set_name)
         interf_edges = self._collect_interference_edges(compliance_set_name)
 
         direct: list[str] = []
@@ -205,9 +195,7 @@ class FeatureSelector:
         for other in self._all_cs_names:
             if other == compliance_set_name:
                 continue
-            for edge in self._tb.get_interference_edges(
-                compliance_set_name, other
-            ):
+            for edge in self._tb.get_interference_edges(compliance_set_name, other):
                 if edge not in seen:
                     seen.add(edge)
                     result.append(edge)
@@ -223,9 +211,7 @@ class FeatureSelector:
             ts: int = snap["timestamp"]
             node_data = snap["nodes"].get(node_id)
             if node_data is None:
-                logger.warning(
-                    "Nodo '%s' assente nello snapshot ts=%d", node_id, ts
-                )
+                logger.warning("Nodo '%s' assente nello snapshot ts=%d", node_id, ts)
                 val = float("nan")
             else:
                 raw = node_data.get(metric)
@@ -247,9 +233,7 @@ class FeatureSelector:
             ts: int = snap["timestamp"]
             edge_data = snap["edges"].get(edge_id)
             if edge_data is None:
-                logger.warning(
-                    "Arco '%s' assente nello snapshot ts=%d", edge_id, ts
-                )
+                logger.warning("Arco '%s' assente nello snapshot ts=%d", edge_id, ts)
                 val = float("nan")
             else:
                 raw = edge_data.get(metric)

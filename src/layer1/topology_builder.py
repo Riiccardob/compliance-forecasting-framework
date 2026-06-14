@@ -1,4 +1,5 @@
 """Costruisce l'ipergrafo di certificazione H_cert usando Annotazione Semantica."""
+
 import copy
 from typing import Any
 
@@ -33,13 +34,10 @@ class TopologyBuilder:
 
         # Precalcola i set di nodi per ogni compliance set per O(1) lookup
         self._cs_node_sets: dict[str, set[str]] = {
-            name: set(cs["nodes"])
-            for name, cs in self._compliance_sets.items()
+            name: set(cs["nodes"]) for name, cs in self._compliance_sets.items()
         }
 
-        declared_node_ids: set[str] = {
-            n["id"] for n in self._topology["nodes"]
-        }
+        declared_node_ids: set[str] = {n["id"] for n in self._topology["nodes"]}
         for cs_name, cs in self._topology["compliance_sets"].items():
             for node_id in cs.get("nodes", []):
                 if node_id not in declared_node_ids:
@@ -111,7 +109,9 @@ class TopologyBuilder:
                         "hyperedges=[] - questo arco è strutturalmente "
                         "invisibile al framework (non in A(H_Φi) né in "
                         "M_interf per nessun compliance set).",
-                        edge["id"], u, v,
+                        edge["id"],
+                        u,
+                        v,
                     )
 
         all_node_ids: set[str] = {n["id"] for n in self._topology["nodes"]}
@@ -127,7 +127,11 @@ class TopologyBuilder:
             )
 
         self._graph = g
-        logger.info("Grafo H_cert costruito: %d nodi, %d archi", g.number_of_nodes(), g.number_of_edges())
+        logger.info(
+            "Grafo H_cert costruito: %d nodi, %d archi",
+            g.number_of_nodes(),
+            g.number_of_edges(),
+        )
         return copy.deepcopy(self._graph)
 
     def get_compliance_set_nodes(self, name: str) -> set[str]:
@@ -182,12 +186,12 @@ class TopologyBuilder:
                 logger.warning(
                     "Compliance set '%s' ha topology_type='linear' "
                     "ma non ha critical_path definito in topology.yaml. "
-                    "PAS non sarà calcolabile.", name
+                    "PAS non sarà calcolabile.",
+                    name,
                 )
             if path:
                 valid_edges: set[tuple[str, str]] = {
-                    (e["source"], e["target"])
-                    for e in self._topology["edges"]
+                    (e["source"], e["target"]) for e in self._topology["edges"]
                 }
                 cs_nodes = self._cs_node_sets[name]
                 for node in path:
@@ -214,7 +218,8 @@ class TopologyBuilder:
             logger.warning(
                 "topology_type '%s' non riconosciuto per compliance "
                 "set '%s' - critical_path non calcolabile.",
-                topology_type, name,
+                topology_type,
+                name,
             )
             return []
 

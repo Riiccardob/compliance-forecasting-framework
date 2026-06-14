@@ -1,20 +1,21 @@
 """Test per ATGBuilder - mock sintetici in memoria, nessun CSV reale."""
+
 import json
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from src.utils.config_loader import ConfigLoader
 from src.layer2.atg_builder import ATGBuilder
+from src.utils.config_loader import ConfigLoader
 
 _ROOT = Path(__file__).parent.parent
 _TOPOLOGY_PATH = _ROOT / "config" / "topology.yaml"
 _PIPELINE_PATH = _ROOT / "config" / "pipeline_params.yaml"
 
-#  Costanti mock 
-_T0 = 1_000_000   # nominale
-_T1 = 6_000_000   # anomalo cpu
+#  Costanti mock
+_T0 = 1_000_000  # nominale
+_T1 = 6_000_000  # anomalo cpu
 _T2 = 11_000_000  # anomalo cpu_mem
 
 _NODES = [
@@ -28,31 +29,34 @@ _NODES = [
 ]
 
 _EDGES = [
-    ("e1", "nginx-web-server",       "nginx-thrift"),
-    ("e2", "nginx-thrift",           "home-timeline-service"),
-    ("e3", "home-timeline-service",  "home-timeline-redis"),
-    ("e4", "home-timeline-service",  "post-storage-service"),
-    ("e5", "post-storage-service",   "post-storage-memcached"),
-    ("e6", "post-storage-service",   "post-storage-mongodb"),
+    ("e1", "nginx-web-server", "nginx-thrift"),
+    ("e2", "nginx-thrift", "home-timeline-service"),
+    ("e3", "home-timeline-service", "home-timeline-redis"),
+    ("e4", "home-timeline-service", "post-storage-service"),
+    ("e5", "post-storage-service", "post-storage-memcached"),
+    ("e6", "post-storage-service", "post-storage-mongodb"),
 ]
 
 
-#  Builder di mock DataFrame 
+#  Builder di mock DataFrame
+
 
 def _make_node_metrics(timestamps: list[int]) -> pd.DataFrame:
     rows = []
     for ts in timestamps:
         for node in _NODES:
-            rows.append({
-                "timestamp": ts,
-                "window_id": f"w_{ts}",
-                "node_id": node,
-                "cpu_percent": 5.0,
-                "mem_mb": 100.0,
-                "net_rx_mb": 1.0,
-                "net_tx_mb": 0.5,
-                "source_file": "mock.csv",
-            })
+            rows.append(
+                {
+                    "timestamp": ts,
+                    "window_id": f"w_{ts}",
+                    "node_id": node,
+                    "cpu_percent": 5.0,
+                    "mem_mb": 100.0,
+                    "net_rx_mb": 1.0,
+                    "net_tx_mb": 0.5,
+                    "source_file": "mock.csv",
+                }
+            )
     return pd.DataFrame(rows)
 
 
@@ -60,45 +64,50 @@ def _make_edge_metrics(timestamps: list[int]) -> pd.DataFrame:
     rows = []
     for ts in timestamps:
         for edge_id, source, target in _EDGES:
-            rows.append({
-                "timestamp": ts,
-                "window_id": f"w_{ts}",
-                "edge_id": edge_id,
-                "source": source,
-                "target": target,
-                "latency_ms": 10.0,
-                "error_rate": 0.0 if ts == _T0 else 0.5,
-                "throughput_rps": 5.0,
-                "source_file": "mock.csv",
-            })
+            rows.append(
+                {
+                    "timestamp": ts,
+                    "window_id": f"w_{ts}",
+                    "edge_id": edge_id,
+                    "source": source,
+                    "target": target,
+                    "latency_ms": 10.0,
+                    "error_rate": 0.0 if ts == _T0 else 0.5,
+                    "throughput_rps": 5.0,
+                    "source_file": "mock.csv",
+                }
+            )
     return pd.DataFrame(rows)
 
 
 def _make_ground_truth(timestamps: list[int]) -> pd.DataFrame:
     gt_specs = {
-        _T0: (0, "cpu",     "[]"),
-        _T1: (1, "cpu",     json.dumps(["nginx-web-server"])),
+        _T0: (0, "cpu", "[]"),
+        _T1: (1, "cpu", json.dumps(["nginx-web-server"])),
         _T2: (1, "cpu_mem", json.dumps(["post-storage-service"])),
     }
     rows = []
     for ts in timestamps:
         label, fault, anomaly_ids = gt_specs[ts]
-        rows.append({
-            "timestamp": ts,
-            "window_id": f"w_{ts}",
-            "fault_type": fault,
-            "date": "aug9",
-            "duration": "25min",
-            "rps": 400,
-            "replica_idx": 0,
-            "label_trace": label,
-            "anomaly_node_ids": anomaly_ids,
-            "source_file": "mock.csv",
-        })
+        rows.append(
+            {
+                "timestamp": ts,
+                "window_id": f"w_{ts}",
+                "fault_type": fault,
+                "date": "aug9",
+                "duration": "25min",
+                "rps": 400,
+                "replica_idx": 0,
+                "label_trace": label,
+                "anomaly_node_ids": anomaly_ids,
+                "source_file": "mock.csv",
+            }
+        )
     return pd.DataFrame(rows)
 
 
-#  Fixture 
+#  Fixture
+
 
 @pytest.fixture
 def config() -> ConfigLoader:
@@ -159,7 +168,8 @@ def gt_df() -> pd.DataFrame:
     return _make_ground_truth([_T0, _T1, _T2])
 
 
-#  Test: struttura della lista di snapshot 
+#  Test: struttura della lista di snapshot
+
 
 def test_build_returns_list(snapshots: list[dict]) -> None:
     assert isinstance(snapshots, list)
@@ -170,7 +180,14 @@ def test_snapshot_count(snapshots: list[dict]) -> None:
 
 
 def test_snapshot_keys(snapshots: list[dict]) -> None:
-    required = {"timestamp", "nodes", "edges", "label", "anomaly_type", "anomaly_node_ids"}
+    required = {
+        "timestamp",
+        "nodes",
+        "edges",
+        "label",
+        "anomaly_type",
+        "anomaly_node_ids",
+    }
     for snap in snapshots:
         assert set(snap.keys()) == required
 
@@ -188,7 +205,8 @@ def test_edge_ids_complete(snapshots: list[dict]) -> None:
         assert set(snap["edges"].keys()) == expected_edge_ids
 
 
-#  Test: label e anomaly_type 
+#  Test: label e anomaly_type
+
 
 def test_nominal_label(snapshots: list[dict]) -> None:
     """t0 ha label==0 e anomaly_type is None."""
@@ -216,14 +234,16 @@ def test_nominal_anomaly_node_ids_empty(snapshots: list[dict]) -> None:
     assert t0_snap["anomaly_node_ids"] == []
 
 
-#  Test: ordinamento 
+#  Test: ordinamento
+
 
 def test_snapshots_ordered_by_timestamp(snapshots: list[dict]) -> None:
     ts_list = [s["timestamp"] for s in snapshots]
     assert ts_list == sorted(ts_list)
 
 
-#  Test: get_node_feature_matrix 
+#  Test: get_node_feature_matrix
+
 
 def test_get_node_feature_matrix_shape(
     builder: ATGBuilder, snapshots: list[dict]
@@ -234,7 +254,8 @@ def test_get_node_feature_matrix_shape(
     assert list(df.columns) == ["cpu_percent", "mem_mb", "net_rx_mb", "net_tx_mb"]
 
 
-#  Test: get_edge_feature_matrix 
+#  Test: get_edge_feature_matrix
+
 
 def test_get_edge_feature_matrix_shape(
     builder: ATGBuilder, snapshots: list[dict]
@@ -245,7 +266,8 @@ def test_get_edge_feature_matrix_shape(
     assert list(df.columns) == ["latency_ms", "error_rate", "throughput_rps"]
 
 
-#  Test: filtri snapshot 
+#  Test: filtri snapshot
+
 
 def test_get_nominal_snapshots_count(
     builder: ATGBuilder, snapshots: list[dict]
@@ -273,7 +295,8 @@ def test_get_anomalous_snapshots_by_type_count(
     assert cpu_only[0]["timestamp"] == _T1
 
 
-#  Test: ValueError su timestamp disallineati 
+#  Test: ValueError su timestamp disallineati
+
 
 def test_duplicate_gt_timestamp_deduplicates(
     config: ConfigLoader, tmp_path: Path
@@ -284,14 +307,30 @@ def test_duplicate_gt_timestamp_deduplicates(
     em = _make_edge_metrics([_T0])
 
     gt_rows = [
-        {"timestamp": _T0, "window_id": "w_a", "fault_type": "cpu",
-         "date": "aug9", "duration": "25min", "rps": 400,
-         "replica_idx": 0, "label_trace": 0,
-         "anomaly_node_ids": "[]", "source_file": "exp_a.csv"},
-        {"timestamp": _T0, "window_id": "w_b", "fault_type": "cpu",
-         "date": "aug9", "duration": "25min", "rps": 400,
-         "replica_idx": 1, "label_trace": 1,
-         "anomaly_node_ids": "[]", "source_file": "exp_b.csv"},
+        {
+            "timestamp": _T0,
+            "window_id": "w_a",
+            "fault_type": "cpu",
+            "date": "aug9",
+            "duration": "25min",
+            "rps": 400,
+            "replica_idx": 0,
+            "label_trace": 0,
+            "anomaly_node_ids": "[]",
+            "source_file": "exp_a.csv",
+        },
+        {
+            "timestamp": _T0,
+            "window_id": "w_b",
+            "fault_type": "cpu",
+            "date": "aug9",
+            "duration": "25min",
+            "rps": 400,
+            "replica_idx": 1,
+            "label_trace": 1,
+            "anomaly_node_ids": "[]",
+            "source_file": "exp_b.csv",
+        },
     ]
     gt = pd.DataFrame(gt_rows)
 
@@ -309,9 +348,7 @@ def test_duplicate_gt_timestamp_deduplicates(
     assert snaps[0]["label"] == 0
 
 
-def test_timestamp_mismatch_raises(
-    config: ConfigLoader, tmp_path: Path
-) -> None:
+def test_timestamp_mismatch_raises(config: ConfigLoader, tmp_path: Path) -> None:
     """ValueError se node_metrics e edge_metrics hanno timestamp senza overlap."""
     nm = _make_node_metrics([_T0, _T1, _T2])
     # edge_metrics con timestamp completamente diversi
@@ -337,16 +374,30 @@ def test_duplicate_node_timestamp_deduplicates(
     build() deduplica tenendo la prima occorrenza."""
     nm_rows = []
     for node in _NODES:
-        nm_rows.append({
-            "timestamp": _T0, "window_id": "w_a", "node_id": node,
-            "cpu_percent": 10.0, "mem_mb": 100.0,
-            "net_rx_mb": 1.0, "net_tx_mb": 0.5, "source_file": "exp_a.csv",
-        })
-        nm_rows.append({
-            "timestamp": _T0, "window_id": "w_b", "node_id": node,
-            "cpu_percent": 99.0, "mem_mb": 200.0,
-            "net_rx_mb": 5.0, "net_tx_mb": 3.0, "source_file": "exp_b.csv",
-        })
+        nm_rows.append(
+            {
+                "timestamp": _T0,
+                "window_id": "w_a",
+                "node_id": node,
+                "cpu_percent": 10.0,
+                "mem_mb": 100.0,
+                "net_rx_mb": 1.0,
+                "net_tx_mb": 0.5,
+                "source_file": "exp_a.csv",
+            }
+        )
+        nm_rows.append(
+            {
+                "timestamp": _T0,
+                "window_id": "w_b",
+                "node_id": node,
+                "cpu_percent": 99.0,
+                "mem_mb": 200.0,
+                "net_rx_mb": 5.0,
+                "net_tx_mb": 3.0,
+                "source_file": "exp_b.csv",
+            }
+        )
     nm = pd.DataFrame(nm_rows)
     em = _make_edge_metrics([_T0])
     gt = _make_ground_truth([_T0])
@@ -371,18 +422,32 @@ def test_duplicate_edge_timestamp_deduplicates(
     build() deduplica tenendo la prima occorrenza."""
     em_rows = []
     for edge_id, source, target in _EDGES:
-        em_rows.append({
-            "timestamp": _T0, "window_id": "w_a", "edge_id": edge_id,
-            "source": source, "target": target,
-            "latency_ms": 10.0, "error_rate": 0.0, "throughput_rps": 5.0,
-            "source_file": "exp_a.csv",
-        })
-        em_rows.append({
-            "timestamp": _T0, "window_id": "w_b", "edge_id": edge_id,
-            "source": source, "target": target,
-            "latency_ms": 999.0, "error_rate": 1.0, "throughput_rps": 0.0,
-            "source_file": "exp_b.csv",
-        })
+        em_rows.append(
+            {
+                "timestamp": _T0,
+                "window_id": "w_a",
+                "edge_id": edge_id,
+                "source": source,
+                "target": target,
+                "latency_ms": 10.0,
+                "error_rate": 0.0,
+                "throughput_rps": 5.0,
+                "source_file": "exp_a.csv",
+            }
+        )
+        em_rows.append(
+            {
+                "timestamp": _T0,
+                "window_id": "w_b",
+                "edge_id": edge_id,
+                "source": source,
+                "target": target,
+                "latency_ms": 999.0,
+                "error_rate": 1.0,
+                "throughput_rps": 0.0,
+                "source_file": "exp_b.csv",
+            }
+        )
     nm = _make_node_metrics([_T0])
     em = pd.DataFrame(em_rows)
     gt = _make_ground_truth([_T0])
@@ -425,6 +490,7 @@ def test_get_node_feature_matrix_unknown_node_returns_empty(
     """get_node_feature_matrix su node_id inesistente restituisce
     DataFrame vuoto ed emette logger.warning."""
     from unittest.mock import patch
+
     with patch("src.layer2.atg_builder.logger") as mock_logger:
         df = builder.get_node_feature_matrix(snapshots, "nonexistent-service")
     assert df.empty
@@ -438,6 +504,7 @@ def test_get_edge_feature_matrix_unknown_edge_returns_empty(
     """get_edge_feature_matrix su edge_id inesistente restituisce
     DataFrame vuoto ed emette logger.warning."""
     from unittest.mock import patch
+
     with patch("src.layer2.atg_builder.logger") as mock_logger:
         df = builder.get_edge_feature_matrix(snapshots, "e_nonexistent")
     assert isinstance(df, pd.DataFrame)
@@ -453,14 +520,20 @@ def test_fault_type_nan_produces_none_anomaly_type(
     non la stringa 'nan'."""
     nm = _make_node_metrics([_T1])
     em = _make_edge_metrics([_T1])
-    gt_rows = [{
-        "timestamp": _T1, "window_id": f"w_{_T1}",
-        "fault_type": float("nan"),
-        "date": "aug9", "duration": "25min", "rps": 400,
-        "replica_idx": 0, "label_trace": 1,
-        "anomaly_node_ids": json.dumps(["nginx-web-server"]),
-        "source_file": "mock.csv",
-    }]
+    gt_rows = [
+        {
+            "timestamp": _T1,
+            "window_id": f"w_{_T1}",
+            "fault_type": float("nan"),
+            "date": "aug9",
+            "duration": "25min",
+            "rps": 400,
+            "replica_idx": 0,
+            "label_trace": 1,
+            "anomaly_node_ids": json.dumps(["nginx-web-server"]),
+            "source_file": "mock.csv",
+        }
+    ]
     gt = pd.DataFrame(gt_rows)
     nm_path = tmp_path / "nm_nanft.csv"
     em_path = tmp_path / "em_nanft.csv"
@@ -484,13 +557,20 @@ def test_anomaly_node_ids_malformed_json_produces_empty_list(
     senza sollevare eccezioni."""
     nm = _make_node_metrics([_T1])
     em = _make_edge_metrics([_T1])
-    gt_rows = [{
-        "timestamp": _T1, "window_id": f"w_{_T1}",
-        "fault_type": "cpu", "date": "aug9", "duration": "25min",
-        "rps": 400, "replica_idx": 0, "label_trace": 1,
-        "anomaly_node_ids": "NOT_VALID_JSON{{{",
-        "source_file": "mock.csv",
-    }]
+    gt_rows = [
+        {
+            "timestamp": _T1,
+            "window_id": f"w_{_T1}",
+            "fault_type": "cpu",
+            "date": "aug9",
+            "duration": "25min",
+            "rps": 400,
+            "replica_idx": 0,
+            "label_trace": 1,
+            "anomaly_node_ids": "NOT_VALID_JSON{{{",
+            "source_file": "mock.csv",
+        }
+    ]
     gt = pd.DataFrame(gt_rows)
     nm_path = tmp_path / "nm_malinv.csv"
     em_path = tmp_path / "em_malinv.csv"
@@ -512,13 +592,20 @@ def test_anomaly_node_ids_dict_json_produces_empty_list(
     viene normalizzato a []."""
     nm = _make_node_metrics([_T1])
     em = _make_edge_metrics([_T1])
-    gt_rows = [{
-        "timestamp": _T1, "window_id": f"w_{_T1}",
-        "fault_type": "cpu", "date": "aug9", "duration": "25min",
-        "rps": 400, "replica_idx": 0, "label_trace": 1,
-        "anomaly_node_ids": json.dumps({"key": "value"}),
-        "source_file": "mock.csv",
-    }]
+    gt_rows = [
+        {
+            "timestamp": _T1,
+            "window_id": f"w_{_T1}",
+            "fault_type": "cpu",
+            "date": "aug9",
+            "duration": "25min",
+            "rps": 400,
+            "replica_idx": 0,
+            "label_trace": 1,
+            "anomaly_node_ids": json.dumps({"key": "value"}),
+            "source_file": "mock.csv",
+        }
+    ]
     gt = pd.DataFrame(gt_rows)
     nm_path = tmp_path / "nm_dictj.csv"
     em_path = tmp_path / "em_dictj.csv"
@@ -533,7 +620,8 @@ def test_anomaly_node_ids_dict_json_produces_empty_list(
         assert snap["anomaly_node_ids"] == []
 
 
-#  Test: V/E consistency check 
+#  Test: V/E consistency check
+
 
 def test_build_warns_on_isolated_node(
     atg: ATGBuilder,
@@ -552,19 +640,22 @@ def test_build_warns_on_isolated_node(
     bad_topology["nodes"].append({"id": "orphan-service"})
 
     # Crea righe CSV per orphan-service (stesso pattern degli altri nodi)
-    orphan_rows = pd.DataFrame([{
-        "timestamp": ts,
-        "window_id": f"w_{ts}",
-        "node_id": "orphan-service",
-        "cpu_percent": 5.0,
-        "mem_mb": 100.0,
-        "net_rx_mb": 1.0,
-        "net_tx_mb": 0.5,
-        "source_file": "mock.csv",
-    } for ts in node_df["timestamp"].unique()])
-    node_df_extended = pd.concat(
-        [node_df, orphan_rows], ignore_index=True
+    orphan_rows = pd.DataFrame(
+        [
+            {
+                "timestamp": ts,
+                "window_id": f"w_{ts}",
+                "node_id": "orphan-service",
+                "cpu_percent": 5.0,
+                "mem_mb": 100.0,
+                "net_rx_mb": 1.0,
+                "net_tx_mb": 0.5,
+                "source_file": "mock.csv",
+            }
+            for ts in node_df["timestamp"].unique()
+        ]
     )
+    node_df_extended = pd.concat([node_df, orphan_rows], ignore_index=True)
 
     with patch.object(atg, "_topology", bad_topology):
         with patch("src.layer2.atg_builder.logger") as mock_logger:
@@ -572,9 +663,7 @@ def test_build_warns_on_isolated_node(
 
     # Verifica che il warning di "blind spot" sia emesso
     # (nodo non in alcun compliance set)
-    warning_msgs = " ".join(
-        str(c) for c in mock_logger.warning.call_args_list
-    )
+    warning_msgs = " ".join(str(c) for c in mock_logger.warning.call_args_list)
     assert "orphan-service" in warning_msgs
 
 
@@ -586,16 +675,22 @@ def test_extra_node_in_csv_warns(
 ) -> None:
     """Un node_id sconosciuto in node_metrics emette warning su extra_nodes."""
     from unittest.mock import patch
-    extra_rows = pd.DataFrame([{
-        "timestamp": ts,
-        "window_id": f"w_{ts}",
-        "node_id": "unknown-service",
-        "cpu_percent": 5.0,
-        "mem_mb": 100.0,
-        "net_rx_mb": 1.0,
-        "net_tx_mb": 0.5,
-        "source_file": "mock.csv",
-    } for ts in [_T0, _T1, _T2]])
+
+    extra_rows = pd.DataFrame(
+        [
+            {
+                "timestamp": ts,
+                "window_id": f"w_{ts}",
+                "node_id": "unknown-service",
+                "cpu_percent": 5.0,
+                "mem_mb": 100.0,
+                "net_rx_mb": 1.0,
+                "net_tx_mb": 0.5,
+                "source_file": "mock.csv",
+            }
+            for ts in [_T0, _T1, _T2]
+        ]
+    )
     node_extra = pd.concat([node_df, extra_rows], ignore_index=True)
     with patch("src.layer2.atg_builder.logger") as mock_logger:
         atg.build(node_extra, edge_df, gt_df)
@@ -611,6 +706,7 @@ def test_missing_node_in_csv_warns(
 ) -> None:
     """Un node_id atteso da topology assente in node_metrics emette warning."""
     from unittest.mock import patch
+
     node_missing = node_df[node_df["node_id"] != "nginx-web-server"].copy()
     with patch("src.layer2.atg_builder.logger") as mock_logger:
         atg.build(node_missing, edge_df, gt_df)
@@ -624,20 +720,25 @@ def test_label_out_of_range_included_but_not_classified(
     """label_trace fuori intervallo emette warning ma lo snapshot è incluso
     con label intatto, anomaly_type=None e anomaly_node_ids=[]."""
     from unittest.mock import patch
+
     nm = _make_node_metrics([_T0])
     em = _make_edge_metrics([_T0])
-    gt_invalid = pd.DataFrame([{
-        "timestamp": _T0,
-        "window_id": f"w_{_T0}",
-        "fault_type": "cpu",
-        "date": "aug9",
-        "duration": "25min",
-        "rps": 400,
-        "replica_idx": 0,
-        "label_trace": 2,
-        "anomaly_node_ids": "[]",
-        "source_file": "mock.csv",
-    }])
+    gt_invalid = pd.DataFrame(
+        [
+            {
+                "timestamp": _T0,
+                "window_id": f"w_{_T0}",
+                "fault_type": "cpu",
+                "date": "aug9",
+                "duration": "25min",
+                "rps": 400,
+                "replica_idx": 0,
+                "label_trace": 2,
+                "anomaly_node_ids": "[]",
+                "source_file": "mock.csv",
+            }
+        ]
+    )
     with patch("src.layer2.atg_builder.logger") as mock_logger:
         snaps = atg.build(nm, em, gt_invalid)
     assert len(snaps) == 1
@@ -657,9 +758,7 @@ def test_extra_edge_in_csv_warns(
     non dichiarato in topology.yaml."""
     from unittest.mock import patch
 
-    phantom_rows = edge_df[
-        edge_df["edge_id"] == edge_df["edge_id"].iloc[0]
-    ].copy()
+    phantom_rows = edge_df[edge_df["edge_id"] == edge_df["edge_id"].iloc[0]].copy()
     phantom_rows["edge_id"] = "e99"
     edge_extra = pd.concat([edge_df, phantom_rows], ignore_index=True)
     with patch("src.layer2.atg_builder.logger") as mock_logger:
@@ -677,11 +776,10 @@ def test_missing_edge_in_csv_warns(
     """build() emette warning quando topology.yaml dichiara un
     edge_id assente da edge_metrics.csv."""
     from unittest.mock import patch
+
     # Rimuovi tutti i record di e1 dal CSV degli archi
     edge_missing = edge_df[edge_df["edge_id"] != "e1"].copy()
     with patch("src.layer2.atg_builder.logger") as mock_logger:
         atg.build(node_df, edge_missing, gt_df)
-    warning_msgs = " ".join(
-        str(c) for c in mock_logger.warning.call_args_list
-    )
+    warning_msgs = " ".join(str(c) for c in mock_logger.warning.call_args_list)
     assert "e1" in warning_msgs

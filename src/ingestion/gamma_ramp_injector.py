@@ -1,6 +1,7 @@
 """Inietta una rampa lineare di latenza nelle ultime N finestre nominali di ogni esperimento."""
+
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import numpy as np
 import pandas as pd
@@ -20,7 +21,7 @@ EXCLUDE_PREFIX: str = "cpu_aug12_25min_200_"
 SLA_H_CRIT_MS: float = 284.4
 SLA_H_CACHE_MS: float = 45.0
 MAX_GLOBAL_SCALE: float = 3.82
-SLA_H_CRIT_RAMP_TARGET: float = SLA_H_CRIT_MS * 0.90   # 255.96ms
+SLA_H_CRIT_RAMP_TARGET: float = SLA_H_CRIT_MS * 0.90  # 255.96ms
 SLA_H_CACHE_RAMP_TARGET: float = SLA_H_CACHE_MS * 0.90  # 40.5ms
 MIN_NOMINAL_FOR_RAMP: int = 5
 
@@ -222,7 +223,10 @@ class GammaRampInjector:
 
             logger.debug(
                 "[%s] rampa applicata: n_nominal=%d, n_ramp=%d, exp_scale=%.3f",
-                sf, n_nominal, n_ramp, exp_scale,
+                sf,
+                n_nominal,
+                n_ramp,
+                exp_scale,
             )
 
         result_df = pd.concat(augmented_frames, ignore_index=True)
@@ -240,6 +244,7 @@ class GammaRampInjector:
             min(self.exp_scale_factors.values()) if self.exp_scale_factors else 0.0,
             max(self.exp_scale_factors.values()) if self.exp_scale_factors else 0.0,
             sum(self.exp_scale_factors.values()) / len(self.exp_scale_factors)
-            if self.exp_scale_factors else 0.0,
+            if self.exp_scale_factors
+            else 0.0,
         )
         return result_df

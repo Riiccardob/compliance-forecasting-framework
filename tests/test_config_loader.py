@@ -1,4 +1,5 @@
 """Test per ConfigLoader: caricamento e validazione dei file di configurazione."""
+
 import logging
 from pathlib import Path
 
@@ -61,7 +62,8 @@ alert_generation:
 """
 
 
-#  Module-level fixtures (used by DSB pipeline content tests) 
+#  Module-level fixtures (used by DSB pipeline content tests)
+
 
 @pytest.fixture
 def loader() -> ConfigLoader:
@@ -73,7 +75,8 @@ def pipeline(loader: ConfigLoader) -> dict:
     return loader.load_pipeline_params()
 
 
-#  Behavior tests 
+#  Behavior tests
+
 
 def test_load_topology_returns_dict(tmp_path: Path) -> None:
     topo = tmp_path / "topology.yaml"
@@ -93,7 +96,8 @@ def test_pipeline_params_loads(tmp_path: Path) -> None:
     assert isinstance(mock_loader.load_pipeline_params(), dict)
 
 
-#  Pipeline content - DSB regression guard 
+#  Pipeline content - DSB regression guard
+
 
 def test_lstm_config_present(pipeline: dict) -> None:
     assert "lstm" in pipeline["forecasting"]
@@ -103,7 +107,8 @@ def test_arima_config_present(pipeline: dict) -> None:
     assert "arima" in pipeline["forecasting"]
 
 
-#  Error handling 
+#  Error handling
+
 
 def test_missing_topology_file_raises() -> None:
     missing = Path("/nonexistent/path/topology.yaml")
@@ -248,7 +253,8 @@ def test_malformed_yaml_raises(tmp_path: Path) -> None:
         loader.load_topology()
 
 
-#  Cache isolation 
+#  Cache isolation
+
 
 def test_load_topology_cache_is_isolated(tmp_path: Path) -> None:
     """Mutare il dict restituito non corrompe la cache interna."""
@@ -306,7 +312,8 @@ def test_load_pipeline_cache_deep_isolation(tmp_path: Path) -> None:
     assert p2["anomaly_detection"]["cusum"]["ewma_alpha"] != 999.0
 
 
-#  DSB topology content - regression guard 
+#  DSB topology content - regression guard
+
 
 class TestTopologyYamlContent:
     """Regression guard on the content of config/topology.yaml for
@@ -371,7 +378,9 @@ class TestTopologyYamlContent:
         assert real_topology["compliance_sets"]["H_crit"]["topology_type"] == "linear"
 
     def test_topology_type_h_cache_parallel(self, real_topology: dict) -> None:
-        assert real_topology["compliance_sets"]["H_cache"]["topology_type"] == "parallel"
+        assert (
+            real_topology["compliance_sets"]["H_cache"]["topology_type"] == "parallel"
+        )
 
     def test_edge_metrics_exact(self, real_topology: dict) -> None:
         """topology['edge_metrics'] contiene esattamente le 3 metriche di arco."""
