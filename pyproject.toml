@@ -1,9 +1,4 @@
 [tool.pytest.ini_options]
-<<<<<<< HEAD
-# Kept in sync with pytest.ini - if you use pyproject.toml, migrate pytest.ini here
-=======
-# Kept in sync with pytest.ini — if you use pyproject.toml, migrate pytest.ini here
->>>>>>> 5f90656 (add CI workflow, ruff confing, CHANGELOG)
 pythonpath = ["."]
 filterwarnings = [
     "ignore::UserWarning",
