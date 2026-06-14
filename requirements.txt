@@ -1,4 +1,4 @@
-# Core runtime dependencies — Hybrid Hypergraph-ATG
+# Core runtime dependencies - Hybrid Hypergraph-ATG
 # Install with: pip install -r requirements.txt
 
 # Data manipulation

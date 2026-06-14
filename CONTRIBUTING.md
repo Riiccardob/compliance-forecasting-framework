@@ -34,7 +34,7 @@ All 306 tests must pass before opening a pull request. The suite runs without ac
 1. Place the module in the correct `src/layer*/` or `src/phase*/` package based on its responsibility.
 2. Create `tests/test_<module_name>.py` following the in-memory test pattern.
 3. If the module introduces new configuration keys, add them to the appropriate YAML file and document them in `docs/configuration.md`.
-4. Verify that no circular imports are introduced by running `pytest tests/` — any circular import will surface as an `ImportError` on first import.
+4. Verify that no circular imports are introduced by running `pytest tests/` - any circular import will surface as an `ImportError` on first import.
 5. Update `ARCHITECTURE.md` if the module changes data flow or introduces a new design invariant.
 
 ## Pull request checklist

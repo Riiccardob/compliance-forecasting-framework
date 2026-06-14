@@ -16,7 +16,7 @@
 
 > **What this is not**: a generic anomaly detector that fires when a metric looks unusual.
 >
-> **What this is**: a system that predicts *which certified SLA will be violated*, *how many time windows ahead*, *which component will cause it*, and *whether a separate compliance property is also at risk* — all from microservice telemetry.
+> **What this is**: a system that predicts *which certified SLA will be violated*, *how many time windows ahead*, *which component will cause it*, and *whether a separate compliance property is also at risk* - all from microservice telemetry.
 
 ---
 
@@ -28,7 +28,7 @@ Hybrid Hypergraph-ATG monitors distributed microservice systems against formal, 
 - **Attributes** each alert to the root-cause node via topology-guided causal analysis
 - **Detects cross-property interference** when a fault on one certified path degrades another through shared infrastructure
 - **Classifies alerts** in three criticality levels (YELLOW / ORANGE / RED) based on estimated lead time
-- **Maintains zero false positives** on nominal windows — all models are trained exclusively on fault-free data
+- **Maintains zero false positives** on nominal windows - all models are trained exclusively on fault-free data
 
 Detection combines four hierarchical signals: SLA threshold + adaptive z-score (Level 1), Isolation Forest on the multivariate feature vector (Level 2), CUSUM on probabilistic routing drift (Level 3), and a structural co-occurrence validator (Level 4). Any positive signal propagates to the alert layer.
 
@@ -200,10 +200,10 @@ hybrid-hypergraph-atg/
 │   └── app.py                   # Dash + Mantine dashboard
 │
 ├── data/
-│   ├── raw/                     # raw GAMMA files — not tracked by git
-│   └── converted/               # canonical CSV output — not tracked by git
+│   ├── raw/                     # raw GAMMA files - not tracked by git
+│   └── converted/               # canonical CSV output - not tracked by git
 │
-├── results/                     # pipeline JSON output — not tracked by git
+├── results/                     # pipeline JSON output - not tracked by git
 │
 ├── run_etl.py                   # data conversion entry point
 ├── run_pipeline.py              # pipeline entry point
@@ -216,7 +216,7 @@ hybrid-hypergraph-atg/
 
 The framework uses two configuration files with distinct lifecycles.
 
-### `config/topology.yaml` — what you monitor
+### `config/topology.yaml` - what you monitor
 
 Defines the certified system structure. Modify this when the architecture changes or SLA thresholds are renegotiated. This file should be versioned alongside the system's certification documentation.
 
@@ -233,7 +233,7 @@ edges:
   - id: e2
     source: nginx-thrift
     target: home-timeline-service
-    rps_path_type: "all"    # "all" | "graph_1" | "graph_2" — for per-arc throughput
+    rps_path_type: "all"    # "all" | "graph_1" | "graph_2" - for per-arc throughput
   # ... all 6 edges
 
 node_metrics: [cpu_percent, mem_mb, net_rx_mb, net_tx_mb]
@@ -279,7 +279,7 @@ data_paths:
   ground_truth_csv:  "data/converted/ground_truth.csv"
 ```
 
-### `config/pipeline_params.yaml` — how you monitor
+### `config/pipeline_params.yaml` - how you monitor
 
 Algorithmic parameters. Safe to update between tuning sessions without touching `topology.yaml`.
 
@@ -328,7 +328,7 @@ alert:
 
 ## Step-by-Step Pipeline Guide
 
-### Step 1 — Data conversion
+### Step 1 - Data conversion
 
 ```bash
 python run_etl.py
@@ -348,7 +348,7 @@ timestamp,edge_id,source,target,latency_ms,error_rate,throughput_rps,source_file
 
 The converter handles three edge cases: negative CPU deltas (counter reset on container restart) are backfilled from the previous window; zero memory values (GAMMA missing-data sentinel) receive the same treatment; leading NaN values (no predecessor for the first window) are forward-filled or defaulted to 0.0. The first window of every source file is discarded because the CPU delta requires a prior sample.
 
-### Step 2 — Run the pipeline
+### Step 2 - Run the pipeline
 
 ```bash
 python run_pipeline.py
@@ -361,7 +361,7 @@ Config is read automatically from `config/topology.yaml` and `config/pipeline_pa
 --fault-type TYPE    run inference only on one fault type: cpu | mem | net | cpu_mem
 --limit N            limit to the first N anomalous snapshots (useful for quick tests)
 --log-level LEVEL    internal module log verbosity: DEBUG | INFO | WARNING | ERROR
-                     (default: WARNING — keeps stdout readable)
+                     (default: WARNING - keeps stdout readable)
 ```
 
 Examples:
@@ -380,12 +380,12 @@ Execution phases printed to stdout:
 ========================================================================
   INIZIALIZZAZIONE
 ========================================================================
-[BUILD]  topology loaded — 7 nodes, 6 edges, 2 compliance sets
+[BUILD]  topology loaded - 7 nodes, 6 edges, 2 compliance sets
 [TRAIN]  fitting on 11,093 nominal snapshots (label_trace = 0)
          StatForecaster ... done  (Prophet: 8 series)
          CausalAnalyzer ... done  (H_crit: 75 links, H_cache: 69 links + 24 cross-property)
          StructuralMonitor ... done  (Isolation Forest, CUSUM baseline)
-[INFER]  19,112 snapshots — 8,019 anomalous
+[INFER]  19,112 snapshots - 8,019 anomalous
          ...
 ========================================================================
   RIEPILOGO FINALE
@@ -499,7 +499,7 @@ The pipeline writes a single JSON file to `--output` (default: `results/pipeline
 | `lead_time_steps` | Windows of advance notice before the forecast SLA violation. `1` means the violation is in the current or next window. |
 | `lead_time_hours` | `lead_time_steps × step_duration_hours` from `pipeline_params.yaml`. Operational interpretation of the lead time. |
 | `criticality` | `red` ≤ 1 step, `orange` = 2 steps, `yellow` ≥ 3 steps (thresholds in `pipeline_params.yaml`). |
-| `root_cause` | `node:<name>:<metric>` — the node-metric pair with the strongest causal link to the violated metric in the nominal causal graph. |
+| `root_cause` | `node:<name>:<metric>` - the node-metric pair with the strongest causal link to the violated metric in the nominal causal graph. |
 | `critical_arc` | Arc with the highest latency contribution to the aggregated SLA violation. |
 | `cross_property_interference` | The compliance set whose traffic is causing interference on this one, or `null`. |
 | `causal_chain` | Three-step interference path: external arc → shared node metric → internal arc latency. |
@@ -520,12 +520,12 @@ The dashboard runs against the data in `data/converted/` and the results in `res
 
 The interface is built with [Dash Mantine Components](https://www.dash-mantine-components.com/) and provides:
 
-- **Section 0 — Import**: canonical CSV schema viewer and dataset statistics
-- **Section 1 — Topology**: interactive compliance set explorer with node/edge membership
-- **Section 2 — Training**: feature selection summary, causal graph, PBO gold standard
-- **Section 3 — Monitor**: per-window signal activation across the 4-level hierarchy
-- **Section 4 — Alerts**: searchable alert table with criticality, root cause, cross-property chains
-- **Section 5 — Routing drift**: W(t) time series with PAS / Frobenius distance and CUSUM threshold overlay
+- **Section 0 - Import**: canonical CSV schema viewer and dataset statistics
+- **Section 1 - Topology**: interactive compliance set explorer with node/edge membership
+- **Section 2 - Training**: feature selection summary, causal graph, PBO gold standard
+- **Section 3 - Monitor**: per-window signal activation across the 4-level hierarchy
+- **Section 4 - Alerts**: searchable alert table with criticality, root cause, cross-property chains
+- **Section 5 - Routing drift**: W(t) time series with PAS / Frobenius distance and CUSUM threshold overlay
 
 ---
 
@@ -678,7 +678,7 @@ When adding a module: place it in the correct `src/phase*/` or `src/layer*/` pac
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).
 
 ---
 
