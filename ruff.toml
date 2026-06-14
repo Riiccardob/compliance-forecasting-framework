@@ -1,4 +1,4 @@
-# ruff.toml — linter and formatter configuration for Hybrid Hypergraph-ATG
+# ruff.toml - linter and formatter configuration for Hybrid Hypergraph-ATG
 
 [lint]
 select = [
@@ -13,7 +13,7 @@ select = [
 ]
 
 ignore = [
-    "E501",   # line too long — handled by formatter
+    "E501",   # line too long - handled by formatter
     "B008",   # function call in default argument
 
     # Math notation intentionally uses Unicode symbols (× − σ) in docstrings

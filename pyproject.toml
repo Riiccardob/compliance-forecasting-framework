@@ -1,5 +1,5 @@
 [tool.pytest.ini_options]
-# Kept in sync with pytest.ini — if you use pyproject.toml, migrate pytest.ini here
+# Kept in sync with pytest.ini - if you use pyproject.toml, migrate pytest.ini here
 pythonpath = ["."]
 filterwarnings = [
     "ignore::UserWarning",
