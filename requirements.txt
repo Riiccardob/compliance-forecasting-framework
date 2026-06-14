@@ -17,7 +17,6 @@ plotly>=5.18
 
 # Optional: progress bar during ramp injection (run_gamma_ramp_injector.py)
 # tqdm>=4.66
-=======
 # Core runtime dependencies — Hybrid Hypergraph-ATG
 # Install with: pip install -r requirements.txt
 
