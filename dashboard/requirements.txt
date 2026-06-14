@@ -1,0 +1,15 @@
+dash>=2.14
+dash-mantine-components>=0.14
+dash-cytoscape>=0.3
+plotly>=5.18
+diskcache
+multiprocess
+pandas
+pyarrow
+pyyaml
+prophet
+statsmodels
+scikit-learn
+numpy
+networkx
+scipy
