@@ -4,6 +4,7 @@
 
 **Predictive Compliance Monitoring for Microservice Architectures**
 
+[![CI](https://github.com/Riiccardob/hybrid-hypergraph-atg/actions/workflows/ci.yml/badge.svg)](https://github.com/Riiccardob/hybrid-hypergraph-atg/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/tests-306%20passing-brightgreen?logo=pytest)](tests/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -103,7 +104,7 @@ Verify the installation:
 
 ```bash
 python -c "from src.layer1.topology_builder import TopologyBuilder; print('OK')"
-pytest tests/ -q --tb=no              # should report 306 passed
+pytest tests/ -q --tb=no              # should report 297 passed
 ```
 
 ---
@@ -194,7 +195,7 @@ hybrid-hypergraph-atg/
 │   └── phase4/
 │       └── alert_generator.py   # alert synthesis: lead time, criticality, root cause
 │
-├── tests/                       # 306 unit tests across 10 files (all in-memory)
+├── tests/                       # 297 unit tests across 10 files (all in-memory)
 │
 ├── dashboard/
 │   └── app.py                   # Dash + Mantine dashboard
@@ -602,7 +603,7 @@ pytest tests/ -v
 pytest tests/ --cov=src --cov-report=term-missing
 ```
 
-306 test cases across 10 files. All tests operate on in-memory data structures; no test reads from disk (except `ConfigLoader` tests that use `tmp_path`). A full run completes in under 10 seconds.
+297 test cases across 10 files. All tests operate on in-memory data structures; no test reads from disk (except `ConfigLoader` tests that use `tmp_path`). A full run completes in under 10 seconds.
 
 | Category | What is verified |
 |---|---|
