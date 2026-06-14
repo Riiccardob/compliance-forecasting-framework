@@ -1,4 +1,5 @@
 """Test per CausalAnalyzer - dati mock sintetici, nessun CSV reale."""
+
 import warnings
 from pathlib import Path
 
@@ -32,7 +33,8 @@ def _make_series(values: np.ndarray) -> pd.Series:
     return pd.Series(values.astype(float), index=range(len(values)))
 
 
-#  Fixtures 
+#  Fixtures
+
 
 @pytest.fixture
 def config() -> ConfigLoader:
@@ -45,9 +47,7 @@ def topology_builder(config: ConfigLoader) -> TopologyBuilder:
 
 
 @pytest.fixture
-def analyzer(
-    config: ConfigLoader, topology_builder: TopologyBuilder
-) -> CausalAnalyzer:
+def analyzer(config: ConfigLoader, topology_builder: TopologyBuilder) -> CausalAnalyzer:
     return CausalAnalyzer(config, topology_builder)
 
 
@@ -76,7 +76,8 @@ def mock_features_h_cache() -> dict[str, pd.DataFrame]:
     }
 
 
-#  Test: struttura output (4) 
+#  Test: struttura output (4)
+
 
 def test_analyze_returns_dict(
     analyzer: CausalAnalyzer, mock_features_h_crit: dict[str, pd.DataFrame]
@@ -110,7 +111,8 @@ def test_compliance_set_in_output(
     assert result["compliance_set"] == "H_crit"
 
 
-#  Test: candidate pairs (3) 
+#  Test: candidate pairs (3)
+
 
 def test_get_causal_pairs_returns_list(
     analyzer: CausalAnalyzer, mock_features_h_crit: dict[str, pd.DataFrame]
@@ -154,7 +156,8 @@ def test_inter_pairs_bypass_pearson(
     assert "interf:e2:throughput_rps" in keys_in_inter
 
 
-#  Test: Granger (3) 
+#  Test: Granger (3)
+
 
 def test_granger_detects_linear_causality(
     analyzer: CausalAnalyzer,
@@ -172,9 +175,9 @@ def test_granger_detects_linear_causality(
     result = analyzer._granger_test(cause_s, effect_s, max_lag=5, significance=0.05)
     assert result is not None, "Granger doveva rilevare causalità"
     assert result["intensity"] > 0.0, (
-           f"ΔR² atteso > 0 per relazione causale forte, "
-           f"ottenuto {result['intensity']:.6f}"
-       )
+        f"ΔR² atteso > 0 per relazione causale forte, "
+        f"ottenuto {result['intensity']:.6f}"
+    )
     assert result["lag"] >= 1
 
 
@@ -186,7 +189,9 @@ def test_granger_returns_none_on_independent_series(
     cause_s = _make_series(np.random.default_rng(0).normal(0, 1, n))
     effect_s = _make_series(np.random.default_rng(1).normal(0, 1, n))
     result = analyzer._granger_test(cause_s, effect_s, max_lag=5, significance=0.05)
-    assert result is None, "Granger non doveva rilevare causalità su rumore indipendente"
+    assert result is None, (
+        "Granger non doveva rilevare causalità su rumore indipendente"
+    )
 
 
 def test_granger_handles_insufficient_data(
@@ -199,7 +204,8 @@ def test_granger_handles_insufficient_data(
     assert result is None
 
 
-#  Test: Pearson screening (2) 
+#  Test: Pearson screening (2)
+
 
 def test_pearson_screen_passes_correlated(
     analyzer: CausalAnalyzer,
@@ -224,7 +230,8 @@ def test_pearson_screen_blocks_uncorrelated(
     assert analyzer._pearson_screen(s1, s2, threshold=0.7) is False
 
 
-#  Test: Transfer Entropy (2) 
+#  Test: Transfer Entropy (2)
+
 
 def test_transfer_entropy_positive_on_dependent(
     analyzer: CausalAnalyzer,
@@ -259,7 +266,8 @@ def test_transfer_entropy_near_zero_on_independent(
     assert te < 0.3, f"TE atteso < 0.3 su serie indipendenti, ottenuto {te:.4f}"
 
 
-#  Test: robustezza (3) 
+#  Test: robustezza (3)
+
 
 def test_analyze_unknown_compliance_set_raises(
     analyzer: CausalAnalyzer, mock_features_h_crit: dict[str, pd.DataFrame]
@@ -300,7 +308,8 @@ def test_analyze_all_nan_series_skips_gracefully(
     assert not nan_in_edges
 
 
-#  Test: error handling (1) 
+#  Test: error handling (1)
+
 
 def test_missing_causal_analysis_key_raises(
     config: ConfigLoader, topology_builder: TopologyBuilder
@@ -312,9 +321,7 @@ def test_missing_causal_analysis_key_raises(
     pipeline = config.load_pipeline_params()
     bad_pipeline = copy.deepcopy(pipeline)
     del bad_pipeline["causal_analysis"]["pearson_threshold"]
-    with patch.object(
-        type(config), "load_pipeline_params", return_value=bad_pipeline
-    ):
+    with patch.object(type(config), "load_pipeline_params", return_value=bad_pipeline):
         with pytest.raises(ValueError, match="pearson_threshold"):
             CausalAnalyzer(config, topology_builder)
 
@@ -338,12 +345,8 @@ def test_inter_pairs_have_interf_as_source(
     rng = np.random.default_rng(99)
     n = 30
     features = {
-        "node:home-timeline-service:cpu_percent": _make_df(
-            rng.normal(5, 1, n)
-        ),
-        "interf:e2:throughput_rps": _make_df(
-            rng.normal(100, 20, n)
-        ),
+        "node:home-timeline-service:cpu_percent": _make_df(rng.normal(5, 1, n)),
+        "interf:e2:throughput_rps": _make_df(rng.normal(100, 20, n)),
     }
     pairs = analyzer.get_causal_pairs("H_cache", features)
     for source, target, category in pairs:
@@ -367,9 +370,9 @@ def test_granger_intensity_positive_on_causal_series(
     rng = np.random.default_rng(0)
     n = 50
     cause_vals = rng.normal(0, 1, n)
-    effect_vals = np.concatenate(
-        [[cause_vals[0]], cause_vals[:-1]]
-    ) + rng.normal(0, 0.05, n)
+    effect_vals = np.concatenate([[cause_vals[0]], cause_vals[:-1]]) + rng.normal(
+        0, 0.05, n
+    )
     cause_s = pd.Series(cause_vals.astype(float))
     effect_s = pd.Series(effect_vals.astype(float))
     result = analyzer._granger_test(cause_s, effect_s, max_lag=5, significance=0.05)
@@ -380,7 +383,8 @@ def test_granger_intensity_positive_on_causal_series(
     )
 
 
-#  Test: cross-property e deduplicazione (3) 
+#  Test: cross-property e deduplicazione (3)
+
 
 def test_h_crit_has_no_cross_property_chains(
     analyzer: CausalAnalyzer,
@@ -391,8 +395,7 @@ def test_h_crit_has_no_cross_property_chains(
     catene indipendentemente dalla topologia."""
     result = analyzer.analyze("H_crit", mock_features_h_crit)
     assert result["cross_property_chains"] == [], (
-        f"Atteso [] per H_crit (M_interf=∅), "
-        f"ottenuto {result['cross_property_chains']}"
+        f"Atteso [] per H_crit (M_interf=∅), ottenuto {result['cross_property_chains']}"
     )
 
 
@@ -425,9 +428,7 @@ def test_shared_node_arc_pairs_bypass_pearson(
     n = 30
     # Serie con correlazione Pearson molto bassa (|r| < 0.7)
     features = {
-        "node:home-timeline-service:cpu_percent": _make_df(
-            rng.normal(5, 1, n)
-        ),
+        "node:home-timeline-service:cpu_percent": _make_df(rng.normal(5, 1, n)),
         "edge:e4:latency_ms": _make_df(
             rng.normal(10, 0.01, n)  # quasi costante → |r| ≈ 0
         ),
@@ -459,14 +460,12 @@ def test_adf_applied_to_both_series(
     )
     # cause aveva bisogno di 1 diff, effect no → n_diff deve essere 1
     # e entrambe devono aver ricevuto 1 differenziazione
-    assert n_diff >= 1, (
-        f"Atteso n_diff >= 1 (cause non stazionaria), ottenuto {n_diff}"
-    )
+    assert n_diff >= 1, f"Atteso n_diff >= 1 (cause non stazionaria), ottenuto {n_diff}"
     assert len(cause_d) == n - n_diff, (
-        f"cause_d deve avere n-{n_diff}={n-n_diff} elementi"
+        f"cause_d deve avere n-{n_diff}={n - n_diff} elementi"
     )
     assert len(effect_d) == n - n_diff, (
-        f"effect_d deve avere n-{n_diff}={n-n_diff} elementi"
+        f"effect_d deve avere n-{n_diff}={n - n_diff} elementi"
     )
 
 

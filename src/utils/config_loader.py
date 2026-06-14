@@ -1,4 +1,5 @@
 """Caricamento e validazione dei file di configurazione del framework"""
+
 import copy
 from pathlib import Path
 
@@ -31,9 +32,9 @@ _PIPELINE_REQUIRED_KEYS = (
 class ConfigLoader:
     """Carica e valida topology.yaml e pipeline_params.yaml
 
-    Entrambi i file vengono letti in modo lazy 
+    Entrambi i file vengono letti in modo lazy
         --> prima chiamata del metodo corrispondente
-    La validazione è eager 
+    La validazione è eager
         --> alla prima chiamata si verifica la presenza di tutte le chiavi obbligatorie.
     """
 
@@ -42,7 +43,7 @@ class ConfigLoader:
 
         Parameters
         ----------
-        topology_path: 
+        topology_path:
             Path al file topology.yaml.
         pipeline_path:
             Path al file pipeline_params.yaml.
@@ -69,9 +70,7 @@ class ConfigLoader:
             della prima chiave mancante trovata.
         """
         if self._topology is None:
-            data = self._load_and_validate(
-                self._topology_path, _TOPOLOGY_REQUIRED_KEYS
-            )
+            data = self._load_and_validate(self._topology_path, _TOPOLOGY_REQUIRED_KEYS)
             metadata = data.get("metadata", {})
             wds = metadata.get("window_duration_seconds")
             if wds is None:

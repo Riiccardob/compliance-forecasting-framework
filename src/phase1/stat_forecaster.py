@@ -1,4 +1,5 @@
 """Fase I - orchestratore del forecasting per-metrica con routing Prophet/LSTM/ARIMA/Linear."""
+
 from typing import Any
 
 import numpy as np
@@ -104,7 +105,8 @@ class StatForecaster:
             if len(train_df) == 0:
                 logger.warning(
                     "Feature '%s': training set vuoto dopo filtraggio "
-                    "nominale - feature esclusa dal forecasting.", key
+                    "nominale - feature esclusa dal forecasting.",
+                    key,
                 )
                 continue
 
@@ -217,7 +219,9 @@ class StatForecaster:
                 logger.warning(
                     "Serie '%s' ha %d campioni < input_window×2=%d. "
                     "Fallback da LSTM a Prophet.",
-                    key, n_samples, self._input_window * 2,
+                    key,
+                    n_samples,
+                    self._input_window * 2,
                 )
                 return "prophet"
             return "lstm"
@@ -229,10 +233,12 @@ class StatForecaster:
     # ------------------------------------------------------------------
 
     def _fit_prophet(self, df: pd.DataFrame) -> Prophet:
-        prophet_df = pd.DataFrame({
-            "ds": pd.to_datetime(df.index, unit="us"),
-            "y": df["value"].values.astype(float),
-        })
+        prophet_df = pd.DataFrame(
+            {
+                "ds": pd.to_datetime(df.index, unit="us"),
+                "y": df["value"].values.astype(float),
+            }
+        )
         model = Prophet(changepoint_prior_scale=self._prophet_changepoint_prior_scale)
         model.fit(prophet_df)
         return model
@@ -247,7 +253,7 @@ class StatForecaster:
             model = Ridge()
             model.fit([[0.0]], [0.0])
             return model
-        X = np.array([values[i:i + window] for i in range(n - window)])
+        X = np.array([values[i : i + window] for i in range(n - window)])
         y = values[window:]
         model = Ridge()
         model.fit(X, y)
@@ -282,6 +288,7 @@ class StatForecaster:
             raise RuntimeError(f"ARIMA fitting fallito per {key}")
         try:
             from statsmodels.stats.diagnostic import acorr_ljungbox
+
             resid = best_model.resid
             lags = max(1, min(10, len(resid) // 5))
             lb = acorr_ljungbox(resid, lags=[lags], return_df=True)
@@ -289,7 +296,11 @@ class StatForecaster:
                 logger.warning(
                     "ARIMA(%d,%d,%d) per '%s': residui autocorrelati (Ljung-Box p=%.4f) - "
                     "considera ordine più alto o modello alternativo.",
-                    best_p, best_d, best_q, key, float(lb["lb_pvalue"].min()),
+                    best_p,
+                    best_d,
+                    best_q,
+                    key,
+                    float(lb["lb_pvalue"].min()),
                 )
         except Exception as exc:
             logger.warning("Ljung-Box non disponibile per '%s': %s", key, exc)

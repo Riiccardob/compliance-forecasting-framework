@@ -1,4 +1,5 @@
 """Test per StructuralMonitor - mock sintetici, nessun CSV reale."""
+
 import copy
 from pathlib import Path
 from typing import Any
@@ -33,32 +34,44 @@ _NODE_METRICS_SORTED = ["cpu_percent", "mem_mb", "net_rx_mb", "net_tx_mb"]
 
 # Throughput nominale per H_crit (critical path: e1, e2, e4, e6)
 _TP_NOMINAL = {
-    "e1": 100.0, "e2": 100.0,
-    "e3": 50.0,  "e4": 50.0,
-    "e5": 25.0,  "e6": 25.0,
+    "e1": 100.0,
+    "e2": 100.0,
+    "e3": 50.0,
+    "e4": 50.0,
+    "e5": 25.0,
+    "e6": 25.0,
 }
 
 
-#  Helpers 
+#  Helpers
+
 
 def _make_snap(ts: int, label: int, cpu: float = 5.0) -> dict[str, Any]:
     """Snapshot con tutti i nodi e archi DSB (valori nominali)."""
     nodes = {
-        n: {"cpu_percent": cpu, "mem_mb": 512.0,
-            "net_rx_mb": 1.0, "net_tx_mb": 0.5}
+        n: {"cpu_percent": cpu, "mem_mb": 512.0, "net_rx_mb": 1.0, "net_tx_mb": 0.5}
         for n in [
-            "nginx-web-server", "nginx-thrift", "home-timeline-service",
-            "home-timeline-redis", "post-storage-service",
-            "post-storage-memcached", "post-storage-mongodb",
+            "nginx-web-server",
+            "nginx-thrift",
+            "home-timeline-service",
+            "home-timeline-redis",
+            "post-storage-service",
+            "post-storage-memcached",
+            "post-storage-mongodb",
         ]
     }
     edges = {
-        eid: {"latency_ms": 10.0, "error_rate": 0.01,
-              "throughput_rps": tp}
+        eid: {"latency_ms": 10.0, "error_rate": 0.01, "throughput_rps": tp}
         for eid, tp in _TP_NOMINAL.items()
     }
-    return {"timestamp": ts, "label": label, "nodes": nodes, "edges": edges,
-            "anomaly_type": None, "anomaly_node_ids": []}
+    return {
+        "timestamp": ts,
+        "label": label,
+        "nodes": nodes,
+        "edges": edges,
+        "anomaly_type": None,
+        "anomaly_node_ids": [],
+    }
 
 
 def _make_df(val: float, ts: int = _T0) -> pd.DataFrame:
@@ -106,18 +119,24 @@ def _make_weight_series(
         total_pss = tp["e5"] + tp["e6"]
         e5_w = tp["e5"] / total_pss if total_pss > 0 else 0.5
         e6_w = tp["e6"] / total_pss if total_pss > 0 else 0.5
-        result.append({
-            "timestamp": ts,
-            "weights": {
-                "e1": e1_w, "e2": e2_w,
-                "e3": e3_w, "e4": e4_w,
-                "e5": e5_w, "e6": e6_w,
-            },
-        })
+        result.append(
+            {
+                "timestamp": ts,
+                "weights": {
+                    "e1": e1_w,
+                    "e2": e2_w,
+                    "e3": e3_w,
+                    "e4": e4_w,
+                    "e5": e5_w,
+                    "e6": e6_w,
+                },
+            }
+        )
     return result
 
 
-#  Fixture 
+#  Fixture
+
 
 @pytest.fixture
 def config() -> ConfigLoader:
@@ -185,7 +204,8 @@ def fitted_monitor(
     return monitor
 
 
-#  Struttura e fit (4) 
+#  Struttura e fit (4)
+
 
 def test_monitor_returns_dict(
     fitted_monitor: StructuralMonitor,
@@ -205,10 +225,18 @@ def test_monitor_result_has_required_keys(
         "H_crit", _make_features_h_crit(), [mock_weight_series[-1]], _T0
     )
     expected = {
-        "timestamp", "compliance_set", "base_signal", "if_signal",
-        "cusum_signal", "structural_confirmed", "zscore_violations",
-        "threshold_violations", "frobenius_distance", "pas_value",
-        "cusum_stat", "ewma_value",
+        "timestamp",
+        "compliance_set",
+        "base_signal",
+        "if_signal",
+        "cusum_signal",
+        "structural_confirmed",
+        "zscore_violations",
+        "threshold_violations",
+        "frobenius_distance",
+        "pas_value",
+        "cusum_stat",
+        "ewma_value",
     }
     assert set(result.keys()) == expected
 
@@ -220,7 +248,9 @@ def test_fit_raises_on_empty_nominal_snapshots(
     mock_gold_standard: dict[str, float],
 ) -> None:
     with pytest.raises(RuntimeError):
-        monitor.fit("H_crit", mock_features_h_crit, [], mock_weight_series, mock_gold_standard)
+        monitor.fit(
+            "H_crit", mock_features_h_crit, [], mock_weight_series, mock_gold_standard
+        )
 
 
 def test_monitor_raises_before_fit(
@@ -228,10 +258,13 @@ def test_monitor_raises_before_fit(
     mock_weight_series: list[dict],
 ) -> None:
     with pytest.raises(RuntimeError):
-        monitor.monitor("H_crit", _make_features_h_crit(), [mock_weight_series[-1]], _T0)
+        monitor.monitor(
+            "H_crit", _make_features_h_crit(), [mock_weight_series[-1]], _T0
+        )
 
 
-#  Livello 1 - Threshold (3) 
+#  Livello 1 - Threshold (3)
+
 
 def test_threshold_no_violation_on_nominal(
     fitted_monitor: StructuralMonitor,
@@ -239,9 +272,7 @@ def test_threshold_no_violation_on_nominal(
 ) -> None:
     """Valori nominali ben dentro le soglie SLA → nessuna threshold violation."""
     features = _make_features_h_crit(latency=10.0)
-    result = fitted_monitor.monitor(
-        "H_crit", features, [mock_weight_series[-1]], _T0
-    )
+    result = fitted_monitor.monitor("H_crit", features, [mock_weight_series[-1]], _T0)
     assert result["threshold_violations"] == []
 
 
@@ -251,9 +282,7 @@ def test_threshold_violation_on_high_latency(
 ) -> None:
     """latency_ms > SLA upper threshold (100.0) → violation."""
     features = _make_features_h_crit(latency=200.0)  # > 100.0
-    result = fitted_monitor.monitor(
-        "H_crit", features, [mock_weight_series[-1]], _T0
-    )
+    result = fitted_monitor.monitor("H_crit", features, [mock_weight_series[-1]], _T0)
     violated = result["threshold_violations"]
     latency_violated = [k for k in violated if "latency_ms" in k]
     assert len(latency_violated) > 0, (
@@ -268,15 +297,15 @@ def test_threshold_nan_value_not_a_violation(
     """NaN non conta come violazione threshold."""
     features = _make_features_h_crit()
     features["edge:e1:latency_ms"] = _make_df(float("nan"))
-    result = fitted_monitor.monitor(
-        "H_crit", features, [mock_weight_series[-1]], _T0
-    )
-    e1_lat_violated = [k for k in result["threshold_violations"]
-                       if k == "edge:e1:latency_ms"]
+    result = fitted_monitor.monitor("H_crit", features, [mock_weight_series[-1]], _T0)
+    e1_lat_violated = [
+        k for k in result["threshold_violations"] if k == "edge:e1:latency_ms"
+    ]
     assert len(e1_lat_violated) == 0
 
 
-#  Livello 1 - Z-score (3) 
+#  Livello 1 - Z-score (3)
+
 
 def test_zscore_no_violation_on_nominal(
     fitted_monitor: StructuralMonitor,
@@ -284,9 +313,7 @@ def test_zscore_no_violation_on_nominal(
 ) -> None:
     """Valori nominali → zscore_violations vuoto."""
     features = _make_features_h_crit(cpu=5.0)
-    result = fitted_monitor.monitor(
-        "H_crit", features, [mock_weight_series[-1]], _T0
-    )
+    result = fitted_monitor.monitor("H_crit", features, [mock_weight_series[-1]], _T0)
     assert result["zscore_violations"] == []
 
 
@@ -321,17 +348,27 @@ def test_zscore_violation_on_spike(
             key = f"node:{node}:{m}"
             nominal_features[key] = pd.DataFrame(
                 {"value": [512.0] * n if m == "mem_mb" else [1.0] * n},
-                index=pd.Index([_T0 + i * _STEP_US for i in range(n)], name="timestamp"),
+                index=pd.Index(
+                    [_T0 + i * _STEP_US for i in range(n)], name="timestamp"
+                ),
             )
     for eid in ("e1", "e2", "e4", "e6"):
         for m in ("latency_ms", "error_rate", "throughput_rps"):
             key = f"edge:{eid}:{m}"
             nominal_features[key] = pd.DataFrame(
                 {"value": [10.0] * n},
-                index=pd.Index([_T0 + i * _STEP_US for i in range(n)], name="timestamp"),
+                index=pd.Index(
+                    [_T0 + i * _STEP_US for i in range(n)], name="timestamp"
+                ),
             )
 
-    monitor.fit("H_crit", nominal_features, nominal_snaps, mock_weight_series, mock_gold_standard)
+    monitor.fit(
+        "H_crit",
+        nominal_features,
+        nominal_snaps,
+        mock_weight_series,
+        mock_gold_standard,
+    )
 
     spike_cpu = mean_cpu + 4.0 * std_cpu
     test_features: dict[str, pd.DataFrame] = {}
@@ -360,15 +397,17 @@ def test_zscore_nan_not_a_violation(
     """Valore NaN non genera zscore violation."""
     features = _make_features_h_crit()
     features["node:nginx-web-server:cpu_percent"] = _make_df(float("nan"))
-    result = fitted_monitor.monitor(
-        "H_crit", features, [mock_weight_series[-1]], _T0
-    )
-    nan_violated = [k for k in result["zscore_violations"]
-                    if k == "node:nginx-web-server:cpu_percent"]
+    result = fitted_monitor.monitor("H_crit", features, [mock_weight_series[-1]], _T0)
+    nan_violated = [
+        k
+        for k in result["zscore_violations"]
+        if k == "node:nginx-web-server:cpu_percent"
+    ]
     assert len(nan_violated) == 0
 
 
-#  Livello 2 - Isolation Forest (3) 
+#  Livello 2 - Isolation Forest (3)
+
 
 def test_if_inactive_without_base_signal(
     fitted_monitor: StructuralMonitor,
@@ -376,9 +415,7 @@ def test_if_inactive_without_base_signal(
 ) -> None:
     """Con base_signal=False (valori nominali), if_signal=False."""
     features = _make_features_h_crit(cpu=5.0, latency=10.0)
-    result = fitted_monitor.monitor(
-        "H_crit", features, [mock_weight_series[-1]], _T0
-    )
+    result = fitted_monitor.monitor("H_crit", features, [mock_weight_series[-1]], _T0)
     # Con valori nominali base_signal dovrebbe essere False
     if not result["base_signal"]:
         assert result["if_signal"] is False
@@ -422,16 +459,26 @@ def test_if_detects_multivariate_anomaly(
         for m in ("net_rx_mb", "net_tx_mb"):
             nominal_features[f"node:{node}:{m}"] = pd.DataFrame(
                 {"value": [1.0] * n},
-                index=pd.Index([_T0 + i * _STEP_US for i in range(n)], name="timestamp"),
+                index=pd.Index(
+                    [_T0 + i * _STEP_US for i in range(n)], name="timestamp"
+                ),
             )
     for eid in ("e1", "e2", "e4", "e6"):
         for m in ("latency_ms", "error_rate", "throughput_rps"):
             nominal_features[f"edge:{eid}:{m}"] = pd.DataFrame(
                 {"value": [10.0] * n},
-                index=pd.Index([_T0 + i * _STEP_US for i in range(n)], name="timestamp"),
+                index=pd.Index(
+                    [_T0 + i * _STEP_US for i in range(n)], name="timestamp"
+                ),
             )
 
-    monitor.fit("H_crit", nominal_features, nominal_snaps, mock_weight_series, mock_gold_standard)
+    monitor.fit(
+        "H_crit",
+        nominal_features,
+        nominal_snaps,
+        mock_weight_series,
+        mock_gold_standard,
+    )
 
     # Test: cpu=1000 in tutte le dimensioni - outlier estremo (>400σ dal training)
     extreme_cpu = 1000.0
@@ -451,13 +498,12 @@ def test_if_imputes_nan_in_state_vector(
     features = _make_features_h_crit(cpu=5.0)
     features["node:nginx-web-server:cpu_percent"] = _make_df(float("nan"))
     # Nessun raise atteso
-    result = fitted_monitor.monitor(
-        "H_crit", features, [mock_weight_series[-1]], _T0
-    )
+    result = fitted_monitor.monitor("H_crit", features, [mock_weight_series[-1]], _T0)
     assert isinstance(result, dict)
 
 
-#  Livello 3 - EWMA + CUSUM (4) 
+#  Livello 3 - EWMA + CUSUM (4)
+
 
 def test_cusum_starts_at_zero(
     monitor: StructuralMonitor,
@@ -468,8 +514,11 @@ def test_cusum_starts_at_zero(
 ) -> None:
     """Dopo fit() cusum_stat == 0.0 (reset chiamato in fit)."""
     monitor.fit(
-        "H_crit", mock_features_h_crit, mock_nominal_snapshots,
-        mock_weight_series, mock_gold_standard
+        "H_crit",
+        mock_features_h_crit,
+        mock_nominal_snapshots,
+        mock_weight_series,
+        mock_gold_standard,
     )
     assert monitor._cusum_stat == 0.0
 
@@ -483,10 +532,13 @@ def test_cusum_accumulates_on_degradation(
 ) -> None:
     """PAS decrescente → CUSUM si accumula dopo 5 chiamate."""
     monitor.fit(
-        "H_crit", mock_features_h_crit, mock_nominal_snapshots,
-        mock_weight_series, mock_gold_standard
+        "H_crit",
+        mock_features_h_crit,
+        mock_nominal_snapshots,
+        mock_weight_series,
+        mock_gold_standard,
     )
-    initial_stat = monitor._cusum_stat
+    _ = monitor._cusum_stat
 
     # Pesi degradati: e4 dominante → PAS decresce
     degraded_ws = _make_weight_series(
@@ -544,6 +596,7 @@ def test_cusum_signal_when_threshold_exceeded(
     with patch.object(type(config), "load_pipeline_params", return_value=bad_pipeline):
         from src.layer1.topology_builder import TopologyBuilder as TB
         from src.layer2.pbo_builder import PBOBuilder as PBO
+
         cfg2 = ConfigLoader(_TOPOLOGY_PATH, _PIPELINE_PATH)
         tb2 = TB(cfg2)
         pbo2 = PBO(cfg2, tb2)
@@ -551,8 +604,11 @@ def test_cusum_signal_when_threshold_exceeded(
 
     low_monitor._cusum_threshold = 0.0001
     low_monitor.fit(
-        "H_crit", mock_features_h_crit, mock_nominal_snapshots,
-        mock_weight_series, mock_gold_standard
+        "H_crit",
+        mock_features_h_crit,
+        mock_nominal_snapshots,
+        mock_weight_series,
+        mock_gold_standard,
     )
 
     degraded_ws = _make_weight_series(
@@ -561,9 +617,7 @@ def test_cusum_signal_when_threshold_exceeded(
     result = None
     for i in range(10):
         ts = _T0 + (20 + i) * _STEP_US
-        result = low_monitor.monitor(
-            "H_crit", mock_features_h_crit, degraded_ws, ts
-        )
+        result = low_monitor.monitor("H_crit", mock_features_h_crit, degraded_ws, ts)
         if result["cusum_signal"]:
             break
 
@@ -574,7 +628,8 @@ def test_cusum_signal_when_threshold_exceeded(
     )
 
 
-#  Livello 4 - Validatore strutturale (3) 
+#  Livello 4 - Validatore strutturale (3)
+
 
 def test_structural_confirmed_requires_both_signals(
     fitted_monitor: StructuralMonitor,
@@ -582,9 +637,7 @@ def test_structural_confirmed_requires_both_signals(
 ) -> None:
     """structural_confirmed=False se uno solo dei segnali è True."""
     features = _make_features_h_crit()
-    result = fitted_monitor.monitor(
-        "H_crit", features, [mock_weight_series[-1]], _T0
-    )
+    result = fitted_monitor.monitor("H_crit", features, [mock_weight_series[-1]], _T0)
     if not result["if_signal"] or not result["cusum_signal"]:
         assert result["structural_confirmed"] is False
 
@@ -631,8 +684,9 @@ def test_structural_confirmed_on_persistent_degradation(
     gold = pbo_builder.compute_gold_standard(ws_nominal, nominal_snaps)
 
     nominal_features: dict[str, pd.DataFrame] = {}
-    cpu_arr = np.array([s["nodes"]["nginx-web-server"]["cpu_percent"]
-                        for s in nominal_snaps])
+    cpu_arr = np.array(
+        [s["nodes"]["nginx-web-server"]["cpu_percent"] for s in nominal_snaps]
+    )
     ts_list = [s["timestamp"] for s in nominal_snaps]
     for node in _H_CRIT_NODES:
         nominal_features[f"node:{node}:cpu_percent"] = pd.DataFrame(
@@ -654,15 +708,19 @@ def test_structural_confirmed_on_persistent_degradation(
 
     mon = StructuralMonitor(config, topology_builder, pbo_builder)
     mon.fit("H_crit", nominal_features, nominal_snaps, ws_nominal, gold)
-    mon._cusum_threshold = 0.0001   # soglia CUSUM bassissima
+    mon._cusum_threshold = 0.0001  # soglia CUSUM bassissima
     mon._frobenius_threshold = 0.0  # qualsiasi Frobenius > 0 è sufficiente
 
     # Iter 0: pesi nominali → EWMA cold-start a PAS_gold≈0.25
     # Questo garantisce che le iterazioni successive producano diffs negativi.
     ws_nominal_one = _make_weight_series(n=1)
     ts0 = _T0 + n * _STEP_US
-    mon.monitor("H_crit", _make_features_h_crit(cpu=1000.0, latency=10.0, ts=ts0),
-                ws_nominal_one, ts0)
+    mon.monitor(
+        "H_crit",
+        _make_features_h_crit(cpu=1000.0, latency=10.0, ts=ts0),
+        ws_nominal_one,
+        ts0,
+    )
 
     # Iters 1-8: pesi fortemente degradati → PAS ≈ 0.0099, EWMA decresce
     # monotonicamente da 0.25 verso 0.0099 → diffs sempre negativi.
@@ -674,9 +732,7 @@ def test_structural_confirmed_on_persistent_degradation(
     for i in range(1, 9):
         ts = _T0 + (n + i) * _STEP_US
         anomalous_features_ts = _make_features_h_crit(cpu=1000.0, latency=10.0, ts=ts)
-        result = mon.monitor(
-            "H_crit", anomalous_features_ts, degraded_ws, ts
-        )
+        result = mon.monitor("H_crit", anomalous_features_ts, degraded_ws, ts)
         if result["structural_confirmed"]:
             break
 
@@ -694,7 +750,8 @@ def test_structural_confirmed_on_persistent_degradation(
     )
 
 
-#  Robustezza (3) 
+#  Robustezza (3)
+
 
 def test_monitor_unknown_compliance_set_raises(
     fitted_monitor: StructuralMonitor,
@@ -717,8 +774,11 @@ def test_fit_unknown_compliance_set_raises(
     """fit() con compliance set inesistente solleva KeyError."""
     with pytest.raises(KeyError):
         monitor.fit(
-            "H_nonexistent", mock_features_h_crit, mock_nominal_snapshots,
-            mock_weight_series, mock_gold_standard
+            "H_nonexistent",
+            mock_features_h_crit,
+            mock_nominal_snapshots,
+            mock_weight_series,
+            mock_gold_standard,
         )
 
 
@@ -736,7 +796,8 @@ def test_missing_anomaly_detection_key_raises(
             StructuralMonitor(config, topology_builder, pbo_builder)
 
 
-#  Config guard (1) 
+#  Config guard (1)
+
 
 def test_cusum_k_loaded_from_yaml(
     monitor: StructuralMonitor,
@@ -752,7 +813,8 @@ def test_cusum_k_loaded_from_yaml(
     )
 
 
-#  Warning (1) 
+#  Warning (1)
+
 
 def test_monitor_warns_on_compliance_set_mismatch(
     fitted_monitor: StructuralMonitor,
@@ -761,19 +823,19 @@ def test_monitor_warns_on_compliance_set_mismatch(
     """monitor() emette warning se chiamato con un compliance set
     diverso da quello su cui è stato eseguito fit()."""
     from unittest.mock import patch
+
     with patch.object(fitted_monitor._logger, "warning") as mock_warn:
         fitted_monitor.monitor(
             "H_cache", _make_features_h_crit(), [mock_weight_series[-1]], _T0
         )
-    warning_msgs = " ".join(
-        str(c) for c in mock_warn.call_args_list
-    )
+    warning_msgs = " ".join(str(c) for c in mock_warn.call_args_list)
     assert "H_cache" in warning_msgs or "H_crit" in warning_msgs, (
         "Atteso warning per CS mismatch (fit su H_crit, monitor su H_cache)."
     )
 
 
-#  Robustezza aggiuntiva (2) 
+#  Robustezza aggiuntiva (2)
+
 
 def test_structural_validator_warmup_returns_false(
     config: ConfigLoader,
@@ -787,8 +849,7 @@ def test_structural_validator_warmup_returns_false(
     rng = np.random.default_rng(7)
     n = 20
     nominal_snaps = [
-        _make_snap(_T0 + i * _STEP_US, label=0,
-                   cpu=float(rng.normal(5.0, 0.5)))
+        _make_snap(_T0 + i * _STEP_US, label=0, cpu=float(rng.normal(5.0, 0.5)))
         for i in range(n)
     ]
     ws_nominal = _make_weight_series(n=n)
@@ -797,8 +858,12 @@ def test_structural_validator_warmup_returns_false(
     nominal_features: dict[str, pd.DataFrame] = {}
     ts_list = [_T0 + i * _STEP_US for i in range(n)]
     for node in _H_CRIT_NODES:
-        for m, val in [("cpu_percent", 5.0), ("mem_mb", 512.0),
-                       ("net_rx_mb", 1.0), ("net_tx_mb", 0.5)]:
+        for m, val in [
+            ("cpu_percent", 5.0),
+            ("mem_mb", 512.0),
+            ("net_rx_mb", 1.0),
+            ("net_tx_mb", 0.5),
+        ]:
             nominal_features[f"node:{node}:{m}"] = pd.DataFrame(
                 {"value": [val] * n}, index=pd.Index(ts_list, name="timestamp")
             )
@@ -832,7 +897,7 @@ def test_structural_validator_warmup_returns_false(
         # structural_confirmed DEVE essere False anche se cusum_signal potrebbe
         # già essere True
         assert result["structural_confirmed"] is False, (
-            f"Atteso structural_confirmed=False al ciclo {i+1}/{consecutive} "
+            f"Atteso structural_confirmed=False al ciclo {i + 1}/{consecutive} "
             f"(warm-up: storia insufficiente per {consecutive} diff consecutivi). "
             f"Stato: {result}"
         )
@@ -857,8 +922,11 @@ def test_cusum_decreases_on_recovery(
     pochi passi ewma_new > 0.25 e l'incremento diventa negativo.
     """
     monitor.fit(
-        "H_crit", mock_features_h_crit, mock_nominal_snapshots,
-        mock_weight_series, mock_gold_standard,
+        "H_crit",
+        mock_features_h_crit,
+        mock_nominal_snapshots,
+        mock_weight_series,
+        mock_gold_standard,
     )
     monitor._cusum_threshold = 0.0001
 
@@ -870,9 +938,7 @@ def test_cusum_decreases_on_recovery(
         ts = _T0 + (20 + i) * _STEP_US
         monitor.monitor("H_crit", mock_features_h_crit, degraded_ws, ts)
     stat_after_degradation = monitor._cusum_stat
-    assert stat_after_degradation > 0.0, (
-        "CUSUM deve aver accumulato durante il degrado"
-    )
+    assert stat_after_degradation > 0.0, "CUSUM deve aver accumulato durante il degrado"
 
     # Fase 2: recovery con pesi super-nominali (tutto il traffico sul
     # percorso critico: e4=100, e3=0, e6=100, e5=0 → PAS=1.0 >> PAS_gold)
@@ -904,8 +970,11 @@ def test_structural_validator_uses_pas_gap_for_linear(
     """Per topologia lineare, il validatore usa |PAS - PAS_gold| > δ
     (non Frobenius). Verifica con soglia esplicita e pesi degradati."""
     monitor.fit(
-        "H_crit", mock_features_h_crit, mock_nominal_snapshots,
-        mock_weight_series, mock_gold_standard,
+        "H_crit",
+        mock_features_h_crit,
+        mock_nominal_snapshots,
+        mock_weight_series,
+        mock_gold_standard,
     )
     # PAS_gold = 0.25; con e4=99.0, e3=1.0: PAS ≈ 0.01
     # |0.01 - 0.25| = 0.24 > frobenius_threshold se ≤ 0.24
@@ -915,10 +984,8 @@ def test_structural_validator_uses_pas_gap_for_linear(
         n=1, tp_override={"e4": 99.0, "e3": 1.0, "e6": 1.0, "e5": 99.0}
     )
     # Calcola PAS corrente e Frobenius corrente per il validatore
-    from src.layer2.pbo_builder import PBOBuilder
-    pas_series = monitor._pbo.compute_path_adherence(
-        degraded_ws, "H_crit"
-    )
+
+    pas_series = monitor._pbo.compute_path_adherence(degraded_ws, "H_crit")
     pas_val = pas_series[-1]["pas"]
     frob_series = monitor._pbo.compute_frobenius_distance(
         degraded_ws, monitor._gold_standard
@@ -956,7 +1023,7 @@ def test_monitor_with_empty_weight_series_does_not_crash(
     result = fitted_monitor.monitor(
         "H_crit",
         _make_features_h_crit(),
-        [],   # weight_series vuoto
+        [],  # weight_series vuoto
         _T0,
     )
     assert isinstance(result, dict)

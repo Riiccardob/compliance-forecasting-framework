@@ -1,10 +1,10 @@
 """Test per AlertGenerator - mock sintetici, nessun CSV reale."""
+
 import copy
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -32,7 +32,8 @@ _SLA_LATENCY_THRESHOLD = 100.0
 # step_duration_hours=24.0 → lead_time_days = lead_time_steps
 
 
-#  Helpers 
+#  Helpers
+
 
 def _make_forecast_df(yhats: list[float]) -> pd.DataFrame:
     """DataFrame forecast con colonne yhat/yhat_lower/yhat_upper."""
@@ -52,7 +53,9 @@ def _make_forecasts_h_crit(
     yhat_per_arc: float = 10.0, n_steps: int = _N_STEPS
 ) -> dict[str, pd.DataFrame]:
     """Forecasts per H_crit con yhat costante per tutti gli archi e step."""
-    return {k: _make_forecast_df([yhat_per_arc] * n_steps) for k in _H_CRIT_LATENCY_KEYS}
+    return {
+        k: _make_forecast_df([yhat_per_arc] * n_steps) for k in _H_CRIT_LATENCY_KEYS
+    }
 
 
 def _make_forecasts_violation_at_step(
@@ -70,19 +73,31 @@ def _make_causal_graph_empty(cs: str = "H_crit") -> dict[str, Any]:
 
 def _make_monitor_nominal() -> dict[str, Any]:
     return {
-        "timestamp": _T0, "compliance_set": "H_crit",
-        "base_signal": False, "if_signal": False,
-        "cusum_signal": False, "structural_confirmed": False,
-        "zscore_violations": [], "threshold_violations": [],
-        "frobenius_distance": 0.0, "pas_value": 0.25,
-        "cusum_stat": 0.0, "ewma_value": 0.25,
+        "timestamp": _T0,
+        "compliance_set": "H_crit",
+        "base_signal": False,
+        "if_signal": False,
+        "cusum_signal": False,
+        "structural_confirmed": False,
+        "zscore_violations": [],
+        "threshold_violations": [],
+        "frobenius_distance": 0.0,
+        "pas_value": 0.25,
+        "cusum_stat": 0.0,
+        "ewma_value": 0.25,
     }
 
 
 def _make_monitor_red() -> dict[str, Any]:
     m = _make_monitor_nominal()
-    m.update({"base_signal": True, "if_signal": True,
-               "cusum_signal": True, "structural_confirmed": True})
+    m.update(
+        {
+            "base_signal": True,
+            "if_signal": True,
+            "cusum_signal": True,
+            "structural_confirmed": True,
+        }
+    )
     return m
 
 
@@ -92,7 +107,8 @@ def _make_monitor_orange() -> dict[str, Any]:
     return m
 
 
-#  Fixtures 
+#  Fixtures
+
 
 @pytest.fixture
 def config() -> ConfigLoader:
@@ -159,7 +175,8 @@ def mock_monitor_orange() -> dict[str, Any]:
     return _make_monitor_orange()
 
 
-#  Struttura output (4) 
+#  Struttura output (4)
+
 
 def test_generate_returns_none_when_no_violation(
     alert_generator: AlertGenerator,
@@ -169,8 +186,11 @@ def test_generate_returns_none_when_no_violation(
 ) -> None:
     """Forecasts nominali (sum=40 < SLA 100) → generate() restituisce None."""
     result = alert_generator.generate(
-        "H_crit", mock_forecasts_h_crit,
-        mock_causal_graph_empty, mock_monitor_nominal, _T0,
+        "H_crit",
+        mock_forecasts_h_crit,
+        mock_causal_graph_empty,
+        mock_monitor_nominal,
+        _T0,
     )
     assert result is None
 
@@ -183,8 +203,11 @@ def test_generate_returns_dict_on_violation(
 ) -> None:
     """Forecasts con sum=120 > SLA 100 → generate() restituisce dict."""
     result = alert_generator.generate(
-        "H_crit", mock_forecasts_h_crit_violation,
-        mock_causal_graph_empty, mock_monitor_nominal, _T0,
+        "H_crit",
+        mock_forecasts_h_crit_violation,
+        mock_causal_graph_empty,
+        mock_monitor_nominal,
+        _T0,
     )
     assert isinstance(result, dict)
 
@@ -197,15 +220,28 @@ def test_alert_has_required_keys(
 ) -> None:
     """L'alert contiene esattamente le chiavi richieste dalla struttura Alert."""
     alert = alert_generator.generate(
-        "H_crit", mock_forecasts_h_crit_violation,
-        mock_causal_graph_empty, mock_monitor_nominal, _T0,
+        "H_crit",
+        mock_forecasts_h_crit_violation,
+        mock_causal_graph_empty,
+        mock_monitor_nominal,
+        _T0,
     )
     assert alert is not None
     expected_keys = {
-        "timestamp", "compliance_set", "property_at_risk", "criticality",
-        "lead_time_steps", "lead_time_hours", "aggregated_forecast",
-        "sla_threshold", "sla_bound", "critical_arc", "root_cause",
-        "cross_property_interference", "causal_chain", "structural_signals",
+        "timestamp",
+        "compliance_set",
+        "property_at_risk",
+        "criticality",
+        "lead_time_steps",
+        "lead_time_hours",
+        "aggregated_forecast",
+        "sla_threshold",
+        "sla_bound",
+        "critical_arc",
+        "root_cause",
+        "cross_property_interference",
+        "causal_chain",
+        "structural_signals",
         "model_uncertainty_flag",
     }
     assert set(alert.keys()) == expected_keys
@@ -219,14 +255,18 @@ def test_compliance_set_in_alert(
 ) -> None:
     """alert['compliance_set'] corrisponde al nome passato."""
     alert = alert_generator.generate(
-        "H_crit", mock_forecasts_h_crit_violation,
-        mock_causal_graph_empty, mock_monitor_nominal, _T0,
+        "H_crit",
+        mock_forecasts_h_crit_violation,
+        mock_causal_graph_empty,
+        mock_monitor_nominal,
+        _T0,
     )
     assert alert is not None
     assert alert["compliance_set"] == "H_crit"
 
 
-#  Lead time (3) 
+#  Lead time (3)
+
 
 def test_lead_time_steps_is_first_violation(
     alert_generator: AlertGenerator,
@@ -236,7 +276,11 @@ def test_lead_time_steps_is_first_violation(
     """Violazione al step 3 (sum=120>100 da step 3): lead_time_steps==3."""
     forecasts = _make_forecasts_violation_at_step(step=3, n_steps=6)
     alert = alert_generator.generate(
-        "H_crit", forecasts, mock_causal_graph_empty, mock_monitor_nominal, _T0,
+        "H_crit",
+        forecasts,
+        mock_causal_graph_empty,
+        mock_monitor_nominal,
+        _T0,
     )
     assert alert is not None
     assert alert["lead_time_steps"] == 3, (
@@ -252,8 +296,11 @@ def test_lead_time_none_means_no_alert(
 ) -> None:
     """Nessuna violazione nell'orizzonte → generate() restituisce None."""
     result = alert_generator.generate(
-        "H_crit", mock_forecasts_h_crit,
-        mock_causal_graph_empty, mock_monitor_nominal, _T0,
+        "H_crit",
+        mock_forecasts_h_crit,
+        mock_causal_graph_empty,
+        mock_monitor_nominal,
+        _T0,
     )
     assert result is None
 
@@ -266,13 +313,18 @@ def test_lead_time_step_1_possible(
     """Violazione già al primo step → lead_time_steps==1."""
     forecasts = _make_forecasts_h_crit(yhat_per_arc=30.0)
     alert = alert_generator.generate(
-        "H_crit", forecasts, mock_causal_graph_empty, mock_monitor_nominal, _T0,
+        "H_crit",
+        forecasts,
+        mock_causal_graph_empty,
+        mock_monitor_nominal,
+        _T0,
     )
     assert alert is not None
     assert alert["lead_time_steps"] == 1
 
 
-#  Classificazione criticità (4) 
+#  Classificazione criticità (4)
+
 
 def test_criticality_yellow_on_long_lead_time(
     alert_generator: AlertGenerator,
@@ -282,9 +334,15 @@ def test_criticality_yellow_on_long_lead_time(
     """lead_time_steps=10 (10 giorni > 7) + tutti segnali False → 'yellow'."""
     # Violation solo allo step 10 (steps 1-9 sum=80<100, step 10 sum=120>100)
     yhats_9_ok_1_violation = [20.0] * 9 + [30.0]
-    forecasts = {k: _make_forecast_df(yhats_9_ok_1_violation) for k in _H_CRIT_LATENCY_KEYS}
+    forecasts = {
+        k: _make_forecast_df(yhats_9_ok_1_violation) for k in _H_CRIT_LATENCY_KEYS
+    }
     alert = alert_generator.generate(
-        "H_crit", forecasts, mock_causal_graph_empty, mock_monitor_nominal, _T0,
+        "H_crit",
+        forecasts,
+        mock_causal_graph_empty,
+        mock_monitor_nominal,
+        _T0,
     )
     assert alert is not None
     assert alert["criticality"] == "yellow", (
@@ -301,7 +359,11 @@ def test_criticality_orange_on_cusum_signal(
     """cusum_signal=True, structural_confirmed=False → almeno 'orange'."""
     forecasts = _make_forecasts_h_crit(yhat_per_arc=30.0)
     alert = alert_generator.generate(
-        "H_crit", forecasts, mock_causal_graph_empty, mock_monitor_orange, _T0,
+        "H_crit",
+        forecasts,
+        mock_causal_graph_empty,
+        mock_monitor_orange,
+        _T0,
     )
     assert alert is not None
     assert alert["criticality"] in ("orange", "red"), (
@@ -318,12 +380,15 @@ def test_criticality_red_on_structural_confirmed(
     """cusum_signal=True AND structural_confirmed=True → 'red'."""
     forecasts = _make_forecasts_h_crit(yhat_per_arc=30.0)
     alert = alert_generator.generate(
-        "H_crit", forecasts, mock_causal_graph_empty, mock_monitor_red, _T0,
+        "H_crit",
+        forecasts,
+        mock_causal_graph_empty,
+        mock_monitor_red,
+        _T0,
     )
     assert alert is not None
     assert alert["criticality"] == "red", (
-        f"Atteso 'red' con structural_confirmed=True, "
-        f"ottenuto '{alert['criticality']}'"
+        f"Atteso 'red' con structural_confirmed=True, ottenuto '{alert['criticality']}'"
     )
 
 
@@ -335,7 +400,11 @@ def test_criticality_red_on_short_lead_time(
     """lead_time_steps=1 (1 giorno < orange_min_days=2) → 'red'."""
     forecasts = _make_forecasts_h_crit(yhat_per_arc=30.0)
     alert = alert_generator.generate(
-        "H_crit", forecasts, mock_causal_graph_empty, mock_monitor_nominal, _T0,
+        "H_crit",
+        forecasts,
+        mock_causal_graph_empty,
+        mock_monitor_nominal,
+        _T0,
     )
     assert alert is not None
     assert alert["criticality"] == "red", (
@@ -344,7 +413,8 @@ def test_criticality_red_on_short_lead_time(
     )
 
 
-#  Aggregazione (3) 
+#  Aggregazione (3)
+
 
 def test_aggregation_latency_is_sum_for_linear(
     alert_generator: AlertGenerator,
@@ -355,7 +425,11 @@ def test_aggregation_latency_is_sum_for_linear(
     yhat_per_arc = 30.0  # 4 archi × 30 = 120 > 100 → violation
     forecasts = _make_forecasts_h_crit(yhat_per_arc=yhat_per_arc)
     alert = alert_generator.generate(
-        "H_crit", forecasts, mock_causal_graph_empty, mock_monitor_nominal, _T0,
+        "H_crit",
+        forecasts,
+        mock_causal_graph_empty,
+        mock_monitor_nominal,
+        _T0,
     )
     assert alert is not None
     expected_sum = 4 * yhat_per_arc
@@ -375,8 +449,11 @@ def test_aggregation_no_relevant_features_returns_none(
         "node:nginx-web-server:cpu_percent": _make_forecast_df([5.0] * _N_STEPS)
     }
     result = alert_generator.generate(
-        "H_crit", forecasts_irrelevant,
-        mock_causal_graph_empty, mock_monitor_nominal, _T0,
+        "H_crit",
+        forecasts_irrelevant,
+        mock_causal_graph_empty,
+        mock_monitor_nominal,
+        _T0,
     )
     assert result is None
 
@@ -391,14 +468,19 @@ def test_aggregation_nan_yhat_uses_sla_as_conservative(
     forecasts = {k: nan_df for k in _H_CRIT_LATENCY_KEYS}
     # Fallback: 4 × 100.0 = 400 > 100 → violation
     result = alert_generator.generate(
-        "H_crit", forecasts, mock_causal_graph_empty, mock_monitor_nominal, _T0,
+        "H_crit",
+        forecasts,
+        mock_causal_graph_empty,
+        mock_monitor_nominal,
+        _T0,
     )
     assert isinstance(result, dict), (
         "Atteso dict (violazione dal fallback SLA), ottenuto None"
     )
 
 
-#  Root cause (3) 
+#  Root cause (3)
+
 
 def test_root_cause_from_highest_intensity_edge(
     alert_generator: AlertGenerator,
@@ -411,21 +493,29 @@ def test_root_cause_from_highest_intensity_edge(
             {
                 "source": "node:nginx-web-server:cpu_percent",
                 "target": "edge:e1:latency_ms",
-                "type": "linear", "intensity": 0.3,
-                "method": "granger", "lag": 1,
+                "type": "linear",
+                "intensity": 0.3,
+                "method": "granger",
+                "lag": 1,
             },
             {
                 "source": "node:post-storage-service:cpu_percent",
                 "target": "edge:e4:latency_ms",
-                "type": "linear", "intensity": 0.7,
-                "method": "granger", "lag": 2,
+                "type": "linear",
+                "intensity": 0.7,
+                "method": "granger",
+                "lag": 2,
             },
         ],
         "cross_property_chains": [],
     }
     forecasts = _make_forecasts_h_crit(yhat_per_arc=30.0)
     alert = alert_generator.generate(
-        "H_crit", forecasts, causal_graph, mock_monitor_nominal, _T0,
+        "H_crit",
+        forecasts,
+        causal_graph,
+        mock_monitor_nominal,
+        _T0,
     )
     assert alert is not None
     assert alert["root_cause"] == "node:post-storage-service:cpu_percent", (
@@ -446,14 +536,22 @@ def test_cross_property_interference_from_confirmed_chain(
             {
                 "source_cs": "H_cache",
                 "target_cs": "H_crit",
-                "chain": ["interf:e2:throughput_rps", "node:home-timeline-service:cpu_percent", "edge:e4:latency_ms"],
+                "chain": [
+                    "interf:e2:throughput_rps",
+                    "node:home-timeline-service:cpu_percent",
+                    "edge:e4:latency_ms",
+                ],
                 "confirmed": True,
             }
         ],
     }
     forecasts = _make_forecasts_h_crit(yhat_per_arc=30.0)
     alert = alert_generator.generate(
-        "H_crit", forecasts, causal_graph, mock_monitor_nominal, _T0,
+        "H_crit",
+        forecasts,
+        causal_graph,
+        mock_monitor_nominal,
+        _T0,
     )
     assert alert is not None
     assert alert["cross_property_interference"] == "H_cache"
@@ -468,14 +566,19 @@ def test_no_root_cause_on_empty_causal_graph(
     """CausalGraph senza edges → root_cause=None, causal_chain=[]."""
     forecasts = _make_forecasts_h_crit(yhat_per_arc=30.0)
     alert = alert_generator.generate(
-        "H_crit", forecasts, mock_causal_graph_empty, mock_monitor_nominal, _T0,
+        "H_crit",
+        forecasts,
+        mock_causal_graph_empty,
+        mock_monitor_nominal,
+        _T0,
     )
     assert alert is not None
     assert alert["root_cause"] is None
     assert alert["causal_chain"] == []
 
 
-#  Model uncertainty (3) 
+#  Model uncertainty (3)
+
 
 def test_uncertainty_flag_false_on_smooth_forecast(
     alert_generator: AlertGenerator,
@@ -487,7 +590,11 @@ def test_uncertainty_flag_false_on_smooth_forecast(
     lin_yhats = [30.0 + 10.0 * i for i in range(_N_STEPS)]
     forecasts = {k: _make_forecast_df(lin_yhats) for k in _H_CRIT_LATENCY_KEYS}
     alert = alert_generator.generate(
-        "H_crit", forecasts, mock_causal_graph_empty, mock_monitor_nominal, _T0,
+        "H_crit",
+        forecasts,
+        mock_causal_graph_empty,
+        mock_monitor_nominal,
+        _T0,
     )
     assert alert is not None
     assert alert["model_uncertainty_flag"] is False, (
@@ -505,7 +612,11 @@ def test_uncertainty_flag_true_on_oscillating_forecast(
     osc_yhats = [10.0, 300.0, 10.0, 300.0, 10.0, 300.0]
     forecasts = {k: _make_forecast_df(osc_yhats) for k in _H_CRIT_LATENCY_KEYS}
     alert = alert_generator.generate(
-        "H_crit", forecasts, mock_causal_graph_empty, mock_monitor_nominal, _T0,
+        "H_crit",
+        forecasts,
+        mock_causal_graph_empty,
+        mock_monitor_nominal,
+        _T0,
     )
     assert alert is not None
     assert alert["model_uncertainty_flag"] is True, (
@@ -525,7 +636,11 @@ def test_uncertainty_demotes_red_to_orange(
     forecasts = {k: _make_forecast_df(osc_yhats) for k in _H_CRIT_LATENCY_KEYS}
     # monitor_red: cusum_signal=True AND structural_confirmed=True → RED baseline
     alert = alert_generator.generate(
-        "H_crit", forecasts, mock_causal_graph_empty, mock_monitor_red, _T0,
+        "H_crit",
+        forecasts,
+        mock_causal_graph_empty,
+        mock_monitor_red,
+        _T0,
     )
     assert alert is not None
     assert alert["model_uncertainty_flag"] is True
@@ -535,7 +650,8 @@ def test_uncertainty_demotes_red_to_orange(
     )
 
 
-#  Robustezza (3) 
+#  Robustezza (3)
+
 
 def test_generate_unknown_compliance_set_raises(
     alert_generator: AlertGenerator,
@@ -546,8 +662,11 @@ def test_generate_unknown_compliance_set_raises(
     """generate() con CS inesistente solleva KeyError."""
     with pytest.raises(KeyError):
         alert_generator.generate(
-            "H_nonexistent", mock_forecasts_h_crit,
-            mock_causal_graph_empty, mock_monitor_nominal, _T0,
+            "H_nonexistent",
+            mock_forecasts_h_crit,
+            mock_causal_graph_empty,
+            mock_monitor_nominal,
+            _T0,
         )
 
 
@@ -558,9 +677,7 @@ def test_missing_alert_generation_key_raises(
     pipeline = config.load_pipeline_params()
     bad_pipeline = copy.deepcopy(pipeline)
     del bad_pipeline["alert_generation"]["yellow_min_days"]
-    with patch.object(
-        type(config), "load_pipeline_params", return_value=bad_pipeline
-    ):
+    with patch.object(type(config), "load_pipeline_params", return_value=bad_pipeline):
         with pytest.raises(ValueError, match="yellow_min_days"):
             AlertGenerator(config, topology_builder)
 
@@ -572,12 +689,17 @@ def test_generate_with_empty_forecasts_returns_none(
 ) -> None:
     """generate() con forecasts={} → None (nessuna feature da aggregare)."""
     result = alert_generator.generate(
-        "H_crit", {}, mock_causal_graph_empty, mock_monitor_nominal, _T0,
+        "H_crit",
+        {},
+        mock_causal_graph_empty,
+        mock_monitor_nominal,
+        _T0,
     )
     assert result is None
 
 
-#  Aggregazione estesa (2) 
+#  Aggregazione estesa (2)
+
 
 def test_aggregation_reliability_product_complement(
     config: ConfigLoader,
@@ -610,7 +732,7 @@ def test_aggregation_reliability_product_complement(
     forecasts_ok = {k: _make_forecast_df([0.01] * _N_STEPS) for k in _H_CRIT_ERR_KEYS}
     result = ag.generate("H_crit", forecasts_ok, causal_graph, monitor, _T0)
     assert result is None, (
-        f"Atteso None (reliability ≈ 0.9606 > 0.95), ma ottenuto alert."
+        "Atteso None (reliability ≈ 0.9606 > 0.95), ma ottenuto alert."
     )
 
     # 0.02 per arco: reliability ≈ 0.9224 < 0.95 → violation
@@ -654,7 +776,8 @@ def test_aggregation_capacity_min(
     )
 
 
-#  Valori numerici (3) 
+#  Valori numerici (3)
+
 
 def test_aggregated_forecast_reliability_value(
     config: ConfigLoader,
@@ -680,7 +803,7 @@ def test_aggregated_forecast_reliability_value(
 
     alert = ag.generate("H_crit", forecasts, causal_graph, monitor, _T0)
     assert alert is not None
-    expected = 0.98 ** 4  # ≈ 0.9224
+    expected = 0.98**4  # ≈ 0.9224
     assert abs(alert["aggregated_forecast"][0] - expected) < 1e-9, (
         f"Atteso aggregated_forecast[0]≈{expected:.6f} (0.98^4), "
         f"ottenuto {alert['aggregated_forecast'][0]:.9f}"
@@ -698,21 +821,29 @@ def test_critical_arc_from_highest_intensity_edge(
             {
                 "source": "node:nginx-web-server:cpu_percent",
                 "target": "edge:e1:latency_ms",
-                "type": "linear", "intensity": 0.3,
-                "method": "granger", "lag": 1,
+                "type": "linear",
+                "intensity": 0.3,
+                "method": "granger",
+                "lag": 1,
             },
             {
                 "source": "node:post-storage-service:cpu_percent",
                 "target": "edge:e4:latency_ms",
-                "type": "linear", "intensity": 0.7,
-                "method": "granger", "lag": 2,
+                "type": "linear",
+                "intensity": 0.7,
+                "method": "granger",
+                "lag": 2,
             },
         ],
         "cross_property_chains": [],
     }
     forecasts = _make_forecasts_h_crit(yhat_per_arc=30.0)
     alert = alert_generator.generate(
-        "H_crit", forecasts, causal_graph, mock_monitor_nominal, _T0,
+        "H_crit",
+        forecasts,
+        causal_graph,
+        mock_monitor_nominal,
+        _T0,
     )
     assert alert is not None
     assert alert["critical_arc"] == "e4", (
@@ -729,7 +860,11 @@ def test_lead_time_hours_value(
     """lead_time_hours = lead_time_steps × step_duration_hours: 1 step × 24h = 24.0h."""
     forecasts = _make_forecasts_h_crit(yhat_per_arc=30.0)  # violazione al step 1
     alert = alert_generator.generate(
-        "H_crit", forecasts, mock_causal_graph_empty, mock_monitor_nominal, _T0,
+        "H_crit",
+        forecasts,
+        mock_causal_graph_empty,
+        mock_monitor_nominal,
+        _T0,
     )
     assert alert is not None
     assert alert["lead_time_steps"] == 1
@@ -739,7 +874,8 @@ def test_lead_time_hours_value(
     )
 
 
-#  Nuovi test (4) 
+#  Nuovi test (4)
+
 
 def test_aggregation_capacity_nan_yhat_is_conservative(
     config: ConfigLoader,
@@ -763,8 +899,11 @@ def test_aggregation_capacity_nan_yhat_is_conservative(
         "edge:e6:throughput_rps": nan_df,
     }
     result = ag.generate(
-        "H_crit", forecasts, _make_causal_graph_empty(),
-        _make_monitor_nominal(), _T0,
+        "H_crit",
+        forecasts,
+        _make_causal_graph_empty(),
+        _make_monitor_nominal(),
+        _T0,
     )
     assert result is not None, (
         "Atteso alert (min(0.0,...) < SLA 10.0 → violazione), ottenuto None. "
@@ -793,8 +932,11 @@ def test_uncertainty_demotes_orange_to_yellow(
     monitor_no_signals = _make_monitor_nominal()
 
     alert = alert_generator.generate(
-        "H_crit", forecasts_5d_osc, mock_causal_graph_empty,
-        monitor_no_signals, _T0,
+        "H_crit",
+        forecasts_5d_osc,
+        mock_causal_graph_empty,
+        monitor_no_signals,
+        _T0,
     )
     assert alert is not None
     assert alert["model_uncertainty_flag"] is True, (
@@ -822,16 +964,21 @@ def test_reliability_threshold_derived_from_sla_dynamically(
         ag = AlertGenerator(config, topology_builder)
 
     keys = [
-        "edge:e1:error_rate", "edge:e2:error_rate",
-        "edge:e4:error_rate", "edge:e6:error_rate",
+        "edge:e1:error_rate",
+        "edge:e2:error_rate",
+        "edge:e4:error_rate",
+        "edge:e6:error_rate",
     ]
     # error_rate=0.02 → reliability = 0.98^4 ≈ 0.9224
     # Con threshold=0.90 (1-0.10): 0.9224 > 0.90 → NO violation → None
     # Con threshold=0.95 (hardcoded): 0.9224 < 0.95 → violation → dict
     forecasts = {k: _make_forecast_df([0.02] * _N_STEPS) for k in keys}
     result = ag.generate(
-        "H_crit", forecasts, _make_causal_graph_empty(),
-        _make_monitor_nominal(), _T0,
+        "H_crit",
+        forecasts,
+        _make_causal_graph_empty(),
+        _make_monitor_nominal(),
+        _T0,
     )
     assert result is None, (
         f"error_rate=0.02 → reliability≈0.9224 > threshold=0.90 → NO violation attesa. "
@@ -861,8 +1008,11 @@ def test_aggregation_latency_max_for_parallel_topology(
         "edge:e5:latency_ms": _make_forecast_df([20.0] * _N_STEPS),
     }
     alert = ag.generate(
-        "H_cache", forecasts, _make_causal_graph_empty("H_cache"),
-        _make_monitor_nominal(), _T0,
+        "H_cache",
+        forecasts,
+        _make_causal_graph_empty("H_cache"),
+        _make_monitor_nominal(),
+        _T0,
     )
     assert alert is not None
     assert abs(alert["aggregated_forecast"][0] - 60.0) < 1e-9, (
@@ -870,7 +1020,7 @@ def test_aggregation_latency_max_for_parallel_topology(
         f"ottenuto {alert['aggregated_forecast'][0]:.4f}. "
         "Se fosse 90.0, l'aggregazione usa sum invece di max."
     )
-    
+
 
 def test_critical_arc_is_edge_id_not_node_id(
     alert_generator: AlertGenerator,
@@ -895,11 +1045,13 @@ def test_critical_arc_is_edge_id_not_node_id(
         ],
         "cross_property_chains": [],
     }
-    forecasts = {k: _make_forecast_df([30.0] * _N_STEPS)
-                 for k in _H_CRIT_LATENCY_KEYS}
+    forecasts = {k: _make_forecast_df([30.0] * _N_STEPS) for k in _H_CRIT_LATENCY_KEYS}
     alert = alert_generator.generate(
-        "H_crit", forecasts, causal_graph_node_only,
-        _make_monitor_nominal(), _T0,
+        "H_crit",
+        forecasts,
+        causal_graph_node_only,
+        _make_monitor_nominal(),
+        _T0,
     )
     assert alert is not None
     # critical_arc deve essere un edge_id dell'arco con max yhat,
@@ -927,9 +1079,7 @@ def test_aggregation_reliability_nan_yhat_is_conservative(
     bad_topology["compliance_sets"]["H_crit"]["sla"] = {
         "error_rate": {"bound": "upper", "threshold": 0.05}
     }
-    with patch.object(
-        type(config), "load_topology", return_value=bad_topology
-    ):
+    with patch.object(type(config), "load_topology", return_value=bad_topology):
         ag = AlertGenerator(config, topology_builder)
 
     nan_df = _make_forecast_df([float("nan")] * _N_STEPS)
@@ -940,8 +1090,11 @@ def test_aggregation_reliability_nan_yhat_is_conservative(
         "edge:e6:error_rate": nan_df,
     }
     result = ag.generate(
-        "H_crit", forecasts, _make_causal_graph_empty(),
-        _make_monitor_nominal(), _T0,
+        "H_crit",
+        forecasts,
+        _make_causal_graph_empty(),
+        _make_monitor_nominal(),
+        _T0,
     )
     assert result is not None, (
         "yhat=NaN su error_rate → fallback=0.05 → reliability≈0.81<0.95 "
@@ -959,8 +1112,6 @@ def test_orange_min_days_less_than_yellow_min_days_raises(
     bad_params["alert_generation"]["orange_min_days"] = 7
     bad_params["alert_generation"]["yellow_min_days"] = 2
 
-    with patch.object(
-        type(config), "load_pipeline_params", return_value=bad_params
-    ):
+    with patch.object(type(config), "load_pipeline_params", return_value=bad_params):
         with pytest.raises(ValueError, match="orange_min_days"):
             AlertGenerator(config, topology_builder)

@@ -1,10 +1,11 @@
 """Costruisce il Probabilistic Behavioral Overlay G_Behavior(t) = (V, E_all, W_t)."""
+
 import math
 from typing import Any
 
+from src.layer1.topology_builder import TopologyBuilder
 from src.utils.config_loader import ConfigLoader
 from src.utils.logging_setup import LoggingSetup
-from src.layer1.topology_builder import TopologyBuilder
 
 logger = LoggingSetup.configure(__name__, "INFO")
 
@@ -115,12 +116,10 @@ class PBOBuilder:
                         raw_values[eid] = float("nan")
 
                 has_invalid = any(
-                    not math.isfinite(v) or v < 0
-                    for v in raw_values.values()
+                    not math.isfinite(v) or v < 0 for v in raw_values.values()
                 )
                 total_tp = sum(
-                    v for v in raw_values.values()
-                    if math.isfinite(v) and v >= 0
+                    v for v in raw_values.values() if math.isfinite(v) and v >= 0
                 )
 
                 if has_invalid:
@@ -128,14 +127,17 @@ class PBOBuilder:
                         "Valori non validi in weight_metric '%s' "
                         "per sorgente '%s' al ts=%d - "
                         "usando pesi uniformi.",
-                        self._weight_metric, src,
+                        self._weight_metric,
+                        src,
                         snap["timestamp"],
                     )
                 elif total_tp <= 0:
                     logger.warning(
                         "Throughput totale uscente da '%s' al ts=%d è "
                         "zero o negativo (total=%.4f) - usando pesi uniformi.",
-                        src, snap["timestamp"], total_tp,
+                        src,
+                        snap["timestamp"],
+                        total_tp,
                     )
 
                 if has_invalid or total_tp <= 0:
@@ -191,8 +193,7 @@ class PBOBuilder:
                 "disponibile per calibrare W_gold."
             )
         n_nominal_in_snapshots = sum(
-            1 for s in snapshots
-            if s["label"] == self._gold_standard_label
+            1 for s in snapshots if s["label"] == self._gold_standard_label
         )
         n_used = len(nominal_weights)
         if n_used < n_nominal_in_snapshots:
@@ -302,8 +303,10 @@ class PBOBuilder:
                 (weights.get(eid, 0.0) - gold_standard.get(eid, 0.0)) ** 2
                 for eid in all_eids
             )
-            result.append({
-                "timestamp": entry["timestamp"],
-                "frobenius": math.sqrt(sq_sum),
-            })
+            result.append(
+                {
+                    "timestamp": entry["timestamp"],
+                    "frobenius": math.sqrt(sq_sum),
+                }
+            )
         return result

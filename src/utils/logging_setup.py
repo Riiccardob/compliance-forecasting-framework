@@ -1,4 +1,5 @@
 """Configurazione del logging per i moduli del framework."""
+
 import logging
 
 

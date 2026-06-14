@@ -1,0 +1,23 @@
+[tool.pytest.ini_options]
+# Kept in sync with pytest.ini — if you use pyproject.toml, migrate pytest.ini here
+pythonpath = ["."]
+filterwarnings = [
+    "ignore::UserWarning",
+    "ignore::RuntimeWarning",
+    "ignore::statsmodels.tools.sm_exceptions.ConvergenceWarning",
+    "ignore::FutureWarning",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["tests/*", "dashboard/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "pass",
+]

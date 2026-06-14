@@ -1,4 +1,5 @@
 """Costruisce la sequenza di snapshot G_t = (V, E_t, X_V,t, X_E,t) del Layer 2."""
+
 import json
 from pathlib import Path
 from typing import Any
@@ -90,9 +91,7 @@ class ATGBuilder:
             )
             gt_df = gt_df.drop_duplicates(subset=["timestamp"], keep="first")
 
-        n_nm_dup = int(
-            node_df.duplicated(subset=["timestamp", "node_id"]).sum()
-        )
+        n_nm_dup = int(node_df.duplicated(subset=["timestamp", "node_id"]).sum())
         if n_nm_dup > 0:
             logger.warning(
                 "node_metrics contiene %d righe duplicate su "
@@ -105,9 +104,7 @@ class ATGBuilder:
                 subset=["timestamp", "node_id"], keep="first"
             )
 
-        n_em_dup = int(
-            edge_df.duplicated(subset=["timestamp", "edge_id"]).sum()
-        )
+        n_em_dup = int(edge_df.duplicated(subset=["timestamp", "edge_id"]).sum())
         if n_em_dup > 0:
             logger.warning(
                 "edge_metrics contiene %d righe duplicate su "
@@ -131,12 +128,14 @@ class ATGBuilder:
         if extra_nodes:
             logger.warning(
                 "node_metrics contiene %d node_id non presenti in topology: %s",
-                len(extra_nodes), sorted(extra_nodes),
+                len(extra_nodes),
+                sorted(extra_nodes),
             )
         if missing_nodes:
             logger.warning(
                 "node_metrics manca di %d node_id attesi da topology: %s",
-                len(missing_nodes), sorted(missing_nodes),
+                len(missing_nodes),
+                sorted(missing_nodes),
             )
         all_cs_node_ids: set[str] = set()
         for cs_def in self._topology["compliance_sets"].values():
@@ -151,12 +150,14 @@ class ATGBuilder:
         if extra_edges:
             logger.warning(
                 "edge_metrics contiene %d edge_id non presenti in topology: %s",
-                len(extra_edges), sorted(extra_edges),
+                len(extra_edges),
+                sorted(extra_edges),
             )
         if missing_edges:
             logger.warning(
                 "edge_metrics manca di %d edge_id attesi da topology: %s",
-                len(missing_edges), sorted(missing_edges),
+                len(missing_edges),
+                sorted(missing_edges),
             )
 
         node_ts = set(node_df["timestamp"].unique())
@@ -205,7 +206,10 @@ class ATGBuilder:
 
         logger.info(
             "Build ATG: %d snapshot allineati (node_ts=%d, edge_ts=%d, gt_ts=%d)",
-            len(common_ts), len(node_ts), len(edge_ts), len(gt_ts),
+            len(common_ts),
+            len(node_ts),
+            len(edge_ts),
+            len(gt_ts),
         )
 
         node_grouped = node_df.groupby("timestamp")
@@ -226,7 +230,8 @@ class ATGBuilder:
                 logger.warning(
                     "Label non riconosciuta %r al timestamp %d - "
                     "lo snapshot sarà né nominale né anomalo.",
-                    label, ts,
+                    label,
+                    ts,
                 )
             fault_type_raw = gt_row["fault_type"]
             anomaly_node_ids_raw = gt_row["anomaly_node_ids"]
@@ -244,7 +249,8 @@ class ATGBuilder:
                         logger.warning(
                             "anomaly_node_ids al ts=%d non è una lista "
                             "(%s) - normalizzato a [].",
-                            ts, type(parsed).__name__,
+                            ts,
+                            type(parsed).__name__,
                         )
                         anomaly_node_ids: list[str] = []
                     else:
@@ -252,21 +258,24 @@ class ATGBuilder:
                 except (json.JSONDecodeError, TypeError, ValueError):
                     logger.warning(
                         "anomaly_node_ids malformato al ts=%d: %s",
-                        ts, anomaly_node_ids_raw,
+                        ts,
+                        anomaly_node_ids_raw,
                     )
                     anomaly_node_ids = []
             else:
                 anomaly_type = None
                 anomaly_node_ids = []
 
-            snapshots.append({
-                "timestamp": ts,
-                "nodes": nodes_dict,
-                "edges": edges_dict,
-                "label": label,
-                "anomaly_type": anomaly_type,
-                "anomaly_node_ids": anomaly_node_ids,
-            })
+            snapshots.append(
+                {
+                    "timestamp": ts,
+                    "nodes": nodes_dict,
+                    "edges": edges_dict,
+                    "label": label,
+                    "anomaly_type": anomaly_type,
+                    "anomaly_node_ids": anomaly_node_ids,
+                }
+            )
 
         return snapshots
 
@@ -322,8 +331,7 @@ class ATGBuilder:
         records = [
             {
                 "timestamp": s["timestamp"],
-                **{col: s["edges"][edge_id][col]
-                   for col in self._edge_metrics},
+                **{col: s["edges"][edge_id][col] for col in self._edge_metrics},
             }
             for s in snapshots
             if edge_id in s["edges"]
@@ -361,19 +369,15 @@ class ATGBuilder:
             result = [s for s in result if s["anomaly_type"] == anomaly_type]
         return result
 
-    def _build_nodes(
-        self, rows: pd.DataFrame
-    ) -> dict[str, dict[str, float]]:
+    def _build_nodes(self, rows: pd.DataFrame) -> dict[str, dict[str, float]]:
         return {
             r["node_id"]: {col: r[col] for col in self._node_metrics}
-            for r in rows[["node_id"] + self._node_metrics].to_dict("records")
+            for r in rows[["node_id", *self._node_metrics]].to_dict("records")
         }
 
-    def _build_edges(
-        self, rows: pd.DataFrame
-    ) -> dict[str, dict[str, Any]]:
-        edge_cols = ["edge_id", "source", "target"] + self._edge_metrics
+    def _build_edges(self, rows: pd.DataFrame) -> dict[str, dict[str, Any]]:
+        edge_cols = ["edge_id", "source", "target", *self._edge_metrics]
         return {
-            r["edge_id"]: {k: r[k] for k in ["source", "target"] + self._edge_metrics}
+            r["edge_id"]: {k: r[k] for k in ["source", "target", *self._edge_metrics]}
             for r in rows[edge_cols].to_dict("records")
         }

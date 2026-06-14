@@ -1,4 +1,5 @@
 """Conversione dei CSV raw GAMMA/DSB nei tre CSV interni del framework."""
+
 import json
 import re
 from pathlib import Path
@@ -69,8 +70,7 @@ class DSBConverter:
         # per recuperare la colonna {n}_latency dal CSV raw.
         self._edges: list[dict] = topology["edges"]
         self._edge_dest_idx: dict[str, int] = {
-            edge["id"]: self._node_name_to_idx[edge["target"]]
-            for edge in self._edges
+            edge["id"]: self._node_name_to_idx[edge["target"]] for edge in self._edges
         }
 
         # Tipo di percorso per il calcolo del throughput per-arco.
@@ -78,8 +78,7 @@ class DSBConverter:
         # Valori ammessi: "all" (N1+N2), "graph_1" (N1), "graph_2" (N2).
         # Default "all" se il campo è assente → retrocompatibilità garantita.
         self._edge_rps_type: dict[str, str] = {
-            edge["id"]: edge.get("rps_path_type", "all")
-            for edge in self._edges
+            edge["id"]: edge.get("rps_path_type", "all") for edge in self._edges
         }
 
         self._data_paths: dict = topology["data_paths"]
@@ -122,7 +121,9 @@ class DSBConverter:
         """
         files = sorted(raw_dir.rglob(f"*{self._graph_suffix}"))
         if not files:
-            logger.warning("Nessun file *%s trovato in: %s", self._graph_suffix, raw_dir)
+            logger.warning(
+                "Nessun file *%s trovato in: %s", self._graph_suffix, raw_dir
+            )
             return
 
         node_frames: list[pd.DataFrame] = []
@@ -189,9 +190,7 @@ class DSBConverter:
     # Metodi privati
     # ------------------------------------------------------------------
 
-    def _parse_filename(
-        self, filename: str
-    ) -> dict[str, str | int | None]:
+    def _parse_filename(self, filename: str) -> dict[str, str | int | None]:
         """Estrae metadati dal nome file GAMMA con regex tollerante.
 
         Gestisce: assenza del campo ``duration``, token extra come
@@ -232,9 +231,7 @@ class DSBConverter:
             "replica_idx": int(m.group("replica_idx")),
         }
 
-    def _aggregate_window_metrics(
-        self, df: pd.DataFrame
-    ) -> pd.DataFrame:
+    def _aggregate_window_metrics(self, df: pd.DataFrame) -> pd.DataFrame:
         """Aggrega le righe per ``window_id``.
 
         Aggregazioni applicate:
@@ -279,9 +276,7 @@ class DSBConverter:
         agg = agg.rename(columns={"0_start": "timestamp"})
 
         # n_traces e n_anomalous_traces calcolati separatamente per chiarezza
-        n_traces = (
-            df.groupby("window_id")["label_trace"].count().rename("n_traces")
-        )
+        n_traces = df.groupby("window_id")["label_trace"].count().rename("n_traces")
         n_anom = (
             df.groupby("window_id")["label_trace"].sum().rename("n_anomalous_traces")
         )
@@ -289,9 +284,7 @@ class DSBConverter:
 
         return agg.sort_values("timestamp").reset_index(drop=True)
 
-    def _load_per_arc_rps(
-        self, filepath: Path
-    ) -> tuple[np.ndarray, np.ndarray]:
+    def _load_per_arc_rps(self, filepath: Path) -> tuple[np.ndarray, np.ndarray]:
         """Carica home_rps_start_time_1.csv e _2.csv per il throughput per-arco.
 
         I file sono in:
@@ -335,7 +328,9 @@ class DSBConverter:
         )
         logger.debug(
             "[%s] RPS disaggregati: N1=%d (graph_1), N2=%d (graph_2)",
-            filepath.name, len(ts1), len(ts2),
+            filepath.name,
+            len(ts1),
+            len(ts2),
         )
         return ts1, ts2
 
@@ -365,10 +360,9 @@ class DSBConverter:
         """
         if len(sorted_ts) == 0:
             return np.zeros(len(window_starts_us), dtype=np.int64)
-        return (
-            np.searchsorted(sorted_ts, window_ends_us, side="left")
-            - np.searchsorted(sorted_ts, window_starts_us, side="left")
-        )
+        return np.searchsorted(
+            sorted_ts, window_ends_us, side="left"
+        ) - np.searchsorted(sorted_ts, window_starts_us, side="left")
 
     def _compute_node_metrics(
         self,
@@ -421,9 +415,9 @@ class DSBConverter:
             # Negative delta = counter reset (container restart). Preserve the
             # leading NaN from diff() so the first window is still dropped.
             _diff_nan = cpu_pct.isna()
-            cpu_pct = cpu_pct.mask(
-                (cpu_pct < 0) | ~delta_t_sec.gt(0)
-            ).ffill().fillna(0.0)
+            cpu_pct = (
+                cpu_pct.mask((cpu_pct < 0) | ~delta_t_sec.gt(0)).ffill().fillna(0.0)
+            )
             cpu_pct = cpu_pct.where(~_diff_nan)
 
             mem_bytes: pd.Series = agg[mem_col].copy()
@@ -451,9 +445,7 @@ class DSBConverter:
                     }
                 )
 
-        logger.debug(
-            "[%s] node_metrics: %d record", source_file, len(records)
-        )
+        logger.debug("[%s] node_metrics: %d record", source_file, len(records))
         return pd.DataFrame(records)
 
     def _compute_edge_metrics(
@@ -498,9 +490,9 @@ class DSBConverter:
         # T_w[i] = t[i+1] - t[i]
         t_w: pd.Series = t_sec.diff().shift(-1)
 
-        error_rate: pd.Series = (
-            agg["n_anomalous_traces"] / agg["n_traces"]
-        ).fillna(0.0)
+        error_rate: pd.Series = (agg["n_anomalous_traces"] / agg["n_traces"]).fillna(
+            0.0
+        )
         fallback_duration = self._window_duration_s
 
         # --- Setup throughput per-arco ---
@@ -521,8 +513,8 @@ class DSBConverter:
                 # Ultima finestra: end = timestamp[-1] + window_duration_s * 1e6.
                 window_ends = np.empty(len(timestamps_us), dtype=np.int64)
                 window_ends[:-1] = timestamps_us[1:]
-                window_ends[-1] = (
-                    timestamps_us[-1] + int(self._window_duration_s * 1_000_000)
+                window_ends[-1] = timestamps_us[-1] + int(
+                    self._window_duration_s * 1_000_000
                 )
                 n1_per_window = self._count_traces_per_window(
                     ts1, timestamps_us, window_ends
@@ -561,7 +553,8 @@ class DSBConverter:
                 logger.warning(
                     "[%s] Tutti i valori di latency per arco '%s' sono NaN - "
                     "latency_ms sarà NaN per tutte le finestre.",
-                    source_file, edge["id"],
+                    source_file,
+                    edge["id"],
                 )
 
             for i in range(len(agg)):
@@ -595,9 +588,7 @@ class DSBConverter:
                     }
                 )
 
-        logger.debug(
-            "[%s] edge_metrics: %d record", source_file, len(records)
-        )
+        logger.debug("[%s] edge_metrics: %d record", source_file, len(records))
         return pd.DataFrame(records)
 
     def _compute_ground_truth(
@@ -635,8 +626,7 @@ class DSBConverter:
             anomaly_nodes: list[str] = [
                 self._node_map[n]
                 for n in range(self._n_nodes)
-                if f"{n}_label_RPC" in agg.columns
-                and row[f"{n}_label_RPC"] == 1
+                if f"{n}_label_RPC" in agg.columns and row[f"{n}_label_RPC"] == 1
             ]
 
             label = int(row["n_anomalous_traces"] > 0)

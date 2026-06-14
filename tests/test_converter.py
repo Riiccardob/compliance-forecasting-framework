@@ -1,4 +1,5 @@
 """Test per DSBConverter - dati mock sintetici, nessun CSV reale."""
+
 import json
 from pathlib import Path
 
@@ -12,7 +13,7 @@ _ROOT = Path(__file__).parent.parent
 _TOPOLOGY_PATH = _ROOT / "config" / "topology.yaml"
 _PIPELINE_PATH = _ROOT / "config" / "pipeline_params.yaml"
 
-#  Costanti mock 
+#  Costanti mock
 # Nodi rilevanti (ordine lista topology.yaml):
 #   0: nginx-web-server  |  1: nginx-thrift  |  4: post-storage-service
 
@@ -37,7 +38,8 @@ _TX_W1 = 6 * 1024 * 1024
 _LAT_E1_US = 10_000.0
 
 
-#  Fixture 
+#  Fixture
+
 
 @pytest.fixture(scope="function")
 def topology_config() -> ConfigLoader:
@@ -56,43 +58,46 @@ def _make_base_raw() -> pd.DataFrame:
     Include solo le colonne strettamente necessarie ai test; il converter
     salta silenziosamente i nodi privi di colonne CPU (log warning).
     """
-    return pd.DataFrame([
-        {
-            "window_id": "10_0",
-            "0_start": _TS_W0,
-            "label_trace": 0,
-            # Node 0 (nginx-web-server) - counter Prometheus
-            "0_container_cpu_usage_seconds_total": _CPU_W0,
-            "0_container_memory_usage_bytes": _MEM_BYTES,
-            "0_container_network_receive_bytes_total": _RX_W0,
-            "0_container_network_transmit_bytes_total": _TX_W0,
-            # Latenza arco e1 (dest = nginx-thrift, indice 1)
-            "1_latency": _LAT_E1_US,
-            # Label RPC
-            "0_label_RPC": 0,
-            "4_label_RPC": 0,
-        },
-        {
-            "window_id": "10_1",
-            "0_start": _TS_W1,
-            "label_trace": 1,
-            "0_container_cpu_usage_seconds_total": _CPU_W1,
-            "0_container_memory_usage_bytes": _MEM_BYTES,
-            "0_container_network_receive_bytes_total": _RX_W1,
-            "0_container_network_transmit_bytes_total": _TX_W1,
-            "1_latency": _LAT_E1_US,
-            "0_label_RPC": 0,
-            "4_label_RPC": 1,  # post-storage-service (idx 4) anomalous
-        },
-    ])
+    return pd.DataFrame(
+        [
+            {
+                "window_id": "10_0",
+                "0_start": _TS_W0,
+                "label_trace": 0,
+                # Node 0 (nginx-web-server) - counter Prometheus
+                "0_container_cpu_usage_seconds_total": _CPU_W0,
+                "0_container_memory_usage_bytes": _MEM_BYTES,
+                "0_container_network_receive_bytes_total": _RX_W0,
+                "0_container_network_transmit_bytes_total": _TX_W0,
+                # Latenza arco e1 (dest = nginx-thrift, indice 1)
+                "1_latency": _LAT_E1_US,
+                # Label RPC
+                "0_label_RPC": 0,
+                "4_label_RPC": 0,
+            },
+            {
+                "window_id": "10_1",
+                "0_start": _TS_W1,
+                "label_trace": 1,
+                "0_container_cpu_usage_seconds_total": _CPU_W1,
+                "0_container_memory_usage_bytes": _MEM_BYTES,
+                "0_container_network_receive_bytes_total": _RX_W1,
+                "0_container_network_transmit_bytes_total": _TX_W1,
+                "1_latency": _LAT_E1_US,
+                "0_label_RPC": 0,
+                "4_label_RPC": 1,  # post-storage-service (idx 4) anomalous
+            },
+        ]
+    )
 
 
-#  Test suite 
+#  Test suite
+
 
 class TestDSBConverter:
     """Test suite per DSBConverter - mock in memoria, nessun I/O su CSV reali."""
 
-    #  Metriche di nodo 
+    #  Metriche di nodo
 
     def test_first_window_dropped_for_cpu(self, converter: DSBConverter) -> None:
         """La prima window non produce record in node_metrics (diff CPU = NaN)."""
@@ -100,7 +105,8 @@ class TestDSBConverter:
         node_df = converter._compute_node_metrics(agg, "source.csv")
 
         w0_records = node_df[
-            (node_df["window_id"] == "10_0") & (node_df["node_id"] == "nginx-web-server")
+            (node_df["window_id"] == "10_0")
+            & (node_df["node_id"] == "nginx-web-server")
         ]
         assert len(w0_records) == 0
 
@@ -113,7 +119,8 @@ class TestDSBConverter:
         node_df = converter._compute_node_metrics(agg, "source.csv")
 
         rec = node_df[
-            (node_df["window_id"] == "10_1") & (node_df["node_id"] == "nginx-web-server")
+            (node_df["window_id"] == "10_1")
+            & (node_df["node_id"] == "nginx-web-server")
         ]
         assert len(rec) == 1
         expected_mb = _MEM_BYTES / (1024.0 * 1024.0)
@@ -125,22 +132,21 @@ class TestDSBConverter:
         node_df = converter._compute_node_metrics(agg, "source.csv")
 
         rec = node_df[
-            (node_df["window_id"] == "10_1") & (node_df["node_id"] == "nginx-web-server")
+            (node_df["window_id"] == "10_1")
+            & (node_df["node_id"] == "nginx-web-server")
         ]
         assert len(rec) == 1
         expected_mb = (_RX_W1 - _RX_W0) / (1024.0 * 1024.0)
         assert abs(rec.iloc[0]["net_rx_mb"] - expected_mb) < 0.01
 
-    #  Metriche di arco 
+    #  Metriche di arco
 
     def test_latency_ms_conversion(self, converter: DSBConverter) -> None:
         """latency_ms per e1 = media µs / 1000 = 10.0 ms."""
         agg = converter._aggregate_window_metrics(_make_base_raw())
         edge_df = converter._compute_edge_metrics(agg, "source.csv")
 
-        rec = edge_df[
-            (edge_df["window_id"] == "10_1") & (edge_df["edge_id"] == "e1")
-        ]
+        rec = edge_df[(edge_df["window_id"] == "10_1") & (edge_df["edge_id"] == "e1")]
         assert len(rec) == 1
         assert abs(rec.iloc[0]["latency_ms"] - (_LAT_E1_US / 1000.0)) < 0.001
 
@@ -157,13 +163,11 @@ class TestDSBConverter:
         agg = converter._aggregate_window_metrics(_make_base_raw())
         edge_df = converter._compute_edge_metrics(agg, "source.csv")
 
-        rec = edge_df[
-            (edge_df["window_id"] == "10_1") & (edge_df["edge_id"] == "e1")
-        ]
+        rec = edge_df[(edge_df["window_id"] == "10_1") & (edge_df["edge_id"] == "e1")]
         assert len(rec) == 1
         assert abs(rec.iloc[0]["error_rate"] - 1.0) < 0.001
 
-    #  Ground truth 
+    #  Ground truth
 
     def test_ground_truth_anomaly_node_ids(self, converter: DSBConverter) -> None:
         """anomaly_node_ids in 10_1 contiene 'post-storage-service'."""
@@ -189,7 +193,7 @@ class TestDSBConverter:
         assert meta["rps"] == 400
         assert meta["replica_idx"] == 2
 
-    #  Parsing filename 
+    #  Parsing filename
 
     def test_filename_without_duration(self, converter: DSBConverter) -> None:
         """File senza token duration: 'duration' è None, altri campi corretti."""
@@ -221,26 +225,27 @@ class TestDSBConverter:
         node_df = converter._compute_node_metrics(agg, "source.csv")
 
         rec = node_df[
-            (node_df["window_id"] == "10_1") & (node_df["node_id"] == "nginx-web-server")
+            (node_df["window_id"] == "10_1")
+            & (node_df["node_id"] == "nginx-web-server")
         ]
         assert len(rec) == 1
         assert abs(rec.iloc[0]["cpu_percent"] - 5.0) < 0.01
 
-    def test_net_negative_delta_forward_filled(
-        self, converter: DSBConverter
-    ) -> None:
+    def test_net_negative_delta_forward_filled(self, converter: DSBConverter) -> None:
         """Delta negativo su net_rx (counter reset) viene azzerato a NaN
         e poi forward-filled con il valore della window precedente.
         """
         raw = _make_base_raw()
-        raw.loc[raw["window_id"] == "10_1",
-                "0_container_network_receive_bytes_total"] = _RX_W0 - 1024
+        raw.loc[
+            raw["window_id"] == "10_1", "0_container_network_receive_bytes_total"
+        ] = _RX_W0 - 1024
 
         agg = converter._aggregate_window_metrics(raw)
         node_df = converter._compute_node_metrics(agg, "source.csv")
 
         rec_w1 = node_df[
-            (node_df["window_id"] == "10_1") & (node_df["node_id"] == "nginx-web-server")
+            (node_df["window_id"] == "10_1")
+            & (node_df["node_id"] == "nginx-web-server")
         ]
         assert len(rec_w1) == 1
         val = rec_w1.iloc[0]["net_rx_mb"]
@@ -255,9 +260,7 @@ class TestDSBConverter:
         agg = converter._aggregate_window_metrics(_make_base_raw())
         edge_df = converter._compute_edge_metrics(agg, "source.csv")
 
-        rec = edge_df[
-            (edge_df["window_id"] == "10_0") & (edge_df["edge_id"] == "e1")
-        ]
+        rec = edge_df[(edge_df["window_id"] == "10_0") & (edge_df["edge_id"] == "e1")]
         assert len(rec) == 1
         assert abs(rec.iloc[0]["error_rate"] - 0.0) < 0.001
 
@@ -268,8 +271,9 @@ class TestDSBConverter:
         a NaN e forward-filled. Non devono esserci valori negativi."""
         raw = _make_base_raw()
         # Counter CPU decresce: simula restart container tra w0 e w1
-        raw.loc[raw["window_id"] == "10_1",
-                "0_container_cpu_usage_seconds_total"] = _CPU_W0 - 0.5
+        raw.loc[raw["window_id"] == "10_1", "0_container_cpu_usage_seconds_total"] = (
+            _CPU_W0 - 0.5
+        )
 
         agg = converter._aggregate_window_metrics(raw)
         node_df = converter._compute_node_metrics(agg, "source.csv")
@@ -284,14 +288,10 @@ class TestDSBConverter:
         # fillna(0.0) → where produce deterministicamente 0.0.
         assert abs(val - 0.0) < 1e-9
 
-    def test_filename_with_prefix_token(
-        self, converter: DSBConverter
-    ) -> None:
+    def test_filename_with_prefix_token(self, converter: DSBConverter) -> None:
         """Token opzionale (es. 'test') tra fault_type e date viene
         ignorato e gli altri campi vengono estratti correttamente."""
-        meta = converter._parse_filename(
-            "cpu_test_july24_800_0_graph_2.csv"
-        )
+        meta = converter._parse_filename("cpu_test_july24_800_0_graph_2.csv")
         assert meta["fault_type"] == "cpu"
         assert meta["date"] == "july24"
         assert meta["rps"] == 800
@@ -303,24 +303,20 @@ class TestDSBConverter:
         """Quando window_duration_seconds è presente in metadata,
         il warning 'non definito' non viene emesso."""
         import logging
-        with caplog.at_level(logging.WARNING,
-                             logger="src.ingestion.converter"):
+
+        with caplog.at_level(logging.WARNING, logger="src.ingestion.converter"):
             agg = converter._aggregate_window_metrics(_make_base_raw())
             converter._compute_edge_metrics(agg, "source.csv")
-        warning_texts = [r.message for r in caplog.records
-                         if "window_duration_seconds" in r.message]
-        assert len(warning_texts) == 0, (
-            f"Warning inatteso emesso: {warning_texts}"
-        )
+        warning_texts = [
+            r.message for r in caplog.records if "window_duration_seconds" in r.message
+        ]
+        assert len(warning_texts) == 0, f"Warning inatteso emesso: {warning_texts}"
 
-    def test_mem_bfill_on_leading_nan(
-        self, converter: DSBConverter
-    ) -> None:
+    def test_mem_bfill_on_leading_nan(self, converter: DSBConverter) -> None:
         """Leading NaN su mem_mb (prima window con mem_bytes=0)
         viene risolto con backward-fill."""
         raw = _make_base_raw()
-        raw.loc[raw["window_id"] == "10_0",
-                "0_container_memory_usage_bytes"] = 0
+        raw.loc[raw["window_id"] == "10_0", "0_container_memory_usage_bytes"] = 0
 
         agg = converter._aggregate_window_metrics(raw)
         node_df = converter._compute_node_metrics(agg, "source.csv")
@@ -350,11 +346,13 @@ class TestDSBConverter:
         out_dir.mkdir()
 
         original_paths = dict(converter._data_paths)
-        converter._data_paths.update({
-            "node_metrics_csv": str(out_dir / "node_metrics.csv"),
-            "edge_metrics_csv": str(out_dir / "edge_metrics.csv"),
-            "ground_truth_csv": str(out_dir / "ground_truth.csv"),
-        })
+        converter._data_paths.update(
+            {
+                "node_metrics_csv": str(out_dir / "node_metrics.csv"),
+                "edge_metrics_csv": str(out_dir / "edge_metrics.csv"),
+                "ground_truth_csv": str(out_dir / "ground_truth.csv"),
+            }
+        )
         try:
             converter.convert_all(tmp_path)
         finally:
@@ -375,18 +373,22 @@ class TestDSBConverter:
         _TS_W2 = 11_000_000
 
         raw = _make_base_raw().copy()
-        extra = pd.DataFrame([{
-            "window_id": "10_2",
-            "0_start": _TS_W2,
-            "label_trace": 0,
-            "0_container_cpu_usage_seconds_total": _CPU_W1 + 0.1,
-            "0_container_memory_usage_bytes": _MEM_BYTES,
-            "0_container_network_receive_bytes_total": _RX_W0 - 1024,
-            "0_container_network_transmit_bytes_total": _TX_W1 + 1024,
-            "1_latency": _LAT_E1_US,
-            "0_label_RPC": 0,
-            "4_label_RPC": 0,
-        }])
+        extra = pd.DataFrame(
+            [
+                {
+                    "window_id": "10_2",
+                    "0_start": _TS_W2,
+                    "label_trace": 0,
+                    "0_container_cpu_usage_seconds_total": _CPU_W1 + 0.1,
+                    "0_container_memory_usage_bytes": _MEM_BYTES,
+                    "0_container_network_receive_bytes_total": _RX_W0 - 1024,
+                    "0_container_network_transmit_bytes_total": _TX_W1 + 1024,
+                    "1_latency": _LAT_E1_US,
+                    "0_label_RPC": 0,
+                    "4_label_RPC": 0,
+                }
+            ]
+        )
         raw_3 = pd.concat([raw, extra], ignore_index=True)
 
         agg = converter._aggregate_window_metrics(raw_3)
@@ -422,17 +424,16 @@ class TestDSBConverter:
         assert result["rps"] is None
         assert result["replica_idx"] is None
 
-    def test_cpu_zero_delta_t_produces_nan(
-        self, converter: DSBConverter
-    ) -> None:
+    def test_cpu_zero_delta_t_produces_nan(self, converter: DSBConverter) -> None:
         """Due finestre con timestamp identici (delta_t = 0)
         producono cpu_percent finito (non inf)."""
         import math
+
         raw = _make_base_raw()
         # Imposta il timestamp di w1 uguale a w0
-        raw.loc[raw["window_id"] == "10_1", "0_start"] = (
-            raw.loc[raw["window_id"] == "10_0", "0_start"].iloc[0]
-        )
+        raw.loc[raw["window_id"] == "10_1", "0_start"] = raw.loc[
+            raw["window_id"] == "10_0", "0_start"
+        ].iloc[0]
         agg = converter._aggregate_window_metrics(raw)
         node_df = converter._compute_node_metrics(agg, "source.csv")
         rec = node_df[
@@ -440,8 +441,7 @@ class TestDSBConverter:
             & (node_df["node_id"] == "nginx-web-server")
         ]
         assert len(rec) == 1, (
-            f"Atteso 1 record per window 10_1 / nginx-web-server, "
-            f"trovato {len(rec)}"
+            f"Atteso 1 record per window 10_1 / nginx-web-server, trovato {len(rec)}"
         )
         val = rec.iloc[0]["cpu_percent"]
         assert not math.isinf(val), "cpu_percent non deve essere inf"
@@ -458,9 +458,7 @@ class TestDSBConverter:
         empty_dir.mkdir()
         converter.convert_all(empty_dir)  # non deve sollevare eccezioni
 
-    def test_throughput_fallback_uses_yaml_value(
-        self, converter: DSBConverter
-    ) -> None:
+    def test_throughput_fallback_uses_yaml_value(self, converter: DSBConverter) -> None:
         """When delta_t is not calculable (single window or last
         window), throughput_rps uses window_duration_seconds from
         topology.yaml, not a hardcoded value.

@@ -1,0 +1,49 @@
+# ruff.toml — linter and formatter configuration for Hybrid Hypergraph-ATG
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "N",   # pep8-naming
+    "RUF", # ruff-specific rules
+]
+
+ignore = [
+    "E501",   # line too long — handled by formatter
+    "B008",   # function call in default argument
+
+    # Math notation intentionally uses Unicode symbols (× − σ) in docstrings
+    # and comments throughout the test suite. Replacing with ASCII would break
+    # the mathematical readability of the formulas.
+    "RUF001", # ambiguous Unicode in string literals
+    "RUF002", # ambiguous Unicode in docstrings (× − σ)
+    "RUF003", # ambiguous Unicode in comments (× σ)
+
+    # Variable naming: topology math uses uppercase (N, W, H) as per the
+    # framework's formal notation.
+    "N803",   # argument name should be lowercase
+    "N806",   # variable in function should be lowercase
+
+    # Import aliasing used in test mocking (TB, PBO) for brevity in
+    # with-patch blocks. Not worth enforcing full names there.
+    "N814",   # camelcase imported as constant
+    "N817",   # camelcase imported as acronym
+]
+
+[lint.isort]
+known-first-party = ["src"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[lint.per-file-ignores]
+"tests/*" = [
+    "S101",  # use of assert (expected in tests)
+    "N802",  # function name lowercase
+]
